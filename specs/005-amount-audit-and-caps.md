@@ -123,6 +123,15 @@ Facts to rely on:
   - `LearnMoreWords`: `WORDS_CAP` default 25.
   Caps apply to whatever value the block sees, so with a compounding script
   ahead of ours the cap is the final ceiling; the audit still flags the ratio.
+- R2.5 `BigStacks` gains `ANTIMATTER_HARVESTER_CAP` (default 20, 0 = leave
+  stock): sets `MaxCapacity` in
+  `MODELS/PLANETS/BIOMES/COMMON/BUILDINGS/PARTS/BUILDABLEPARTS/TECH/ANTIMATTERHARVESTER/ENTITIES/ANTIMATTERHARVESTER.ENTITY.MBIN`
+  (stock `-1` means "a full stack", which with raised stack caps is 99,999
+  antimatter per harvester). This replaces the one useful edit of a library
+  script the audit retired. Scope the edit the way that script did
+  (`PRECEDING_KEY_WORDS` `GcMaintenanceElement`), or by a `WRAPPER_MULT`-style
+  deterministic locate if that is cleaner; a unit test on a synthetic snippet
+  and the real build must show exactly one `MaxCapacity` changed.
 - R2.4 R1.5 of spec 004 (built-ins at default values reproduce the reference
   dump `MODIFICATIONS`) must be updated: the reference dump predates caps, so
   the test compares after stripping `CAP` keys, and says so.
