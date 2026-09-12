@@ -78,7 +78,7 @@ to not spraying stderr from the GUI.
 ### R2 — Sections (navigation order)
 
 1. **Overview** — install card (game dir, buildid, data version, PCBANKS pak
-   count, `GAMEDATA/MODS` state incl. the legacy-symlink warning,
+   count, `GAMEDATA/MODS` state incl. the symlink warning,
    `DisableAllMods` state with a warning marker when true); tools card
    (compiler version + compatibility marker, dotnet runtime, pak index age);
    library card (enabled/total mods, last build time and verdict counts from
@@ -164,7 +164,7 @@ Sequential HBox, never Border-center.
 
 Sentence case, second person, plain words, consequences named; trailing
 ellipsis on buttons that open a dialog; destructive dialogs state what is *not*
-touched; empty states explain themselves. Reuse the legacy report legend text
+touched; empty states explain themselves. Reuse the reference report legend text
 where the report is shown.
 
 ## Acceptance Criteria
@@ -208,14 +208,14 @@ where the report is shown.
 
 ## Status notes
 
-Verified on njv-cachyos, 2026-09-11, against Steam buildid `25233815` (97 paks,
+Verified 2026-09-11 against Steam buildid `25233815` (97 paks,
 194,531 internal paths), MBINCompiler **v7.02.0-pre1** (`dotnet10`, .NET runtime
 present), Fyne **v2.8.1**, Go 1.27.1, golangci-lint v2.12.2. The mod library for
 the acceptance run is the same 27 scripts spec 002 used, through a scratch
 `--config`.
 
-**Nothing was deployed.** The real install's `GAMEDATA/MODS` is still the legacy
-symlink to `~/Games/nms-modding/MODS`, and the window's Overview says so with a
+**Nothing was deployed.** The real install's `GAMEDATA/MODS` is still a symlink
+to a mod tree outside the install, and the window's Overview says so with a
 warning marker. `core.Deploy` was exercised only by the phase-2 tests against
 temporary fake game directories; the GUI's Deploy button was never pressed
 against the real game.
@@ -230,7 +230,7 @@ the window is responsive throughout a build at that.
 
 | Section | What was exercised | Result |
 | --- | --- | --- |
-| Overview | Real install, tools and library cards | game dir, buildid `25233815`, 97 paks, `GAMEDATA/MODS symlink -> …` with a warning marker and the legacy-layout paragraph, `DisableAllMods false`, compiler `v7.02.0-pre1 (dotnet10)`, .NET 10 present, 27 of 27 mods |
+| Overview | Real install, tools and library cards | game dir, buildid `25233815`, 97 paks, `GAMEDATA/MODS symlink -> …` with a warning marker and the symlink paragraph, `DisableAllMods false`, compiler `v7.02.0-pre1 (dotnet10)`, .NET 10 present, 27 of 27 mods |
 | Mods | Table, sort arrow, tap-to-toggle, select, Move down, Add…, Remove… | 27 rows with `#`/On/Name/Author/Files/Last verdict, verdicts coloured, footer "27 of 27 enabled · build order is table order…" |
 | Build | Build, live log, step markers, Cancel, Rebuild cache | see AC3 |
 | Report | Table, header facts, actions | identical to `nmsbonker report` (below) |

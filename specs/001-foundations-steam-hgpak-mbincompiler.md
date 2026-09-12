@@ -4,10 +4,11 @@
 
 ## Context
 
-`~/Games/nms-modding/` holds a working but ad-hoc Linux pipeline that rebuilds
+`nmsbonker` is a Go rewrite of a reference Python/Lua pipeline that rebuilds
 No Man's Sky mods from AMUMSS `.lua` scripts: a bash driver, two Python scripts,
 a Lua dumper, AMUMSS's `hgpaktool.exe` run under Wine, and a hand-downloaded
-MBINCompiler. It is being refactored into `nmsbonker`, a Go project with a cobra
+MBINCompiler. That pipeline's behaviour is captured in golden fixtures and is
+the correctness oracle for the port. The rewrite is a Go project with a cobra
 CLI and a Fyne GUI, published at `github.com/ushineko/nmsbonker`.
 
 This spec is phase 1 of 4. It delivers everything *below* the mod pipeline: the
@@ -164,7 +165,7 @@ Facts established during investigation (2026-09-11), to be relied on:
 - R4.4 Uncompressed paks (`is_compressed == 0`) are supported (offsets absolute,
   no chunk table).
 - R4.5 `hgpak.Index`: built over a PCBANKS directory, maps normalised internal
-  path → pak path, plus a basename index used only as a fallback (the legacy
+  path → pak path, plus a basename index used only as a fallback (the reference
   builder resolved by basename when the full path missed; scripts sometimes
   write `GLOBALS\X.MBIN` for a root-level global). Built by opening each pak and
   reading its manifest only. Persisted to `cache_dir/pak-index.json` keyed by
@@ -259,8 +260,8 @@ Facts established during investigation (2026-09-11), to be relied on:
 - R9.2 Integration (skip unless `NMSBONKER_GAME_DIR` is set): open every pak in
   PCBANKS and read the manifest; extract `gcgameplayglobals.global.mbin` and
   assert the MBIN magic (`CC CC CC CC CC CC CC CC` or `DD…`) and, when
-  `NMSBONKER_LEGACY_DIR` is set, byte-equality with
-  `<legacy>/extract/GLOBALS/gcgameplayglobals.global.MBIN` (an hgpaktool
+  `NMSBONKER_REFERENCE_DIR` is set, byte-equality with
+  `$NMSBONKER_REFERENCE_DIR/extract/GLOBALS/gcgameplayglobals.global.MBIN` (an hgpaktool
   extraction); with a compiler installed, `Decompile` it and assert the MXML
   begins with `<?xml` and contains `template="GcGameplayGlobals"`.
 - R9.3 Test names are sentences describing the invariant; `require`, not
@@ -272,8 +273,8 @@ Facts established during investigation (2026-09-11), to be relied on:
   `NMSBONKER_*` unset; `./nmsbonker version` prints the VERSION file value and
   the commit.
 - [x] AC2 `./nmsbonker status` on this machine reports the game dir under
-  `~/.local/share/Steam`, buildid `25233815`, `ModsState=symlink` (current
-  legacy setup), `DisableAllMods=false`, and the compiler state.
+  `~/.local/share/Steam`, buildid `25233815`, `ModsState=symlink`,
+  `DisableAllMods=false`, and the compiler state.
 - [x] AC3 `./nmsbonker tools ensure` downloads and verifies a MBINCompiler
   release into the tools dir on first run and is a no-op (says "already
   installed") on the second; `--no-network` with a populated tools dir succeeds.
@@ -283,22 +284,22 @@ Facts established during investigation (2026-09-11), to be relied on:
   writes a file whose first 8 bytes are the MBIN magic, and `Decompile` of it
   succeeds.
 - [x] AC5 `./nmsbonker pak extract gcgameplayglobals.global.mbin` is
-  byte-identical to the legacy hgpaktool extraction in
-  `~/Games/nms-modding/extract/GLOBALS/`.
+  byte-identical to the hgpaktool extraction in
+  `$NMSBONKER_REFERENCE_DIR/extract/GLOBALS/`.
 - [x] AC6 Cold pak index over the real PCBANKS completes in < 5 s; warm load
   < 200 ms; numbers recorded in the spec's Status notes.
 - [x] AC7 Integration tests (R9.2) pass with `NMSBONKER_GAME_DIR` and
-  `NMSBONKER_LEGACY_DIR=~/Games/nms-modding` set, and are skipped (not failed)
+  `NMSBONKER_REFERENCE_DIR` set, and are skipped (not failed)
   without them.
 - [x] AC8 No file under `internal/`, `cmd/`, or `testdata/` contains game data,
-  a Nexus script, or a personal absolute path (grep for `/home/`, `nverenin`,
-  `Data2`).
+  a Nexus script, or a personal absolute path (grep for `/home/`, the user
+  name, `Data2`).
 - [x] AC9 `go vet` and `golangci-lint` report nothing; `govulncheck ./...` clean
   or findings documented.
 
 ## Status notes
 
-Verified on njv-cachyos, 2026-09-11, against Steam buildid `25233815` (97 paks,
+Verified 2026-09-11 against Steam buildid `25233815` (97 paks,
 194,531 internal paths) at commit `8d73d43`. Go 1.27.1, golangci-lint v2.12.2,
 MBINCompiler v7.02.0-pre1 (`dotnet10` flavor), .NET runtime 10.0.11.
 
@@ -337,7 +338,7 @@ game dir:              <steam>/steamapps/common/No Man's Sky
 steam library:         <steam root>
 buildid:               25233815
 paks:                  97 in <game>/GAMEDATA/PCBANKS
-GAMEDATA/MODS:         symlink -> <legacy>/MODS
+GAMEDATA/MODS:         symlink -> <external mods tree>
 DisableAllMods:        false
   mod:                 COSMOS COMBINE (enabled=true, priority=0)
 MBINCompiler:          v7.02.0-pre1 (dotnet10)
@@ -362,8 +363,8 @@ to a 9,660,495-byte MXML beginning `<?xml` with `template="cGcRewardTable"`.
 
 `go vet ./...` clean; `golangci-lint run` **0 issues**;
 `go test -race ./...` green with and without the integration environment;
-9 tests skip when `NMSBONKER_GAME_DIR` is unset (AC7). A grep for `/home/`,
-`nverenin` and `Data2` over `cmd/`, `internal/` and `config/` finds nothing, and
+9 tests skip when `NMSBONKER_GAME_DIR` is unset (AC7). A grep for `/home/`, the
+user name and `Data2` over `cmd/`, `internal/` and `config/` finds nothing, and
 there is no `testdata/` directory (AC8).
 
 `govulncheck -mode=binary ./nmsbonker`: **No vulnerabilities found**, after
@@ -379,17 +380,18 @@ the binary-mode scan above confirms it.
 ### Deviations from the spec, and why
 
 **AC5's named oracle is not an hgpaktool extraction.** The spec compares against
-`<legacy>/extract/GLOBALS/gcgameplayglobals.global.MBIN`. That file differs from
+`$NMSBONKER_REFERENCE_DIR/extract/GLOBALS/gcgameplayglobals.global.MBIN`. That file differs from
 the pak's bytes in 7 places: two ranges in the MBIN header (0x0A-0x0B and
 0x18-0x1D, where libMBIN stamps its own version) and one at 0x17A0, where
 `MaxNumSameGroupTech` is 25 rather than the game's 3. Its sibling `.MXML` is
 timestamped 0.16 s *earlier* than the `.MBIN`. It is a modded recompile
 (StackingTechnologyModules), not an extraction. The genuine hgpaktool output is
-in the legacy build cache, which `build_cache.py` fills by running hgpaktool
-directly: `<legacy>/cache/raw/f3/GLOBALS/gcgameplayglobals.global.mbin`. This
+in the reference build cache, which `build_cache.py` fills by running hgpaktool
+directly:
+`$NMSBONKER_REFERENCE_DIR/cache/raw/f3/GLOBALS/gcgameplayglobals.global.mbin`. This
 reader's output is **byte-identical** to that file (8,648 bytes, `cmp` clean),
 which is the property AC5 exists to establish. AC5 is ticked on that basis; the
-test skips if the legacy build cache is absent.
+test skips if the reference build cache is absent.
 
 **R6.1/R6.2: the game data version cannot be read this way.** `version <file>`
 on a pak-extracted MBIN does not yield the game's data version, because the

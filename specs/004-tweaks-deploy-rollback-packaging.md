@@ -95,7 +95,7 @@ and are Steam-Cloud synced.
 - R1.4 Built-ins appear in the mod list as source `builtin` (library scripts are
   `library`); they cannot be removed or re-ordered relative to each other's
   *files*, but do take part in the single global build order like any mod.
-  Default order on a fresh config: the legacy `mods.conf` order for the
+  Default order on a fresh config: the reference `mods.conf` order for the
   built-ins (MaterialYield10x, ChestAndLootMaterials10x, MoneyAndNanites5x,
   BigStacks, ScanValue50x, SpaceMiningBoost, ItemValueBoost, LearnMoreWords,
   NaniteRewardBuff, MissionStandingBuff); default state **disabled** (a fresh
@@ -215,7 +215,7 @@ and are Steam-Cloud synced.
 
 ## Acceptance Criteria
 
-- [ ] AC1 Built-ins at default values reproduce the legacy dump JSON (R1.5) and
+- [ ] AC1 Built-ins at default values reproduce the reference dump JSON (R1.5) and
   the spec 002 golden suite still passes.
 - [ ] AC2 Setting `MATERIAL_MULTIPLIER` to 20 via the Tweaks slider (and via
   `tweaks set`) changes the merged MXML for the affected entity files by exactly
@@ -238,8 +238,10 @@ and are Steam-Cloud synced.
   removes exactly those files.
 - [ ] AC8 README, architecture doc, screenshots and the validation report
   exist; `make lint`, `make test`, parity and golden suites pass.
-- [ ] AC9 `grep -ri legacy` over the repository (excluding `.git`) returns
-  nothing, and no committed file contains a personal absolute path.
+- [ ] AC9 The parity oracle is called the *reference* implementation
+  everywhere: a case-insensitive grep over the repository (excluding `.git`) for
+  the superseded term this project used for it returns nothing, and no committed
+  file contains a personal absolute path.
 
 ## Risks & Assumptions
 

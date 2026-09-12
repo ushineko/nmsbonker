@@ -53,7 +53,7 @@ This repository is **public**. The following hold without exception:
 - **No game assets.** Nothing extracted from the game's `.pak` files (MBIN, MXML,
   textures, tables) may be committed, not even as test fixtures. Tests that need
   game data read it from the user's install at test time and skip when it is
-  absent (`NMSBONKER_GAME_DIR`, `NMSBONKER_GOLDEN_DIR`, `NMSBONKER_LEGACY_DIR`).
+  absent (`NMSBONKER_GAME_DIR`, `NMSBONKER_GOLDEN_DIR`, `NMSBONKER_REFERENCE_DIR`).
   Synthetic fixtures are hand-written and small.
 - **No third-party mod scripts.** AMUMSS `.lua` scripts downloaded from Nexus or
   elsewhere belong to their authors and stay in the user's library directory
@@ -80,7 +80,7 @@ This repository is **public**. The following hold without exception:
 - **Recompile gate**: a MBIN is shipped only if MBINCompiler recompiles the merged
   MXML cleanly. A failed structural edit is retried without it, then dropped and
   reported. Never ship a file the compiler rejected.
-- **Golden parity with the legacy Python builder** is the correctness oracle for
+- **Golden parity with the reference Python builder** is the correctness oracle for
   the edit engine (spec 002). Do not "improve" engine semantics without updating
   the golden fixtures and saying so in the spec.
 - **Long-running work is cancellable** (`context.Context`) and reports progress

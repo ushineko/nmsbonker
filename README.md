@@ -169,11 +169,10 @@ Global flags: `--config PATH`, `--game-dir PATH`, `-v/--verbose`,
 `build` exits 1 if any game file had to be dropped, and 0 otherwise — a mod
 that applied nothing is a warning in the report, not a build failure.
 
-`deploy` refuses a symlinked `GAMEDATA/MODS`, which is what the older
-AMUMSS-on-Linux setups left behind: installing "into the game" would silently
-write somewhere else. `--replace-symlink` removes the link, never its target.
-Whatever was installed before is archived under
-`$XDG_DATA_HOME/nmsbonker/archive/` first.
+`deploy` refuses a symlinked `GAMEDATA/MODS`: the game reads mods through the
+link, so installing "into the game" would silently write somewhere else.
+`--replace-symlink` removes the link, never its target. Whatever was installed
+before is archived under `$XDG_DATA_HOME/nmsbonker/archive/` first.
 
 `pak extract` keeps the file's internal path under the output directory, so an
 extraction tree can be compared with the archive that produced it.
@@ -215,18 +214,18 @@ read a real install skip unless you point them at one:
 
 ```
 NMSBONKER_GAME_DIR="$HOME/.local/share/Steam/steamapps/common/No Man's Sky" \
-NMSBONKER_LEGACY_DIR="$HOME/Games/nms-modding" \
+NMSBONKER_REFERENCE_DIR="/path/to/the/reference/pipeline" \
   go test -race ./...
 ```
 
-`NMSBONKER_LEGACY_DIR` enables the byte-for-byte comparison against an
-`hgpaktool` extraction in the legacy pipeline's build cache. Adding
-`NMSBONKER_GOLDEN_DIR` enables the golden parity suite, which checks the edit
-engine against fixtures captured from the legacy Python builder: every script
-decoded the same way, every merged file byte-identical, every report line
-identical, and the same per-mod verdicts end to end. The fixtures are
-game-derived and are generated locally by `tools/legacy/make_golden.py`; they
-are never committed.
+`NMSBONKER_REFERENCE_DIR` points at the reference Python/Lua pipeline this tool
+is a rewrite of, and enables the byte-for-byte comparison against an `hgpaktool`
+extraction in that pipeline's build cache. Adding `NMSBONKER_GOLDEN_DIR` enables
+the golden parity suite, which checks the edit engine against fixtures captured
+from the reference Python builder: every script decoded the same way, every
+merged file byte-identical, every report line identical, and the same per-mod
+verdicts end to end. The fixtures are game-derived and are generated locally by
+`tools/reference/make_golden.py`; they are never committed.
 
 ## Project layout
 

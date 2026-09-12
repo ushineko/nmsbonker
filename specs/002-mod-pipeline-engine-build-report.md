@@ -5,29 +5,29 @@
 ## Context
 
 Phase 2 of 4. On top of spec 001 this delivers the actual mod pipeline, a
-faithful Go port of the legacy Python builder
-(`~/Games/nms-modding/builder/nms_build_mods.py`, `build_cache.py`,
-`dump_mod.lua`, `build.sh`). The legacy pipeline is the behavioural oracle:
+faithful Go port of the reference Python builder
+(`$NMSBONKER_REFERENCE_DIR/builder/nms_build_mods.py`, `build_cache.py`,
+`dump_mod.lua`, `build.sh`). The reference pipeline is the behavioural oracle:
 golden fixtures generated from it on 2026-09-11 live in
-`~/Games/nms-modding/golden/` (game-derived, never committed):
+`$NMSBONKER_GOLDEN_DIR` (game-derived, never committed):
 
 ```
 golden/
   mods.conf            # 27 scripts, all enabled, in build order
-  manifest.json        # legacy cache manifest: SOURCE(upper) -> {internal, pak, mxml}
+  manifest.json        # reference cache manifest: SOURCE(upper) -> {internal, pak, mxml}
   dumped/<mod>.json    # dump_mod.lua output per script (the Lua stage oracle)
   merged/<INTERNAL>    # merged MXML text per target after ALL blocks applied (100 files)
   index.json           # per-target block counts + per-mod applied/skipped/notfound
   report_lines.txt     # the engine's OK/WARN lines, in order (504 lines)
-  BUILD_REPORT.md      # the legacy end-to-end report (verdicts per mod)
+  BUILD_REPORT.md      # the reference end-to-end report (verdicts per mod)
 ```
 
 The pristine MXML inputs referenced by `manifest.json` (`mxml` paths relative to
-`~/Games/nms-modding/`) are the legacy cache; the golden merge used them
-directly. The scripts are in `~/Games/nms-modding/lua-src/` (27 files; 11 are
-this project's own tweaks, 16 are third-party and must not be committed).
+`$NMSBONKER_REFERENCE_DIR`) are the reference cache; the golden merge used them
+directly. The scripts are in `$NMSBONKER_REFERENCE_DIR/lua-src/` (27 files; 11
+are this project's own tweaks, 16 are third-party and must not be committed).
 
-How the legacy engine works, in the detail the port must reproduce
+How the reference engine works, in the detail the port must reproduce
 (`nms_build_mods.py`, read it alongside this spec):
 
 1. **Script → change tables.** `dump_mod.lua` doubles every backslash in the
@@ -81,7 +81,7 @@ How the legacy engine works, in the detail the port must reproduce
      to int32; floats: `"%f"` then strip trailing zeros and a trailing dot,
      `"0"` if empty. Math exceptions (non-numeric old) fall back to `str(val)`.
    - `get_val`/`set_val` operate on the first `value="…"` on the line.
-   - Keys the legacy engine reads: `PRECEDING_KEY_WORDS`, `SPECIAL_KEY_WORDS`,
+   - Keys the reference engine reads: `PRECEDING_KEY_WORDS`, `SPECIAL_KEY_WORDS`,
      `FOREACH_SKW_GROUP`, `SECTION_UP`, `SECTION_UP_TO`, `VALUE_CHANGE_TABLE`,
      `MATH_OPERATION`, `INTEGER_TO_FLOAT`, `REPLACE_TYPE`, `ADD`, `REMOVE`,
      `CURRENCY_MULT`, `WRAPPER_MULT`. Present in the scripts but **ignored**:
@@ -94,7 +94,7 @@ How the legacy engine works, in the detail the port must reproduce
    `WORKING*` (has ADD/REMOVE and compiled), `WORKING~` (skipped > 0), else
    `WORKING`. Sorted by verdict rank then name. `BUILD_REPORT.md` has the
    header facts, legend, table, the degraded-files section, and the fixed
-   how-to-fix prose (copy the legacy text).
+   how-to-fix prose (copy the reference text).
 6. **Output**: `MODS/<MOD_NAME>/<INTERNAL_UPPER>`; after all targets, every
    `GC*GLOBALS*.MBIN` and `GCCREATUREGLOBALS.MBIN` at the mod root is also copied
    into `<MOD_NAME>/GLOBALS/` (harmless duplicate, matches the known-good layout).
@@ -104,7 +104,7 @@ How the legacy engine works, in the detail the port must reproduce
    The MXML is stored at `cache/mxml/<INTERNAL_UPPER minus ext>.MXML`. Rebuilt
    wholesale when `NMSARC.globals.pak` is newer than the manifest.
 
-Legacy results for reference (BUILD_REPORT.md, 2026-09-11): 100 MBINs built,
+Reference results (BUILD_REPORT.md, 2026-09-11): 100 MBINs built,
 0 dropped; 16 WORKING, 7 WORKING~, 1 WORKING*, 2 PARTIAL (BetterRewards,
 Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 (SpeedIncreaseGrowthAndHarvest).
@@ -159,7 +159,7 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
   }
   ```
   `Value` is a string/number/bool sum type whose `String()` reproduces the
-  Python `str()` the legacy engine saw after JSON decoding: booleans `True`/`False`
+  Python `str()` the reference engine saw after JSON decoding: booleans `True`/`False`
   (they never occur in VCTs in practice; keep for parity), integral numbers as
   `%d`, other numbers as Python `repr(float)` (shortest round-trip; exponent
   form below 1e-4 and at/above 1e16; `1e-05` style two-digit exponent).
@@ -179,7 +179,7 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 - R2.1 `mxml.Apply(lines []string, blk *modscript.Block, ctx ApplyContext) (lines []string, events []Event)`
   is a faithful port of `apply_block` including every branch, quirk and message
   listed in Context §4. `Event{Kind OK|WARN|INFO; Mod, Detail, File string; NotFound string}`
-  and `Event.Line()` renders exactly the legacy text:
+  and `Event.Line()` renders exactly the reference text:
   `"   OK  {mod}: {detail}"` / `"  WARN {mod}: {detail}"` / `"       {detail}"`.
   Python list reprs inside details (`['AmountMin', 'AmountMax']`,
   `['Id', 'WORD']`) are reproduced by a `pyList([]string)` helper.
@@ -208,7 +208,7 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
   decompilation run concurrently up to `config.parallel`. Progress events name
   the file.
 - R3.3 A miss (not in any pak) or a decompile failure is reported per source and
-  does not abort the build; the affected blocks produce the legacy
+  does not abort the build; the affected blocks produce the reference
   `no cached MXML for …` WARN.
 - R3.4 **Compiler/game compatibility is established by round-trip, not by a
   version string.** Spec 001's R6 probe (`MBINCompiler version <file>`) cannot
@@ -250,7 +250,7 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 - R4.4 `Result` carries: per-target outcome (`built` | `degraded` | `dropped` |
   `no-source`), per-mod stats and verdict, totals, timings (cache, merge,
   compile), compiler version, game buildid, and `Events`. `report.Markdown(Result)`
-  renders `BUILD_REPORT.md` with the legacy structure (header bullets, legend,
+  renders `BUILD_REPORT.md` with the reference structure (header bullets, legend,
   table, degraded section, how-to-fix prose, NOT BUILT prose) plus one new
   line `- Unsupported script keys ignored: …` when any block had them.
   `report.JSON` writes `report.json` beside it. Both land in
@@ -260,8 +260,8 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 ### R5 — Deploy (minimal; `core.Deploy`)
 
 - R5.1 Precondition: a successful build exists. If `GAMEDATA/MODS` is a symlink,
-  refuse with a message explaining the legacy setup and pointing at `migrate`
-  (spec 004) or `--replace-symlink`, which removes only the symlink (never its
+  refuse with a message saying the folder is a symlink, where it points, and
+  that `--replace-symlink` removes only the symlink (never its
   target) and creates a real directory.
 - R5.2 Copy `workspace_dir/<MOD_NAME>/` to `GAMEDATA/MODS/<MOD_NAME>.tmp-<pid>`,
   archive any existing `GAMEDATA/MODS/<MOD_NAME>` to
@@ -289,24 +289,24 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 - `mods list|add PATH…|remove NAME [--delete]|enable NAME…|disable NAME…|move NAME POS|import DIR [--pattern]|check [--json]`
 - `build [--recache] [--deploy] [--mod-name NAME]` (prints the event stream,
   then the report table; exit 1 if any target was dropped, 0 otherwise — a
-  `NOT BUILT` mod alone is exit 0 with a warning, matching the legacy script's
+  `NOT BUILT` mod alone is exit 0 with a warning, matching the reference script's
   tolerance),
 - `deploy [--replace-symlink]`, `report [--json]`, `tools check [--json]` (R3.4).
 
 ### R8 — Golden parity test (integration, `internal/build/golden_test.go`)
 
-- R8.1 Skips unless `NMSBONKER_GOLDEN_DIR` and `NMSBONKER_LEGACY_DIR` are set.
+- R8.1 Skips unless `NMSBONKER_GOLDEN_DIR` and `NMSBONKER_REFERENCE_DIR` are set.
 - R8.2 Stage A (Lua): for every script named in `golden/mods.conf`, load
-  `<legacy>/lua-src/<name>.lua` and assert `DumpJSON` is semantically equal to
+  `$NMSBONKER_REFERENCE_DIR/lua-src/<name>.lua` and assert `DumpJSON` is semantically equal to
   `golden/dumped/<name>.json` (numbers compared as float64; strings exact).
 - R8.3 Stage B (engine): build the plan from the golden `mods.conf` order; for
   each target in `golden/index.json`, read the pristine MXML from
-  `<legacy>/<manifest.mxml>`, apply all blocks, and assert the joined text is
+  `$NMSBONKER_REFERENCE_DIR/<manifest.mxml>`, apply all blocks, and assert the joined text is
   **byte-identical** to `golden/merged/<INTERNAL>`; collect all event lines and
   assert they equal `golden/report_lines.txt` line by line.
 - R8.4 Stage C (end to end, additionally needs `NMSBONKER_GAME_DIR` and an
   installed compiler): `core.Build` against the real game with the library
-  pointed at `<legacy>/lua-src` and order from `golden/mods.conf` produces the
+  pointed at `$NMSBONKER_REFERENCE_DIR/lua-src` and order from `golden/mods.conf` produces the
   same set of 100 output paths as `golden/BUILD_REPORT.md` implies (count) and
   the same per-mod verdicts as its table. Time budget: < 3 min warm cache.
 
@@ -321,9 +321,9 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 - [x] AC1 Golden Stage A and B pass (27 scripts, 100 targets byte-identical,
   504 report lines identical).
 - [x] AC2 Golden Stage C passes: 100 MBINs, 0 dropped, verdicts equal to the
-  legacy `BUILD_REPORT.md` (16 WORKING, 7 WORKING~, 1 WORKING*, 2 PARTIAL,
+  reference `BUILD_REPORT.md` (16 WORKING, 7 WORKING~, 1 WORKING*, 2 PARTIAL,
   1 NOT BUILT).
-- [x] AC3 `nmsbonker mods import ~/Games/nms-modding/lua-src` then
+- [x] AC3 `nmsbonker mods import $NMSBONKER_REFERENCE_DIR/lua-src` then
   `nmsbonker build` succeeds on this machine with no Wine/Python/Lua involved
   (verify: `command -v wine lua python3` absence is not required, but the
   process tree of the build contains only `nmsbonker` and
@@ -333,9 +333,9 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
   and archives nothing (nothing existed) — verified on a temp fake game dir in
   tests, and on the real install only after the user has confirmed migration
   (spec 004), so the real-install check is **deferred to spec 004**.
-- [x] AC5 Build output tree matches the legacy layout: root globals +
+- [x] AC5 Build output tree matches the reference layout: root globals +
   `GLOBALS/` mirror + `METADATA/…` + `MODELS/…`; `diff -r` against
-  `~/Games/nms-modding/MODS/COSMOS COMBINE` shows only files whose MBIN differ
+  the reference pipeline's `MODS/COSMOS COMBINE` shows only files whose MBIN differ
   because of the embedded compiler version/GUID, not different file sets
   (document the diff command and outcome).
 - [x] AC6 `make lint`, `make test` pass headless; unit coverage of
@@ -352,19 +352,19 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 
 ## Status notes
 
-Verified on njv-cachyos, 2026-09-11, against Steam buildid `25233815`
+Verified 2026-09-11 against Steam buildid `25233815`
 (97 paks, 194,531 internal paths), MBINCompiler **v7.02.0-pre1** (`dotnet10`
 flavor, .NET runtime 10.0.11), Go 1.27.1, golangci-lint v2.12.2, gopher-lua
 v1.1.1. The mod library used for the acceptance run is the 27 scripts in
-`~/Games/nms-modding/lua-src`, in the `golden/mods.conf` order.
+`$NMSBONKER_REFERENCE_DIR/lua-src`, in the `golden/mods.conf` order.
 
 Nothing under the user's own directories was written: every command below ran
 with `--config` pointing at a scratch file, so `~/.config/nmsbonker/` still does
 not exist (spec 001 never needed to save one), `~/.local/share/nmsbonker/` still
 holds only `tools/`, and the mod library, the pristine cache and the build
 output all live in the scratch tree. Nothing was deployed to the real game
-directory -- its `GAMEDATA/MODS` is still the legacy symlink to
-`~/Games/nms-modding/MODS` -- and deploy was exercised only against temporary
+directory -- its `GAMEDATA/MODS` is still a symlink to the reference pipeline's
+mod tree -- and deploy was exercised only against temporary
 fake game directories. The golden Stage C test reads the user's installed
 MBINCompiler and writes nothing there.
 
@@ -403,16 +403,16 @@ line rather than leaving a reader to conclude the numbers are wrong.
 ### Golden parity
 
 All three stages pass with
-`NMSBONKER_GOLDEN_DIR`/`NMSBONKER_LEGACY_DIR`/`NMSBONKER_GAME_DIR` set:
+`NMSBONKER_GOLDEN_DIR`/`NMSBONKER_REFERENCE_DIR`/`NMSBONKER_GAME_DIR` set:
 
-- **Stage A** — 27 of 27 scripts decode to the legacy `dump_mod.lua` JSON
+- **Stage A** — 27 of 27 scripts decode to the reference `dump_mod.lua` JSON
   (semantic comparison; the Go loader passed on the first run with no fixture
   adjustments).
 - **Stage B** — 100 of 100 targets merge **byte-identical** to
   `golden/merged/`, and all **504** report lines match `report_lines.txt`
   position by position.
 - **Stage C** — 100 MBINs built, 0 dropped, 465 edits applied, 115 skipped, and
-  every one of the 27 per-mod verdicts equals the legacy `BUILD_REPORT.md`:
+  every one of the 27 per-mod verdicts equals the reference `BUILD_REPORT.md`:
   16 WORKING, 7 WORKING~, 1 WORKING\*, 2 PARTIAL, 1 NOT BUILT.
 
 **The verdicts depend on the build order, which is a property of the pipeline
@@ -435,7 +435,7 @@ result:                compatible
 detail:                2 file(s) round-tripped byte-identical outside the header
 ```
 
-`nmsbonker mods import ~/Games/nms-modding/lua-src` → `imported: 27`;
+`nmsbonker mods import $NMSBONKER_REFERENCE_DIR/lua-src` → `imported: 27`;
 `nmsbonker mods list` shows all 27 `enabled=yes status=ok`;
 `nmsbonker mods check` → `loaded: 27 ok, 0 failed`, with the ignored keys named
 per mod (`FSKWG`, `LINE_OFFSET`, `SECTION_ACTIVE`, `VALUE_MATCH`,
@@ -459,11 +459,10 @@ eight `MBINCompiler-linux-dotnet10` children -- no `wine`, no `python3`, no
 `GAMEDATA/MODS` is a symlink (AC4), exit 1:
 
 ```
-nmsbonker: GAMEDATA/MODS is a symlink pointing at <target>. That is the layout
-the legacy AMUMSS-on-Linux setup used: the game reads mods through the link, so
-installing here would write into that directory instead of the game. Pass
---replace-symlink to remove the link (never its target) and create a real
-GAMEDATA/MODS, or wait for `nmsbonker migrate` in a later release
+nmsbonker: GAMEDATA/MODS is a symlink pointing at <target>. The game reads mods
+through the link, so installing here would write into that directory instead of
+the game. Pass --replace-symlink to remove the link (never its target) and
+create a real GAMEDATA/MODS
 ```
 
 With `--replace-symlink`: `installed: <fake>/GAMEDATA/MODS/COSMOS COMBINE`,
@@ -475,7 +474,7 @@ real-install half is deferred to spec 004 as the AC itself allows.
 ### AC5: output tree comparison
 
 ```
-diff -r -q "$WORKSPACE/COSMOS COMBINE" "$HOME/Games/nms-modding/MODS/COSMOS COMBINE"
+diff -r -q "$WORKSPACE/COSMOS COMBINE" "$NMSBONKER_REFERENCE_DIR/MODS/COSMOS COMBINE"
 ```
 
 reports **no** `Only in ...` lines: 107 files on each side, the same 107 paths
@@ -483,7 +482,7 @@ reports **no** `Only in ...` lines: 107 files on each side, the same 107 paths
 `METADATA/` and `MODELS/`. All 107 are reported as differing, and a byte-level
 comparison shows why: every pair has **identical length and a byte-identical
 body**, differing only at header offsets 0x10-0x17 and 0x19 -- libMBIN's own
-version/GUID stamp, and the legacy tree was built with MBINCompiler
+version/GUID stamp, and the reference tree was built with MBINCompiler
 7.01.0-pre1 against 7.02.0-pre1 here. Zero files differ outside the header.
 
 ### Gates
@@ -497,10 +496,10 @@ version/GUID stamp, and the legacy tree was built with MBINCompiler
   86.6 %, `internal/build/cache` 81.4 %, `internal/build/report` 78.8 %,
   `internal/modscript` 72.6 %, `internal/core` 55.3 %.
 - AC8: `git ls-files` matches no `.lua`, `.mxml`, `.mbin`, `.exml` or `.pak`;
-  no `/home/`, `nverenin` or `Data2` in `cmd/`, `internal/` or `config/`.
+  no `/home/`, user name or `Data2` in `cmd/`, `internal/` or `config/`.
   `.gitignore` now also ignores `*.lua` outside `internal/tweaks/scripts/`
   (spec 004's own tweaks) and `__pycache__/`; a stray
-  `tools/legacy/__pycache__/*.pyc` committed by spec 001 was removed.
+  `tools/reference/__pycache__/*.pyc` committed by spec 001 was removed.
 
 ### Deviations from the spec, and why
 
@@ -513,7 +512,7 @@ five-second deadline. `Load` gives a context that carries no deadline of its
 own a `DefaultTimeout`, so a caller cannot hang a build by forgetting one.
 
 **A string `SPECIAL_KEY_WORDS` is one keyword, not one per character.** Python
-iterates a string, so the legacy engine would have matched `"G"`, `"c"`, `"R"`
+iterates a string, so the reference engine would have matched `"G"`, `"c"`, `"R"`
 ... against the MXML for a script that wrote `SPECIAL_KEY_WORDS = "GcReward"`.
 No script in the library does that and the golden set contains no instance, so
 reproducing the behaviour would only preserve a bug nothing triggers.
@@ -521,7 +520,7 @@ reproducing the behaviour would only preserve a bug nothing triggers.
 use it (`ItemValueBoost` writes `""`, three others write a single name).
 
 **`Block` carries `HasAdd`/`HasRemove`/`HasSKW`/`HasVCT` alongside the values.**
-R1.3 lists only `HasAdd`. The legacy builder tested *truthiness* to decide what
+R1.3 lists only `HasAdd`. The reference builder tested *truthiness* to decide what
 an edit does (`if remove:`) and *key presence* to decide what to retry without
 (`"REMOVE" in blk`), and the two answers differ for a block carrying
 `REMOVE = false`. Collapsing them changes which mods a failed recompile drops,
@@ -529,7 +528,7 @@ so both facts are kept.
 
 **`build.Plan(defs, order)` is `build.NewPlan(scripts []Script)`.** A type and
 a function cannot share a name in Go, and the spec's two arguments cannot
-express a script that failed to load -- which the legacy builder reported in
+express a script that failed to load -- which the reference builder reported in
 the build report, in build order, ahead of everything else. `Script` pairs the
 config entry with either a definition or the error, so a missing `.lua` keeps
 its position in the report.
@@ -555,7 +554,7 @@ swapped, matching the cache's own `mxml/` layout.
 is deliberately not a config key: it is the undo button, and a user who has
 pointed it somewhere they later clean out has lost it.
 
-**The report header carries the Steam buildid, not a game version.** The legacy
+**The report header carries the Steam buildid, not a game version.** The reference
 header hard-coded `No Man's Sky COSMOS (7.x)`. There is no readable game data
 version (spec 001's R6 findings), so the report states the buildid, which is
 the only reliable identifier, on its own line and the compiler on another. The
@@ -581,10 +580,10 @@ and records the source as a miss.
 ### Left for later phases
 
 - The GUI (spec 003) and tweak parameters, `GCMODSETTINGS.MXML` *writing*,
-  rollback, `migrate` and packaging (spec 004). `Definition.Globals` is
+  rollback and packaging (spec 004). `Definition.Globals` is
   collected and carried but nothing reads it yet.
 - Deploy against the real install, which needs the user to decide about the
-  legacy `GAMEDATA/MODS` symlink; AC4 defers it to spec 004's `migrate`.
+  symlinked `GAMEDATA/MODS`; AC4 defers it to spec 004.
 - Honouring `VALUE_MATCH`, `LINE_OFFSET`, `SECTION_ACTIVE` and the other keys
   the engine ignores. They are reported per mod so the choice is visible, but
   changing behaviour needs new golden fixtures and a spec that says so.
@@ -593,10 +592,10 @@ and records the source as a miss.
 ### Reviewer notes (2026-09-11, Fable)
 
 Golden stages A/B/C reproduced by the reviewer: 27/27 scripts, 100/100 targets
-byte-identical, 504/504 report lines, legacy verdict counts matched. Deploy and
+byte-identical, 504/504 report lines, reference verdict counts matched. Deploy and
 the recompile-gate fallback were read in full; no findings.
 
-**Known legacy-engine quirk preserved on purpose (follow-up spec material):**
+**Known reference-engine quirk preserved on purpose (follow-up spec material):**
 a `REMOVE` block whose scope is not narrowed by `SPECIAL_KEY_WORDS` (only
 `PRECEDING_KEY_WORDS`, or nothing) deletes from the scope start to the end of
 the file — `Crashed Freighter Loot` produces `REMOVE section None in
@@ -626,8 +625,8 @@ never from directory listing.
 
 ## Alternatives Considered
 
-- Calling the system `lua` binary like the legacy dumper: rejected — a
+- Calling the system `lua` binary like the reference dumper: rejected — a
   single-binary desktop app should not depend on an interpreter, and a sandbox is
   wanted for third-party scripts.
 - An XML DOM-based engine: rejected for this phase — parity with the line-based
-  legacy behaviour (including its quirks) is the acceptance oracle.
+  reference behaviour (including its quirks) is the acceptance oracle.
