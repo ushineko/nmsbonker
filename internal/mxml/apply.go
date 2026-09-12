@@ -1,6 +1,8 @@
 package mxml
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/ushineko/nmsbonker/internal/modscript"
@@ -42,10 +44,10 @@ func Apply(lines []string, blk *modscript.Block, actx ApplyContext) ([]string, [
 	}
 
 	if blk.CurrencyMult != nil {
-		return applyCurrencyMult(lines, blk.CurrencyMult, actx)
+		return applyCurrencyMult(lines, blk.CurrencyMult, blk.Cap, actx)
 	}
 	if blk.WrapperMult != nil {
-		return applyWrapperMult(lines, blk.WrapperMult, actx)
+		return applyWrapperMult(lines, blk.WrapperMult, blk.Cap, actx)
 	}
 
 	groups := blk.ForEachSKWGroup
@@ -78,13 +80,15 @@ entries, and a keyword anchor that matched the outer entry multiplied the inner
 one twice. Walking the file block by block and jumping past each closing tag
 makes the count exact.
 */
-func applyCurrencyMult(lines []string, cm *modscript.CurrencyMult, actx ApplyContext) ([]string, []Event) {
+func applyCurrencyMult(lines []string, cm *modscript.CurrencyMult, limit float64,
+	actx ApplyContext,
+) ([]string, []Event) {
 	if cm.MultErr != "" {
 		return lines, []Event{actx.warn("exception on %s: %s", actx.File(), cm.MultErr)}
 	}
 	const opener = `<Property name="GcRewardMoney">`
 	needle := `value="` + cm.Currency + `"`
-	count := 0
+	count, capped := 0, 0
 
 	for i := 0; i < len(lines); {
 		if strings.TrimSpace(lines[i]) != opener {
@@ -101,25 +105,31 @@ func applyCurrencyMult(lines []string, cm *modscript.CurrencyMult, actx ApplyCon
 		}
 		if matched {
 			for j := i; j <= last && j < len(lines); j++ {
-				lines[j] = scaleLine(lines[j], []string{"AmountMin", "AmountMax"}, cm.Mult)
+				var n int
+				lines[j], n = scaleLine(lines[j], []string{"AmountMin", "AmountMax"}, cm.Mult, limit)
+				capped += n
 			}
 			count++
 		}
 		i = last + 1
 	}
-	return lines, []Event{actx.ok("CURRENCY_MULT %s x%s across %d GcRewardMoney blocks in %s",
-		cm.Currency, modscript.PyRepr(cm.Mult), count, actx.File())}
+	e := actx.ok("CURRENCY_MULT %s x%s%s across %d GcRewardMoney blocks in %s%s",
+		cm.Currency, modscript.PyRepr(cm.Mult), capText(limit), count, actx.File(), cappedText(capped))
+	e.Capped = capped
+	return lines, []Event{e}
 }
 
 // applyWrapperMult multiplies named keys once inside every block opened by the
 // wrapper property. Same motivation as CURRENCY_MULT: no keyword overlap, so no
 // double application.
-func applyWrapperMult(lines []string, wm *modscript.WrapperMult, actx ApplyContext) ([]string, []Event) {
+func applyWrapperMult(lines []string, wm *modscript.WrapperMult, limit float64,
+	actx ApplyContext,
+) ([]string, []Event) {
 	if wm.MultErr != "" {
 		return lines, []Event{actx.warn("exception on %s: %s", actx.File(), wm.MultErr)}
 	}
 	opener := `<Property name="` + wm.Wrapper + `">`
-	count := 0
+	count, capped := 0, 0
 
 	for i := 0; i < len(lines); {
 		if strings.TrimSpace(lines[i]) != opener {
@@ -130,19 +140,23 @@ func applyWrapperMult(lines []string, wm *modscript.WrapperMult, actx ApplyConte
 		// From i+1, not i: the wrapper's own line carries no amount, and the
 		// reference op skipped it.
 		for j := i + 1; j <= last && j < len(lines); j++ {
-			lines[j] = scaleLine(lines[j], wm.Keys, wm.Mult)
+			var n int
+			lines[j], n = scaleLine(lines[j], wm.Keys, wm.Mult, limit)
+			capped += n
 		}
 		count++
 		i = last + 1
 	}
-	return lines, []Event{actx.ok("WRAPPER_MULT %s x%s across %d blocks in %s",
-		wm.Wrapper, modscript.PyRepr(wm.Mult), count, actx.File())}
+	e := actx.ok("WRAPPER_MULT %s x%s%s across %d blocks in %s%s",
+		wm.Wrapper, modscript.PyRepr(wm.Mult), capText(limit), count, actx.File(), cappedText(capped))
+	e.Capped = capped
+	return lines, []Event{e}
 }
 
-// scaleLine multiplies the line's value when it names one of the keys. A value
-// that will not parse as a number is left alone, which is the reference
-// `except: nv = ov`.
-func scaleLine(line string, keys []string, mult float64) string {
+// scaleLine multiplies the line's value when it names one of the keys, and
+// reports how many of them the cap held back (R2.1). A value that will not
+// parse as a number is left alone, which is the reference `except: nv = ov`.
+func scaleLine(line string, keys []string, mult, limit float64) (out string, capped int) {
 	for _, key := range keys {
 		if !strings.Contains(line, `name="`+key+`"`) {
 			continue
@@ -155,13 +169,59 @@ func scaleLine(line string, keys []string, mult float64) string {
 		if !ok {
 			continue
 		}
-		nv, err := FormatNum(f*mult, old, modscript.ITOFOff)
+		r, bit := clamp(f*mult, limit)
+		nv, err := FormatNum(r, old, modscript.ITOFOff)
 		if err != nil {
 			continue
 		}
+		if bit {
+			capped++
+		}
 		line = SetVal(line, nv)
 	}
-	return line
+	return line, capped
+}
+
+/*
+clamp applies a block's CAP to an arithmetic result (R2.1).
+
+A cap of zero -- which is what an absent CAP decodes to, and what every
+reference script means -- returns the result untouched, so an engine run over a
+script that does not use the key produces exactly the bytes it produced before
+the key existed. A negative cap is treated the same way: "no ceiling" is a more
+useful reading of a nonsense value than "clamp everything to a negative number".
+*/
+func clamp(result, limit float64) (value float64, capped bool) {
+	if limit <= 0 || result <= limit {
+		return result, false
+	}
+	return limit, true
+}
+
+/*
+capText names the ceiling in a report line, and is empty for a block that has
+none -- which is what keeps the golden report lines byte-identical (R2.2).
+
+The number is rendered plainly rather than through PyRepr, which prints a whole
+number as "50000.0" because that is Python's repr of a float and the multipliers
+beside it were captured that way. A cap is a stack size, nobody wrote it as a
+float, and reproducing a Python quirk for a field Python never saw would be
+imitation rather than parity.
+*/
+func capText(limit float64) string {
+	if limit <= 0 {
+		return ""
+	}
+	return " cap " + strconv.FormatFloat(limit, 'f', -1, 64)
+}
+
+// cappedText says how often the cap actually bit. Silent when it did not, so a
+// cap set generously enough never to matter adds nothing to read.
+func cappedText(capped int) string {
+	if capped == 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (capped %d)", capped)
 }
 
 /*
@@ -177,7 +237,7 @@ sectionEnd alone would loop forever on a self-closing anchor, and anchor+1 alone
 would re-enter a section already edited.
 */
 func applyAllSections(lines []string, blk *modscript.Block, actx ApplyContext, start, end int) ([]string, []Event) {
-	matched := 0
+	matched, capped := 0, 0
 	pos := start
 
 	for {
@@ -230,7 +290,11 @@ func applyAllSections(lines []string, blk *modscript.Block, actx ApplyContext, s
 			if j < 0 {
 				continue
 			}
-			lines[j] = SetVal(lines[j], newValue(blk, lines[j], vc))
+			nv, bit := newValue(blk, lines[j], vc)
+			if bit {
+				capped++
+			}
+			lines[j] = SetVal(lines[j], nv)
 		}
 		matched++
 		pos = max(scopeEnd, found+1)
@@ -246,8 +310,10 @@ func applyAllSections(lines []string, blk *modscript.Block, actx ApplyContext, s
 	}
 	last := blk.SpecialKeyWords[len(blk.SpecialKeyWords)-1]
 	if matched > 0 {
-		return lines, []Event{actx.ok("%s x%s across %d '%s' sections in %s",
-			PyList(keys), op, matched, last, actx.File())}
+		e := actx.ok("%s x%s%s across %d '%s' sections in %s%s",
+			PyList(keys), op, capText(blk.Cap), matched, last, actx.File(), cappedText(capped))
+		e.Capped = capped
+		return lines, []Event{e}
 	}
 	return lines, []Event{actx.warn("no '%s' sections found in %s", last, actx.File())}
 }
@@ -339,14 +405,20 @@ func applyValueChanges(lines []string, blk *modscript.Block, actx ApplyContext, 
 			})
 			continue
 		}
-		nv := ""
+		nv, capped := "", 0
 		for _, j := range idxs {
-			nv = newValue(blk, lines[j], vc)
+			var bit bool
+			nv, bit = newValue(blk, lines[j], vc)
+			if bit {
+				capped++
+			}
 			lines[j] = SetVal(lines[j], nv)
 		}
 		// The reported value is the last one written, which is what the reference
 		// f-string picked up from the loop variable.
-		events = append(events, actx.ok("%s -> %s (%dx) in %s", vc.Key, nv, len(idxs), actx.File()))
+		e := actx.ok("%s -> %s (%dx) in %s%s", vc.Key, nv, len(idxs), actx.File(), cappedText(capped))
+		e.Capped = capped
+		events = append(events, e)
 	}
 	return events
 }
@@ -355,26 +427,28 @@ func applyValueChanges(lines []string, blk *modscript.Block, actx ApplyContext, 
 newValue computes what to write into a line for one value change.
 
 With no MATH_OPERATION the script's value is written verbatim, as Python's
-str() rendered it. With one, both sides are parsed as floats and the result is
+str() rendered it, and the block's CAP is not consulted. With one, both sides are parsed as floats and the result is
 formatted against the old value's spelling; anything that Python's float() or
 round() would have refused falls back to writing the script's value verbatim,
 which is the reference `except Exception: nv = str(val)`.
 */
-func newValue(blk *modscript.Block, line string, vc modscript.ValueChange) string {
+func newValue(blk *modscript.Block, line string, vc modscript.ValueChange) (value string, capped bool) {
 	if blk.MathOperation == "" {
-		return vc.Value.String()
+		// No arithmetic, so no ceiling: CAP bounds a computed result, and a
+		// value the script wrote out in full is the value the author asked for.
+		return vc.Value.String(), false
 	}
 	old, hasVal := GetVal(line)
 	if !hasVal {
-		return vc.Value.String()
+		return vc.Value.String(), false
 	}
 	o, ok := modscript.ParseFloat(old)
 	if !ok {
-		return vc.Value.String()
+		return vc.Value.String(), false
 	}
 	v, ok := vc.Value.Float()
 	if !ok {
-		return vc.Value.String()
+		return vc.Value.String(), false
 	}
 	var r float64
 	switch blk.MathOperation {
@@ -392,13 +466,14 @@ func newValue(blk *modscript.Block, line string, vc modscript.ValueChange) strin
 			r = o / v
 		}
 	default:
-		return vc.Value.String()
+		return vc.Value.String(), false
 	}
+	r, capped = clamp(r, blk.Cap)
 	nv, err := FormatNum(r, old, blk.IntegerToFloat)
 	if err != nil {
-		return vc.Value.String()
+		return vc.Value.String(), false
 	}
-	return nv
+	return nv, capped
 }
 
 // walkUp climbs `levels` indentation levels from a line, by tab depth (R2.3).

@@ -44,6 +44,19 @@ type Event struct {
 	// NotFound names the key a WARN could not find, which the report groups
 	// per mod. Empty for every other warning.
 	NotFound string
+	// Capped is how many values the block's CAP held back (spec 005 R2.2).
+	// Zero for every block that carries no cap, and for a cap that never bit.
+	Capped int
+	/*
+		Audit marks a line the reward-amount audit produced (spec 005 R1.6).
+
+		It renders as an ordinary warning, because that is what it is to a
+		reader, and it is deliberately left out of the per-mod applied/skipped
+		tallies: a reward amount that came out too large is not a skipped edit,
+		and counting it as one would turn a mod whose every edit landed into a
+		WORKING~ row about a value it may not even have touched.
+	*/
+	Audit bool
 }
 
 // Line renders the event exactly as the reference Report did (R2.1).

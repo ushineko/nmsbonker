@@ -102,6 +102,22 @@ type Block struct {
 	CurrencyMult *CurrencyMult
 	WrapperMult  *WrapperMult
 
+	/*
+		Cap is an upper bound applied to an arithmetic result before it is
+		formatted (spec 005 R2.1).
+
+		Absent, zero or negative means no cap, which is what every reference
+		script means: none of them carries the key, so the golden output is the
+		output of an engine that never looks at it. It is honoured by
+		WRAPPER_MULT, CURRENCY_MULT and a VALUE_CHANGE_TABLE that has a
+		MATH_OPERATION -- the three ops that multiply an existing value and can
+		therefore produce a number the game cannot hold in a stack.
+	*/
+	Cap float64
+	// HasCap is key presence, which is what `mods check --json` reports; the
+	// engine only ever consults Cap.
+	HasCap bool
+
 	// Unsupported names the keys this block carries that the engine ignores.
 	Unsupported []string
 	// Raw is the block as decoded, for `mods check --json`.
@@ -203,6 +219,7 @@ var interpreted = map[string]bool{
 	"SECTION_UP": true, "SECTION_UP_TO": true, "VALUE_CHANGE_TABLE": true,
 	"MATH_OPERATION": true, "INTEGER_TO_FLOAT": true, "REPLACE_TYPE": true,
 	"ADD": true, "REMOVE": true, "CURRENCY_MULT": true, "WRAPPER_MULT": true,
+	"CAP": true,
 }
 
 // decode turns the container tree into the typed model.
@@ -325,6 +342,12 @@ func decodeBlock(raw map[string]any) *Block {
 	if remove, ok := raw["REMOVE"]; ok {
 		blk.HasRemove = true
 		blk.Remove = scalarValue(remove).Truthy()
+	}
+	if capv, ok := raw["CAP"]; ok {
+		blk.HasCap = true
+		if f, ok := scalarValue(capv).Float(); ok {
+			blk.Cap = f
+		}
 	}
 	if cm, ok := raw["CURRENCY_MULT"].(map[string]any); ok {
 		mult, err := multOf(cm["MULT"])
