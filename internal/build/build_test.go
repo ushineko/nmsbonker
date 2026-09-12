@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -406,4 +407,61 @@ func TestWithoutACompilerNothingIsShipped(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, res.Built)
 	require.Equal(t, 1, res.Dropped)
+}
+
+/*
+Cancelling a build must undo it, not publish half of it.
+
+The Cancel button in the GUI (spec 003 R4.3, AC3) closes the run's context, and
+before this was fixed Run went on to delete <ModName>.prev and leave whatever
+targets had finished sitting in <ModName>. That is a mod folder missing most of
+its files, in the place a deploy reads from, with the copy that would have
+undone it already gone -- the failure mode is a game that loads a third of a mod
+and nothing on disk to say so.
+*/
+func TestCancellingABuildPutsThePreviousOutputBack(t *testing.T) {
+	workspace := t.TempDir()
+	previous := filepath.Join(workspace, "TEST MOD", "PREVIOUS.MBIN")
+	require.NoError(t, os.MkdirAll(filepath.Dir(previous), 0o750))
+	require.NoError(t, os.WriteFile(previous, []byte("the build the user has deployed"), 0o600))
+
+	internal, src := pristine(t, "present.mbin", tinyMXML)
+	plan := NewPlan([]Script{{Name: "M", Enabled: true,
+		Def: def("M", []*modscript.Block{valueBlock("A", "1")}, internal)}})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	res, err := Run(ctx, plan, Options{
+		Sources:  map[string]Source{"PRESENT.MBIN": src},
+		Compiler: fakeCompiler(t), Workspace: workspace, ModName: "TEST MOD", Workers: 1,
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.NotNil(t, res, "the partial result is still returned, so the log can be read")
+
+	body, rerr := os.ReadFile(previous)
+	require.NoError(t, rerr, "the previous output must be back under its own name")
+	require.Equal(t, "the build the user has deployed", string(body))
+	require.NoDirExists(t, filepath.Join(workspace, "TEST MOD.prev"),
+		"and the rescue copy must not be left lying about as a second mod folder")
+}
+
+// With nothing built before, a cancelled build leaves no mod folder at all —
+// not a folder holding whichever targets happened to finish first.
+func TestCancellingAFirstBuildLeavesNoPartialOutput(t *testing.T) {
+	workspace := t.TempDir()
+	internal, src := pristine(t, "present.mbin", tinyMXML)
+	plan := NewPlan([]Script{{Name: "M", Enabled: true,
+		Def: def("M", []*modscript.Block{valueBlock("A", "1")}, internal)}})
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	_, err := Run(ctx, plan, Options{
+		Sources:  map[string]Source{"PRESENT.MBIN": src},
+		Compiler: fakeCompiler(t), Workspace: workspace, ModName: "TEST MOD", Workers: 1,
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.NoDirExists(t, filepath.Join(workspace, "TEST MOD"))
+	require.NoDirExists(t, filepath.Join(workspace, "TEST MOD.prev"))
 }

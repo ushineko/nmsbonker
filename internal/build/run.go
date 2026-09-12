@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -141,22 +142,65 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 		}
 	}
 
+	res.Applied, res.Skipped = stats.applied, stats.skipped
+	res.Mods = stats.rows(plan)
+	res.Lines = report.Events(events)
+	res.Timings.Cache = opts.CacheTime
+
+	// A cancelled run is undone rather than published. process() returns as
+	// soon as the context closes, so what is under <ModName> at this point is
+	// whichever targets happened to finish -- a mod folder missing most of its
+	// files, which would deploy and would break the game quietly. prepare()
+	// moved the previous output to <ModName>.prev exactly so this is
+	// recoverable, so it goes back and the partial run is thrown away.
+	//
+	// Checked before mirrorGlobals and before .prev is removed, which is the
+	// whole of the fix: those two lines used to run first and consumed the copy
+	// this needs (spec 003 AC3).
+	if err := ctx.Err(); err != nil {
+		res.Timings.Total = time.Since(started)
+		if rerr := r.restorePrevious(); rerr != nil {
+			return res, fmt.Errorf("build: %w; the previous output could not be put back: %w", err, rerr)
+		}
+		return res, fmt.Errorf("build: %w", err)
+	}
+
 	if err := r.mirrorGlobals(); err != nil {
 		return nil, err
 	}
 	if err := os.RemoveAll(r.modRoot + ".prev"); err != nil {
 		return nil, fmt.Errorf("remove %s: %w", r.modRoot+".prev", err)
 	}
-
-	res.Applied, res.Skipped = stats.applied, stats.skipped
-	res.Mods = stats.rows(plan)
-	res.Lines = report.Events(events)
-	res.Timings.Cache = opts.CacheTime
 	res.Timings.Total = time.Since(started)
-	if err := ctx.Err(); err != nil {
-		return res, fmt.Errorf("build: %w", err)
-	}
 	return res, nil
+}
+
+/*
+restorePrevious undoes an interrupted run.
+
+The partial output goes, and the folder prepare() set aside comes back under its
+own name. A first-ever build has nothing set aside, and then the correct result
+is no mod folder at all rather than a folder holding a third of one.
+
+The work directory is left where it is. It holds the intermediate MXML, which is
+what someone chasing "why did that file not compile" wants to look at, and the
+next run clears it anyway.
+*/
+func (r *runner) restorePrevious() error {
+	prev := r.modRoot + ".prev"
+	if err := os.RemoveAll(r.modRoot); err != nil {
+		return fmt.Errorf("remove %s: %w", r.modRoot, err)
+	}
+	if _, err := os.Stat(prev); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil // nothing was there before this run
+		}
+		return fmt.Errorf("stat %s: %w", prev, err)
+	}
+	if err := os.Rename(prev, r.modRoot); err != nil {
+		return fmt.Errorf("restore %s: %w", r.modRoot, err)
+	}
+	return nil
 }
 
 func (r *runner) emit(e mxml.Event) {
