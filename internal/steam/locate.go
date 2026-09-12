@@ -145,11 +145,17 @@ func canonical(p string) string {
 // naming, not a reason to silently fall back to whatever Steam has installed.
 func Locate(overrideDir string) (*Install, error) {
 	if overrideDir != "" {
-		in, cand := describe("", "", overrideDir)
+		lib := libraryOf(overrideDir)
+		in, cand := describe("", lib, overrideDir)
 		in.Candidates = []Candidate{cand}
 		if cand.Reason != "" {
 			return nil, fmt.Errorf("%s: %s", overrideDir, cand.Reason)
 		}
+		// An override usually points at the Steam install anyway (it is how the
+		// integration tests and a second library are addressed), so the
+		// manifest is read when it is there. Without this, --game-dir silently
+		// blanks the buildid that `status` reports.
+		applyManifest(in, lib)
 		return in, nil
 	}
 
@@ -203,6 +209,41 @@ func Locate(overrideDir string) (*Install, error) {
 	err := fmt.Errorf("%w: looked in %d place(s); set %s or pass --game-dir",
 		ErrNotFound, len(candidates), "NMSBONKER_GAME_DIR")
 	return &Install{Candidates: candidates}, err
+}
+
+// libraryOf recovers the Steam library holding a game directory, on the
+// assumption Steam's own layout holds: <library>/steamapps/common/<installdir>.
+// It returns "" when the path is not shaped that way, and the caller then has
+// no manifest to read -- which is correct for a game copied out of Steam.
+func libraryOf(gameDir string) string {
+	common := filepath.Dir(filepath.Clean(gameDir))
+	if filepath.Base(common) != "common" {
+		return ""
+	}
+	steamapps := filepath.Dir(common)
+	if filepath.Base(steamapps) != "steamapps" {
+		return ""
+	}
+	return filepath.Dir(steamapps)
+}
+
+// applyManifest fills the fields that only the appmanifest knows.
+func applyManifest(in *Install, lib string) {
+	if lib == "" {
+		return
+	}
+	b, err := os.ReadFile(filepath.Join(lib, "steamapps", "appmanifest_"+AppID+".acf"))
+	if err != nil {
+		return
+	}
+	app := parseVDF(string(b)).child("AppState")
+	if app == nil {
+		return
+	}
+	in.BuildID = app.values["buildid"]
+	in.Name = app.values["name"]
+	in.LastUpdated = app.values["LastUpdated"]
+	in.StateFlags = app.values["StateFlags"]
 }
 
 // describe fills in everything derivable from a game directory and reports

@@ -78,9 +78,9 @@ func TestTheAppManifestYieldsTheInstallDirAndBuildID(t *testing.T) {
 	in, err := steam.Locate(filepath.Join(lib, "steamapps", "common", "No Man's Sky"))
 	require.NoError(t, err)
 	require.DirExists(t, in.PCBanksDir)
+	require.Equal(t, "25233815", in.BuildID,
+		"an explicit --game-dir inside a Steam library still gets the manifest facts")
 
-	// Locate with an override does not read the manifest (there may not be one),
-	// so the manifest fields are checked through discovery instead.
 	t.Setenv("STEAM_ROOT", lib)
 	t.Setenv("HOME", t.TempDir()) // keep discovery off the developer's real Steam
 	found, err := steam.Locate("")
