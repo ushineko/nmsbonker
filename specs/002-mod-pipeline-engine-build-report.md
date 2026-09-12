@@ -210,6 +210,28 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
 - R3.3 A miss (not in any pak) or a decompile failure is reported per source and
   does not abort the build; the affected blocks produce the legacy
   `no cached MXML for …` WARN.
+- R3.4 **Compiler/game compatibility is established by round-trip, not by a
+  version string.** Spec 001's R6 probe (`MBINCompiler version <file>`) cannot
+  read a version out of pristine game MBINs (they are not MBINCompiler output;
+  see spec 001 Status notes), so the game data version is `unknown` in
+  practice. Instead, `core.ToolCheck` (also run automatically as the first step
+  of `Cache.Ensure`) decompiles `gcgameplayglobals.global.mbin` and
+  `metadata/reality/tables/rewardtable.mbin`, recompiles each MXML, and compares
+  the recompiled MBIN with the pristine one **ignoring the header** (the first
+  0x60 bytes carry MBINCompiler's own version/GUID stamp; compare from the
+  first byte after the header, and additionally require equal length). Result:
+  `compatible` (both round-trip), `mismatch` (a decompile error, a recompile
+  error, a length difference or a body difference — the message names the file
+  and quotes the compiler's stderr/log tail), or `no-compiler`. A `mismatch`
+  does not forbid building but the build report's header line says
+  `Compiler compatibility: MISMATCH (…)` and the CLI prints a warning advising
+  `tools ensure` (newest release) or a pin. Measured by the spec author on 2026-09-11 with
+  MBINCompiler v7.02.0-pre1: both files round-trip to the same length and
+  differ only at header offsets 0x0A–0x0B and 0x18–0x1C (the compiler's format
+  id and version stamp `07 02 00 01`); the bodies are byte-identical. The
+  comparison therefore skips the first 0x60 bytes (generous margin) and
+  requires equal length. Record the outcome on this machine in the Status
+  notes.
 
 ### R4 — Build orchestrator (`internal/build`)
 
@@ -269,7 +291,7 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
   then the report table; exit 1 if any target was dropped, 0 otherwise — a
   `NOT BUILT` mod alone is exit 0 with a warning, matching the legacy script's
   tolerance),
-- `deploy [--replace-symlink]`, `report [--json]`.
+- `deploy [--replace-symlink]`, `report [--json]`, `tools check [--json]` (R3.4).
 
 ### R8 — Golden parity test (integration, `internal/build/golden_test.go`)
 
@@ -323,6 +345,10 @@ Crashed Freighter Loot — REWARDTABLE structural edits rejected), 1 NOT BUILT
   `mods check` with a clear error and does not execute.
 - [ ] AC8 Repo contains no `.lua` from `lua-src` and no MXML/MBIN (grep +
   `.gitignore` backstop).
+- [ ] AC9 `nmsbonker tools check` reports `compatible` with the installed
+  MBINCompiler on this machine, and reports `mismatch` with an actionable
+  message when pointed (via a test double) at a compiler whose recompile output
+  differs.
 
 ## Risks & Assumptions
 

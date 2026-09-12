@@ -448,6 +448,48 @@ When the override sits inside a Steam library
 `buildid`, `name`, `LastUpdated` and `StateFlags`; a game copied out of Steam
 simply has none, which is correct.
 
+### Review follow-ups (2026-09-11)
+
+Two findings from review, both fixed after the acceptance run above; the
+measurements and command output are unchanged by them.
+
+**F1 — the pak reader truncated silently.** `readAbsolute` returned `out[:n]`
+with no error when the archive could not produce the whole file: the compressed
+path stopped at a chunk index past the table or a short chunk, and the
+uncompressed path treated an EOF short read as success. A truncated pak -- or a
+`data_offset` that `logicalOffset` clamped to 0 -- therefore yielded a short MBIN
+that only failed later inside MBINCompiler, with a message about a malformed
+struct that named neither the pak nor the file. `readAbsolute` now returns
+`io.ErrUnexpectedEOF` wrapped with the archive path, the wanted length and the
+offset. `entryReader.Read` is unchanged: a streaming reader is allowed to return
+fewer bytes than the buffer holds.
+
+**F2 — release tags reached a file path unvalidated.** `release.Tag` comes from
+api.github.com and becomes a directory name under `tools_dir`. `ParseVersion`
+only required an `M.m.p` triple *somewhere* in the string, so
+`../../evil-1.2.3` and `v1.2.3/x` both passed and would have been joined into
+the tools directory. A tag is now accepted only if it matches
+`^v?\d+\.\d+\.\d+(-[A-Za-z0-9][A-Za-z0-9.]*)?$` **and** is one whole path
+segment (`mbin.ValidTag`). It is enforced in `ParseVersion`, in the release
+listing (dropped, with a debug line naming the tag, so `-v` shows why a release
+visible on GitHub was ignored), in `Installed()` (a stray directory in the tools
+tree is skipped), in the `mbincompiler.pin` setter, and defensively in
+`mbin.Dir`, which now returns `(string, error)` and refuses a tag it cannot
+vouch for rather than sanitising one quietly -- a silently rewritten path
+installs a release under a name no later lookup finds. All 30 tags in the live
+listing pass unchanged. `findVersion`, which reads MBINCompiler's undocumented
+output, stays lenient; it never touches a path.
+
+### R6: superseded by spec 002
+
+The reviewer has decided that spec 002 will replace the game-data-version probe
+with a decompile-then-recompile round-trip compatibility check, which asks the
+question that actually matters -- can this compiler read and rewrite this
+install's files -- rather than looking for a version stamp the game does not
+write. The R6 implementation here stays: it is harmless, it is guarded, it is
+correct for MBINCompiler-produced files, and `unknown` is a state R5.2 and R6.2
+already handle. No code change for this.
+
 ### Left for later phases
 
 - `cmd/nmsbonker-gui`, `build-gui`, `build-all` and `install` are deliberately
