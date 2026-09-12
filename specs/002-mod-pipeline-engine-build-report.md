@@ -589,6 +589,27 @@ and records the source as a miss.
   the engine ignores. They are reported per mod so the choice is visible, but
   changing behaviour needs new golden fixtures and a spec that says so.
 
+
+### Reviewer notes (2026-09-11, Fable)
+
+Golden stages A/B/C reproduced by the reviewer: 27/27 scripts, 100/100 targets
+byte-identical, 504/504 report lines, legacy verdict counts matched. Deploy and
+the recompile-gate fallback were read in full; no findings.
+
+**Known legacy-engine quirk preserved on purpose (follow-up spec material):**
+a `REMOVE` block whose scope is not narrowed by `SPECIAL_KEY_WORDS` (only
+`PRECEDING_KEY_WORDS`, or nothing) deletes from the scope start to the end of
+the file — `Crashed Freighter Loot` produces `REMOVE section None in
+REWARDTABLE.MBIN`, which empties the table; the recompile gate rejects it and
+the file ships via the non-structural retry, hence the mod's `PARTIAL`
+verdict. AMUMSS's intent is to remove the single section located by the
+preceding keywords. Fixing this (and honouring `VALUE_MATCH`, `LINE_OFFSET`,
+`SECTION_ACTIVE`) is an "engine fidelity" spec with regenerated golden
+fixtures, not a phase-2 change. Also note from the implementer: per-mod
+verdicts depend on build order (the empty-table REMOVE runs before later mods
+in alphabetical order), which is why the order must come from the user's list,
+never from directory listing.
+
 ## Risks & Assumptions
 
 - Concurrent compilation changes nothing semantically (each target is
