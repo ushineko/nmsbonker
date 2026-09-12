@@ -36,13 +36,13 @@ the first difference outside the header, or -1 when the bodies match.
 */
 type RoundTrip struct {
 	// Name identifies the file the check ran on.
-	Name string
-	OK   bool
+	Name string `json:"name"`
+	OK   bool   `json:"ok"`
 	// Reason is empty when OK.
-	Reason       string
-	OriginalSize int
-	RebuiltSize  int
-	FirstDiff    int
+	Reason       string `json:"reason,omitempty"`
+	OriginalSize int    `json:"originalSize"`
+	RebuiltSize  int    `json:"rebuiltSize"`
+	FirstDiff    int    `json:"firstDiff"`
 }
 
 /*
