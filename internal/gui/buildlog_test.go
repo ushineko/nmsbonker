@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/core"
 )
 
@@ -121,7 +122,7 @@ func TestEveryBuildProgressMessageMapsToAStep(t *testing.T) {
 func TestTheStepListNeverGoesBackwards(t *testing.T) {
 	var r buildRun
 	r.init()
-	r.reset(false)
+	r.reset()
 
 	r.advance(stepCompile, "building")
 	require.Equal(t, stepDone, r.steps[stepCache].state)
@@ -138,7 +139,7 @@ func TestTheStepListNeverGoesBackwards(t *testing.T) {
 func TestCancellingMarksOnlyTheRunningStep(t *testing.T) {
 	var r buildRun
 	r.init()
-	r.reset(false)
+	r.reset()
 	r.advance(stepCache, "preparing pristine game files")
 
 	r.stop(stepCancelled, "cancelled")
@@ -150,13 +151,12 @@ func TestCancellingMarksOnlyTheRunningStep(t *testing.T) {
 	require.True(t, r.finished)
 }
 
-// Deploy is a step only when the run was asked to deploy. A row that is always
-// there and usually never runs reads as something that failed.
-func TestTheDeployStepIsOnlyThereWhenDeploying(t *testing.T) {
-	require.Len(t, newSteps(false), 6)
-	steps := newSteps(true)
-	require.Len(t, steps, 7)
-	require.Equal(t, "Deploy", steps[stepDeploy].name)
+// Deploy is not a step. It is a separate button, pressed once the report has
+// been read, so the step list ends where the build does.
+func TestTheStepListEndsAtTheReport(t *testing.T) {
+	steps := newSteps()
+	require.Len(t, steps, 6)
+	require.Equal(t, "Report", steps[len(steps)-1].name)
 }
 
 // --- the controls ----------------------------------------------------------
@@ -205,11 +205,34 @@ func TestViewReportNeedsAReport(t *testing.T) {
 	require.True(t, u.run.viewBtn.Disabled())
 }
 
+// Deploy installs the last build, so it needs one, and a game to put it in. It
+// is also not startable while a build is running: the folder it would copy is
+// the one being rewritten.
+func TestDeployNeedsABuildAndAGame(t *testing.T) {
+	u := testUI(t)
+	u.run.deployBtn = widget.NewButton("Deploy…", nil)
+
+	u.drawControls()
+	require.True(t, u.run.deployBtn.Disabled(), "nothing has been built")
+
+	u.lastReport = core.ReportResult{Report: &report.Result{}}
+	u.drawControls()
+	require.True(t, u.run.deployBtn.Disabled(), "no game install to deploy into")
+
+	u.status.Install.Found = true
+	u.drawControls()
+	require.False(t, u.run.deployBtn.Disabled())
+
+	u.run.running = true
+	u.drawControls()
+	require.True(t, u.run.deployBtn.Disabled(), "not while the build is rewriting the folder")
+}
+
 // drawSteps and drawLog run several times a second from the log pump, including
 // while the section is not on screen and its widgets are nil.
 func TestDrawingWithNoWidgetsIsHarmless(t *testing.T) {
 	u := testUI(t)
-	u.run.reset(false)
+	u.run.reset()
 	u.run.detach()
 	require.NotPanics(t, func() {
 		u.drawSteps()

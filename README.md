@@ -26,7 +26,7 @@ false". A Tools card below it: MBINCompiler v7.02.0-pre1 (dotnet10) ticked,
 "Reports MBINCompiler v7.02.0-pre1", and a green Compatibility line reading
 "compatible — game files round-trip through this compiler unchanged (2 file(s)
 round-tripped byte-identical outside the header)", with ".NET 10 runtime
-present". Along the bottom, Build and a red "Build and deploy…" beside Refresh,
+present". Along the bottom, Build and a red "Deploy…" beside Refresh,
 and under them Disable all mods, Back up saves and a red "Remove deployed
 mod…". The status bar reads: game 25233815, compiler v7.02.0-pre1, mods 0/12,
 output COSMOS COMBINE.](assets/screenshot-overview.png)

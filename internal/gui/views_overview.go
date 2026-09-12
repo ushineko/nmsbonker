@@ -310,23 +310,16 @@ func verdictCounts(mods []report.ModResult) string {
 	return out
 }
 
-// overviewActions is the bottom strip: the two things this window is for, and
-// a reload.
+// overviewActions is the bottom strip: the two things this window is for
+// (build, then install what was built) and a reload.
 func (u *ui) overviewActions() fyne.CanvasObject {
 	build := widget.NewButtonWithIcon("Build", theme.MediaPlayIcon(), func() {
 		u.selectSection("Build")
-		u.startBuild(false, false, false)
+		u.startBuild(false)
 	})
 	build.Importance = widget.HighImportance
 
-	deploy := widget.NewButtonWithIcon("Build and deploy…", theme.DownloadIcon(), func() {
-		u.confirmDeploy("Build and deploy?",
-			"Every enabled mod is merged into one folder and then installed into the game.",
-			func(replaceSymlink bool) {
-				u.selectSection("Build")
-				u.startBuild(true, false, replaceSymlink)
-			})
-	})
+	deploy := widget.NewButtonWithIcon("Deploy…", theme.DownloadIcon(), func() { u.deployLast() })
 	deploy.Importance = widget.DangerImportance
 
 	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { u.invalidate() })
@@ -335,6 +328,8 @@ func (u *ui) overviewActions() fyne.CanvasObject {
 		// Nothing to build against, or nothing to build with. Disabled rather
 		// than hidden, so the window has the same shape once it is fixed.
 		build.Disable()
+	}
+	if !u.canDeployLast() {
 		deploy.Disable()
 	}
 	return container.NewVBox(widget.NewSeparator(),

@@ -158,7 +158,6 @@ const (
 	stepMerge
 	stepCompile
 	stepReport
-	stepDeploy
 )
 
 // buildStep is one row of the step list.
@@ -168,11 +167,10 @@ type buildStep struct {
 	note  string
 }
 
-// newSteps is the step list for a run. Deploy is only there when the run was
-// asked to deploy: a step that is always present and usually never runs reads
-// as something that failed.
-func newSteps(deploy bool) []buildStep {
-	steps := []buildStep{
+// newSteps is the step list for a run. Deploy is not a step: it is its own
+// button, pressed after the report has been read.
+func newSteps() []buildStep {
+	return []buildStep{
 		{name: "Detect", note: "the game install and the mod library"},
 		{name: "Tools", note: "MBINCompiler compatibility"},
 		{name: "Cache", note: "pak index and pristine game files"},
@@ -180,10 +178,6 @@ func newSteps(deploy bool) []buildStep {
 		{name: "Compile", note: "recompile each merged file"},
 		{name: "Report", note: "verdicts and timings"},
 	}
-	if deploy {
-		steps = append(steps, buildStep{name: "Deploy", note: "install under GAMEDATA/MODS"})
-	}
-	return steps
 }
 
 /*
@@ -232,7 +226,6 @@ func stepFor(what string) (int, bool) {
 type buildRun struct {
 	running   bool
 	cancelled bool
-	deploy    bool
 	cancel    context.CancelFunc
 
 	steps []buildStep
@@ -260,10 +253,11 @@ type buildRun struct {
 	totals    *widget.Label
 	followBox *widget.Check
 	// controls are the buttons that start work, disabled while a run is in
-	// flight; cancelBtn is the one that is enabled only then, and viewBtn needs
-	// a report rather than an idle window.
+	// flight; cancelBtn is the one that is enabled only then, and deployBtn and
+	// viewBtn need a report rather than an idle window.
 	controls  []*widget.Button
 	cancelBtn *widget.Button
+	deployBtn *widget.Button
 	viewBtn   *widget.Button
 }
 
@@ -277,7 +271,7 @@ type stepRowWidgets struct {
 func (r *buildRun) init() {
 	r.log = newLogModel()
 	r.follow = true
-	r.steps = newSteps(false)
+	r.steps = newSteps()
 }
 
 // detach forgets the live widgets. Called when the content pane is replaced: a
@@ -285,7 +279,7 @@ func (r *buildRun) init() {
 // old ones would keep a whole section tree alive for the life of the window.
 func (r *buildRun) detach() {
 	r.list, r.rows, r.counter, r.totals, r.followBox = nil, nil, nil, nil, nil
-	r.controls, r.cancelBtn, r.viewBtn = nil, nil, nil
+	r.controls, r.cancelBtn, r.deployBtn, r.viewBtn = nil, nil, nil, nil
 	// The next list starts at the top, so the offset the last automatic scroll
 	// left behind describes a widget that no longer exists. Carried over, it
 	// makes the fresh pane look as though the user had scrolled up in it, and
@@ -296,10 +290,9 @@ func (r *buildRun) detach() {
 // reset starts a new run's state. The log is emptied rather than appended to:
 // two builds' output in one pane, with no divider a scroll bar can find, is
 // worse than losing the previous one, which is on disk in the report anyway.
-func (r *buildRun) reset(deploy bool) {
+func (r *buildRun) reset() {
 	r.running, r.cancelled, r.finished = true, false, false
-	r.deploy = deploy
-	r.steps = newSteps(deploy)
+	r.steps = newSteps()
 	r.steps[stepDetect].state = stepRunning
 	r.summary, r.summarySt = "", StatusInfo
 	r.follow = true

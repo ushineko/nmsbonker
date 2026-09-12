@@ -36,36 +36,36 @@ scroll position in the middle of the thing they were reading.
 func (u *ui) buildBuild() fyne.CanvasObject {
 	head := heading("Build",
 		"Merge every enabled mod into one folder, recompile each file, and write the report. "+
-			"Nothing reaches the game until you deploy.")
+			"Nothing reaches the game until you press Deploy.")
 
 	build := widget.NewButtonWithIcon("Build", theme.MediaPlayIcon(), func() {
-		u.startBuild(false, false, false)
+		u.startBuild(false)
 	})
 	build.Importance = widget.HighImportance
 
-	deploy := widget.NewButtonWithIcon("Build and deploy…", theme.DownloadIcon(), func() {
-		u.confirmDeploy("Build and deploy?",
-			"Every enabled mod is merged into one folder and then installed into the game.",
-			func(replaceSymlink bool) { u.startBuild(true, false, replaceSymlink) })
-	})
-	deploy.Importance = widget.DangerImportance
-
 	recache := widget.NewButtonWithIcon("Rebuild cache", theme.ViewRefreshIcon(), func() {
-		u.startBuild(false, true, false)
+		u.startBuild(true)
 	})
 
 	cancel := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() { u.cancelBuild() })
 	cancel.Importance = widget.DangerImportance
 
+	// Deploy is its own button, not a variant of Build. Building and installing
+	// are the two halves of the loop, and a button that did both hid the moment
+	// between them: the one where the report says four mods need checking.
+	deploy := widget.NewButtonWithIcon("Deploy…", theme.DownloadIcon(), func() { u.deployLast() })
+	deploy.Importance = widget.DangerImportance
+
 	view := widget.NewButtonWithIcon("View report", theme.DocumentIcon(), func() {
 		u.selectSection("Report")
 	})
 
-	u.run.controls = []*widget.Button{build, deploy, recache}
+	u.run.controls = []*widget.Button{build, recache}
 	u.run.cancelBtn = cancel
+	u.run.deployBtn = deploy
 	u.run.viewBtn = view
 
-	toolbar := container.NewHBox(build, deploy, recache, cancel, view)
+	toolbar := container.NewHBox(build, recache, cancel, deploy, view)
 
 	left := container.NewVBox()
 	u.run.rows = nil
@@ -232,6 +232,15 @@ func (u *ui) drawControls() {
 			u.run.viewBtn.Enable()
 		}
 	}
+	// Deploy needs that same report, since it is what gets installed, and a
+	// game to install it into. The Report section's copy is gated the same way.
+	if u.run.deployBtn != nil {
+		if u.working() || !u.canDeployLast() {
+			u.run.deployBtn.Disable()
+		} else {
+			u.run.deployBtn.Enable()
+		}
+	}
 	if u.run.cancelBtn != nil {
 		if u.run.running && !u.run.cancelled {
 			u.run.cancelBtn.Enable()
@@ -292,16 +301,30 @@ func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 		func() { do(replace.Checked) }).Show()
 }
 
+// canDeployLast says whether there is a build to install and a game to install
+// it into. Every Deploy button in the window is enabled on exactly this.
+func (u *ui) canDeployLast() bool {
+	return u.lastReport.Report != nil && u.status.Install.Found
+}
+
 // deployLast installs the build already in the workspace, without rebuilding.
+//
+// Its log lines go to the build log, under the build they install, so the
+// Output pane reads as one story: built, then deployed.
 func (u *ui) deployLast() {
 	u.confirmDeploy("Deploy the last build?",
 		"The folder already built in the workspace is copied into the game. Nothing is "+
 			"rebuilt, so this installs exactly what the report describes.",
 		func(replaceSymlink bool) {
 			u.perform("Installing under GAMEDATA/MODS…", func(ctx context.Context) error {
+				req := u.request()
+				req.Events = core.Events{Log: func(level core.Level, msg string) {
+					u.run.log.append(level, msg)
+				}}
 				res, err := core.Deploy(ctx, core.DeployRequest{
-					Request: u.request(), ReplaceSymlink: replaceSymlink,
+					Request: req, ReplaceSymlink: replaceSymlink,
 				})
+				fyne.Do(u.drawLog)
 				if err != nil {
 					return err
 				}

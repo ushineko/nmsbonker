@@ -154,10 +154,11 @@ func (u *ui) reportActions() fyne.CanvasObject {
 	if r == nil {
 		openReport.Disable()
 		openOutput.Disable()
+	}
+	if !u.canDeployLast() {
 		deploy.Disable()
 	}
 	if !u.status.Install.Found {
-		deploy.Disable()
 		rollBack.Disable()
 	}
 	if !modsDirOpenable(u.status.Install) {

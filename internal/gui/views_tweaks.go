@@ -258,7 +258,7 @@ func (u *ui) noteParam(mod, param string, value float64, overridden bool) {
 func (u *ui) tweaksActions() fyne.CanvasObject {
 	build := widget.NewButtonWithIcon("Apply and build", theme.MediaPlayIcon(), func() {
 		u.selectSection("Build")
-		u.startBuild(false, false, false)
+		u.startBuild(false)
 	})
 	build.Importance = widget.HighImportance
 

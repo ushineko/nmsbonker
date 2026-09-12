@@ -442,31 +442,25 @@ compiler runner kills the MBINCompiler processes it started, and build.Run
 restores the previous output before returning — so a cancelled build leaves the
 workspace holding the mod folder that was there before, not a half-built one.
 */
-func (u *ui) startBuild(deploy, recache, replaceSymlink bool) {
+func (u *ui) startBuild(recache bool) {
 	if u.working() {
 		u.flash("A build is already running. Cancel it first.", StatusWarn)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	u.run.reset(deploy)
+	u.run.reset()
 	u.run.cancel = cancel
 	u.drawSteps()
 	u.drawControls()
 	u.redrawStatus()
 
 	req := core.BuildRequest{
-		Request:        core.Request{ConfigPath: u.configPath, Events: u.buildEvents()},
-		Recache:        recache,
-		Deploy:         deploy,
-		ReplaceSymlink: replaceSymlink,
+		Request: core.Request{ConfigPath: u.configPath, Events: u.buildEvents()},
+		Recache: recache,
 	}
 
 	go func() {
-		what := "Building…"
-		if deploy {
-			what = "Building and deploying…"
-		}
-		done := u.busy(what)
+		done := u.busy("Building…")
 		defer done()
 		defer cancel()
 
@@ -539,9 +533,6 @@ func (u *ui) finishBuild(res core.BuildResult, err error) {
 		u.run.summarySt = StatusBad
 	default:
 		u.run.finish(stepReport, "written")
-		if u.run.deploy && res.Deployed != nil {
-			u.run.finish(stepDeploy, res.Deployed.Dest)
-		}
 		u.run.running, u.run.finished = false, true
 		u.run.summary, u.run.summarySt = buildSummary(res)
 		u.lastReportOK = false
