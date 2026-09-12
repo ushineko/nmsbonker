@@ -2,7 +2,9 @@
 -- @desc Multiplies the substance amounts a rock, plant, crystal or asteroid
 -- @desc gives up when it is mined, on the entity files themselves.
 -- @param MATERIAL_MULTIPLIER label="Mined amount multiplier" min=1 max=100 step=1 default=10
+-- @param YIELD_CAP label="Largest mined amount" min=0 max=1000000 step=1000 default=50000
 MATERIAL_MULTIPLIER = 10  -- multiply mined substance amounts (rock/crystal/plant) by this
+YIELD_CAP = 50000         -- ceiling on the result, whatever ran before this. 0 = no ceiling.
 
 NMS_MOD_DEFINITION_CONTAINER =
 {
@@ -93,6 +95,7 @@ NMS_MOD_DEFINITION_CONTAINER =
                             ["PRECEDING_KEY_WORDS"] = "",
                             ["MATH_OPERATION"]      = "*",
                             ["REPLACE_TYPE"]        = "ALL",
+                            ["CAP"]                 = YIELD_CAP,
                             ["VALUE_CHANGE_TABLE"]  =
                             {
                                 { "AmountMin", MATERIAL_MULTIPLIER },

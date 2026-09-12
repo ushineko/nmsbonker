@@ -3,6 +3,7 @@
 -- @desc a shot at one yields anything at all.
 -- @param AST_MULT label="Asteroid resource multiplier" min=1 max=100 step=1 default=20
 -- @param VOXEL_CHANCE label="Asteroid yield chance" min=0 max=1 step=0.05 default=1.0 kind=float
+-- @param AST_CAP label="Largest asteroid resource amount" min=0 max=100000 step=100 default=5000
 -- Boost asteroid mining yield at the real source: GCSOLARGENERATIONGLOBALS holds
 -- the per-asteroid resource amounts. Common = tritium/common (ASTEROID1/2),
 -- Rare = precious (gold/platinum/silver, ASTEROID3). Multiply those x20.
@@ -10,6 +11,7 @@
 -- (AsteroidResourceReducer left at stock — it is not the amount lever.)
 AST_MULT     = 20
 VOXEL_CHANCE = 1.0
+AST_CAP      = 5000  -- ceiling on the resulting per-asteroid amounts. 0 = no ceiling.
 
 NMS_MOD_DEFINITION_CONTAINER =
 {
@@ -27,6 +29,7 @@ NMS_MOD_DEFINITION_CONTAINER =
                         {
                             ["PRECEDING_KEY_WORDS"] = "",
                             ["MATH_OPERATION"]      = "*",
+                            ["CAP"]                 = AST_CAP,
                             ["VALUE_CHANGE_TABLE"]  = {
                                 {"Common Asteroid Min Resources", AST_MULT},
                                 {"Common Asteroid Max Resources", AST_MULT},
