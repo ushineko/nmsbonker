@@ -1,17 +1,15 @@
-# Spec 004 — Tweaks (parameterised built-in mods), mod settings, deploy/rollback, save backup, migration, packaging
+# Spec 004 — Tweaks (parameterised built-in mods), mod settings, deploy/rollback, save backup, packaging
 
 ## Status: INCOMPLETE
 
 ## Context
 
 Phase 4 of 4. Turns the working builder into the "trainer" the repository
-description promises, finishes the deploy story, migrates this machine off
-`~/Games/nms-modding/`, and packages the app.
+description promises, finishes the deploy story, and packages the app.
 
-Built-in tweaks are the 11 scripts authored for the legacy pipeline (owned by
-this project's author, MIT), currently at
-`~/git/sysadmin/scripts/nms-modding/custom-mods/` (canonical copies) and in
-`~/Games/nms-modding/lua-src/`:
+Built-in tweaks are the 11 scripts authored by this project's author (MIT).
+The reviewer hands the implementer the source directory at implementation
+time; they are the scripts named below:
 
 | Script | Parameter(s) | Effect |
 |---|---|---|
@@ -27,16 +25,14 @@ this project's author, MIT), currently at
 | LearnMoreWords | `WORDS_MULT` (verify) | words learned per interaction ×N |
 
 (The implementer reads each script and records the actual global names in the
-spec's Status notes; the table above is indicative.) The remaining 16 scripts
-in `lua-src/` are third-party and are imported into the user's library at
-migration time only.
+spec's Status notes; the table above is indicative.) Third-party scripts are
+never embedded; users import them into their library with `mods import`.
 
 Every built-in already follows the pattern `NAME = <number>` at the top of the
 file, before `NMS_MOD_DEFINITION_CONTAINER = {…}`, and the container reads the
 global. That is the parameter contract.
 
-Deployment facts: `GAMEDATA/MODS` on this machine is currently a symlink to
-`~/Games/nms-modding/MODS` (legacy); the game rewrites
+Deployment facts: the game rewrites
 `Binaries/SETTINGS/GCMODSETTINGS.MXML` (format below) and sets
 `DisableAllMods=true` after a crash; loose-file mods need an entry with
 `Enabled=true` (the game adds one on first sight and prompts at the title
@@ -104,11 +100,16 @@ and are Steam-Cloud synced.
   BigStacks, ScanValue50x, SpaceMiningBoost, ItemValueBoost, LearnMoreWords,
   NaniteRewardBuff, MissionStandingBuff); default state **disabled** (a fresh
   install changes nothing until asked). `Reset to defaults` restores the
-  script's own values.
+  script's own values. When a library script with the same basename as a
+  built-in is present (a user who imported the reference script set before the
+  built-ins existed), `mods list`/`check` warn about the duplicate and the
+  library copy is ignored by the build; the Mods section shows it as
+  `shadowed by built-in` with a `Remove` action.
 - R1.5 Golden parity (spec 002) must still hold with built-ins at default
   values: the embedded scripts, executed with no overrides, produce the same
-  dump JSON as the `lua-src` copies (a test asserts this against
-  `NMSBONKER_LEGACY_DIR` when set; headers are comments, so they must).
+  dump JSON as the reference copies in `$NMSBONKER_REFERENCE_DIR/lua-src` (a
+  test asserts this when the variable is set; headers are comments, so they
+  must).
 
 ### R2 — Tweaks section (GUI) and CLI
 
@@ -162,24 +163,16 @@ and are Steam-Cloud synced.
   `saves backup|list`; Overview button `Back up saves` with the last backup time.
   Restore is manual (documented path); the tool does not write into the prefix.
 
-### R6 — Migration from the legacy tree
+### R6 — Symlinked `GAMEDATA/MODS`
 
-- R6.1 `nmsbonker migrate [--legacy DIR=~/Games/nms-modding] [--dry-run]` and an
-  Overview banner-card "Legacy setup detected" (shown when `GAMEDATA/MODS` is a
-  symlink or the legacy dir exists) with a `Migrate…` button that shows the plan
-  and asks. Plan:
-  1. Import `lua-src/*.lua` into the library, **skipping** files whose basename
-     matches a built-in (those built-ins are enabled instead); order and enabled
-     flags from `mods.conf`; parameters left at script defaults (they equal the
-     legacy values).
-  2. Build (cache from scratch under nmsbonker's own cache dir).
-  3. Replace the `GAMEDATA/MODS` symlink with a real directory (the symlink's
-     target `~/Games/nms-modding/MODS` is left untouched) and deploy.
-  4. Update mod settings (R3.2).
-  5. Print what is now unused and may be deleted by hand: the legacy dir
-     (AMUMSS, wineprefix, cache, ~200 MB) — the tool deletes nothing there.
-- R6.2 Idempotent: re-running with an already-migrated setup reports "nothing
-  to do".
+- R6.1 A symlinked `GAMEDATA/MODS` is handled generically (spec 002 R5.1): the
+  refusal message says only that the folder is a symlink, where it points, and
+  that `--replace-symlink` removes the link (never its target) and creates a
+  real directory. No reference to any previous setup.
+- R6.2 The Overview install card shows `GAMEDATA/MODS: symlink → <target>` with
+  a warn marker and a `Replace symlink and deploy…` action; its confirm dialog
+  states the three facts above and that the link's target is left untouched.
+  After success the card shows `directory`.
 
 ### R7 — Packaging, install, docs
 
@@ -213,9 +206,9 @@ and are Steam-Cloud synced.
   .NET), credits (MBINCompiler, HGPAKtool format reference, AMUMSS script
   format), changelog `0.1.0`.
 - R7.5 `docs/architecture.md`: package map, data flow diagram (text), the
-  parity/golden story and how to regenerate golden fixtures from the legacy
-  builder (the `make_golden.py` harness is committed under `tools/legacy/`
-  since it is this project's own code and contains no game data).
+  parity/golden story and how to regenerate golden fixtures from the reference
+  Python builder (the `make_golden.py` harness under `tools/reference/` is this
+  project's own code and contains no game data).
 - R7.6 Validation report for the `0.1.0` milestone under `validation-reports/`
   (angou template), including govulncheck output and binary sizes. No version
   bump or tag without the user's say-so.
@@ -227,12 +220,11 @@ and are Steam-Cloud synced.
 - [ ] AC2 Setting `MATERIAL_MULTIPLIER` to 20 via the Tweaks slider (and via
   `tweaks set`) changes the merged MXML for the affected entity files by exactly
   the expected factor and the on-disk embedded script is unchanged.
-- [ ] AC3 `nmsbonker migrate --dry-run` on this machine prints the five-step
-  plan with 16 library imports and 10–11 built-ins enabled; a real `migrate`
-  (run only after the user confirms in the session) leaves
-  `GAMEDATA/MODS/COSMOS COMBINE` as a real directory with 100 MBINs, the
-  settings entry enabled, `~/Games/nms-modding/` untouched, and the game
-  launching with mods active (user-verified).
+- [ ] AC3 On a fake game dir whose `GAMEDATA/MODS` is a symlink, the Overview
+  `Replace symlink and deploy…` action (and `deploy --replace-symlink`) leaves
+  `GAMEDATA/MODS/<MOD_NAME>` as a real directory with the built files, the
+  settings entry enabled, and the symlink's former target untouched; the
+  message text contains no reference to any previous setup.
 - [ ] AC4 `deploy` twice in a row archives the first deployment; `rollback`
   restores it; `archive list` shows both; retention prunes to 5 in a test on
   fakes.
@@ -246,9 +238,8 @@ and are Steam-Cloud synced.
   removes exactly those files.
 - [ ] AC8 README, architecture doc, screenshots and the validation report
   exist; `make lint`, `make test`, parity and golden suites pass.
-- [ ] AC9 The sysadmin repository's `docs/nms-modding-setup.md` gets a
-  superseded banner pointing at nmsbonker and the memory file is updated
-  (done by the reviewing session, not by the implementer).
+- [ ] AC9 `grep -ri legacy` over the repository (excluding `.git`) returns
+  nothing, and no committed file contains a personal absolute path.
 
 ## Risks & Assumptions
 
@@ -256,9 +247,9 @@ and are Steam-Cloud synced.
   top level; the `@param` header is authoritative for built-ins, and a script
   that reassigns the global later would silently ignore the override — the
   `check` command warns when a parameter name is assigned more than once.
-- Replacing the `GAMEDATA/MODS` symlink is the one irreversible-looking step of
-  migration; it is trivially reversible by hand (`ln -sfn`) and the plan says
-  so. Steam "verify integrity" restores stock files if anything goes wrong.
+- Replacing a `GAMEDATA/MODS` symlink is reversible by hand (`ln -sfn`) and the
+  dialog says so. Steam "verify integrity" restores stock files if anything
+  goes wrong.
 - Retention deletes archives; the counts are conservative and printed.
 - Rollback: `git revert` for code; `nmsbonker rollback` for the game folder.
 
