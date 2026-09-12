@@ -3,7 +3,7 @@ module github.com/ushineko/nmsbonker
 go 1.25.0
 
 require (
-	github.com/klauspost/compress v1.18.0
+	github.com/klauspost/compress v1.18.7
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.1
 )
