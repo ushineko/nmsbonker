@@ -77,12 +77,18 @@ type ui struct {
 	// itself, so inferring "not loaded yet" from an empty slice makes an empty
 	// library load forever. "Loaded and empty" and "not loaded" are different
 	// states and need to be stored as such.
-	status   core.StatusResult
-	statusOK bool
-	detect   core.DetectResult
-	detectOK bool
-	mods     core.ListModsResult
-	modsOK   bool
+	status    core.StatusResult
+	statusOK  bool
+	detect    core.DetectResult
+	detectOK  bool
+	mods      core.ListModsResult
+	modsOK    bool
+	tweaks    core.ListTweaksResult
+	tweaksOK  bool
+	saves     core.ListSaveBackupsResult
+	savesOK   bool
+	archive   core.ListArchiveResult
+	archiveOK bool
 	// checks are the per-script facts the Mods table's Author and Files columns
 	// come from: what each .lua says about itself, loaded through the sandbox.
 	checks       map[string]core.ModCheck
@@ -97,6 +103,20 @@ type ui struct {
 	configOK     bool
 	lastReport   core.ReportResult
 	lastReportOK bool
+	/*
+		compat is the round-trip compatibility check (spec 002 R3.4), which the
+		Overview's Tools card reports.
+
+		Run once per process rather than per section load, and in the background
+		on first arrival at Overview. It starts two MBINCompiler processes and
+		takes about two seconds, which is too slow to do on every navigation and
+		far too useful to leave saying "not checked yet" -- that is what the
+		card said for the whole of spec 003, on a machine where the answer was
+		"compatible" and the build already knew it.
+	*/
+	compat      core.ToolCheckResult
+	compatOK    bool
+	compatError string
 	// lastReportErr is why there is no report, which for a machine that has
 	// never built is "no build yet" rather than a failure.
 	lastReportErr string
@@ -154,7 +174,7 @@ func (u *ui) applyAppearance() {
 // title with no builder draws nothing, so the two are kept in step by
 // TestSectionNamesNeedsNoApp rather than by memory.
 var sectionTitles = []string{
-	"Overview", "Mods", "Build", "Report", "Tools", "Settings", "Appearance", "About",
+	"Overview", "Mods", "Tweaks", "Build", "Report", "Tools", "Settings", "Appearance", "About",
 }
 
 // sectionBuilders is what each section is made of. sections() walks
@@ -175,6 +195,7 @@ func sectionBuilders() map[string]struct {
 	}{
 		"Overview":   {theme.HomeIcon, (*ui).buildOverview},
 		"Mods":       {theme.ListIcon, (*ui).buildMods},
+		"Tweaks":     {theme.SettingsIcon, (*ui).buildTweaks},
 		"Build":      {theme.MediaPlayIcon, (*ui).buildBuild},
 		"Report":     {theme.DocumentIcon, (*ui).buildReport},
 		"Tools":      {theme.ComputerIcon, (*ui).buildTools},
@@ -868,8 +889,13 @@ func Actions() []string {
 		// Mods
 		"mods list", "mods add", "mods import", "mods remove",
 		"mods enable", "mods disable", "mods move", "mods check",
-		// Build and Report
+		// Tweaks
+		"tweaks list", "tweaks set", "tweaks reset", "tweaks enable", "tweaks disable",
+		// Build, Report and what undoes them
 		"build", "deploy", "report",
+		"undeploy", "rollback", "archive list",
+		"mods-off", "mods-on",
+		"saves backup", "saves list",
 		// Tools
 		"tools ensure", "tools list", "tools check", "tools pin", "tools unpin",
 		"tools releases", "tools remove",

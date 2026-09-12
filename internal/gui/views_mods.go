@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/ushineko/nmsbonker/internal/core"
+	"github.com/ushineko/nmsbonker/internal/modscript"
 )
 
 // --- Mods (R2.2) -----------------------------------------------------------
@@ -22,6 +23,7 @@ const (
 	modColOrder = iota
 	modColOn
 	modColName
+	modColSource
 	modColAuthor
 	modColTargets
 	modColVerdict
@@ -59,7 +61,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 		title string
 		width float32
 	}{
-		{"#", 50}, {"On", 50}, {"Name", 300}, {"Author", 180},
+		{"#", 50}, {"On", 50}, {"Name", 260}, {"Source", 110}, {"Author", 170},
 		{"Files", 70}, {"Last verdict", 160},
 	}
 
@@ -77,6 +79,8 @@ func (u *ui) buildMods() fyne.CanvasObject {
 				less = boolLess(a.info.Enabled, b.info.Enabled)
 			case modColName:
 				less = strings.ToLower(a.info.Name) < strings.ToLower(b.info.Name)
+			case modColSource:
+				less = a.info.Source < b.info.Source
 			case modColAuthor:
 				less = strings.ToLower(a.author) < strings.ToLower(b.author)
 			case modColTargets:
@@ -126,10 +130,11 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	disable := widget.NewButtonWithIcon("Disable", theme.CancelIcon(), nil)
 	up := widget.NewButtonWithIcon("Move up", theme.MoveUpIcon(), nil)
 	down := widget.NewButtonWithIcon("Move down", theme.MoveDownIcon(), nil)
+	details := widget.NewButtonWithIcon("Details…", theme.InfoIcon(), nil)
 	open := widget.NewButtonWithIcon("Open script", theme.DocumentIcon(), nil)
 	remove := widget.NewButtonWithIcon("Remove…", theme.DeleteIcon(), nil)
 	remove.Importance = widget.DangerImportance
-	rowActions := []*widget.Button{enable, disable, up, down, open, remove}
+	rowActions := []*widget.Button{enable, disable, up, down, details, open, remove}
 	for _, b := range rowActions {
 		b.Disable()
 	}
@@ -149,6 +154,13 @@ func (u *ui) buildMods() fyne.CanvasObject {
 		}
 		if rows[i].info.Status == core.ModMissing {
 			open.Disable()
+			details.Disable()
+		}
+		if rows[i].info.Source == core.SourceBuiltin && !rows[i].info.Shadowed {
+			// A built-in has no file in the library to open, and no entry to
+			// remove: it is compiled in. Its parameters live in Tweaks.
+			open.Disable()
+			remove.Disable()
 		}
 		u.gate(rowActions...)
 	}
@@ -222,6 +234,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	disable.OnTapped = func() { u.setModEnabled([]string{rows[selected].info.Name}, false) }
 	up.OnTapped = func() { u.moveMod(rows[selected], -1) }
 	down.OnTapped = func() { u.moveMod(rows[selected], +1) }
+	details.OnTapped = func() { u.showModDetails(rows[selected]) }
 	open.OnTapped = func() { u.openPath(rows[selected].info.Path) }
 	remove.OnTapped = func() { u.removeModDialog(rows[selected].info) }
 
@@ -245,7 +258,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	bottom := container.NewVBox(
 		u.modsFooter(rows, inBuildOrder()),
 		widget.NewSeparator(),
-		container.NewHBox(enable, disable, up, down, open, remove),
+		container.NewHBox(enable, disable, up, down, details, open, remove),
 	)
 	return container.NewBorder(top, bottom, nil, nil, fixedHeight(table, 380))
 }
@@ -317,6 +330,14 @@ func modCell(r modRow, col int) (string, widget.Importance) {
 			return r.info.Name, widget.WarningImportance
 		}
 		return r.info.Name, widget.MediumImportance
+	case modColSource:
+		if r.info.Shadowed {
+			// The library holds a script of this name and the built-in is what
+			// builds. Saying "built-in" alone would leave the user looking at a
+			// file in their library that has no effect and no explanation.
+			return modShadowedText, widget.WarningImportance
+		}
+		return r.info.Source, widget.LowImportance
 	case modColAuthor:
 		return orNone(r.author, "—"), widget.LowImportance
 	case modColTargets:
@@ -339,6 +360,10 @@ const (
 	modOnGlyph  = "✓"
 	modOffGlyph = "–"
 )
+
+// modShadowedText is the Source cell for a built-in whose name a library script
+// also carries.
+const modShadowedText = "built-in *"
 
 // targetsText is the Files column: how many game files the script edits, and
 // how many edit blocks it carries.
@@ -542,4 +567,150 @@ func (u *ui) showCheckResults(res core.CheckModsResult) {
 				"mod still builds; the edits those keys asked for do not happen."),
 		), nil, nil, nil, fixedHeight(t.widget(), 360))
 	u.showDetail("Mod scripts", body, 900, 560)
+}
+
+/*
+showModDetails is what one script says about itself, and its parameters (R2.2).
+
+The parameters are the reason this dialog exists. A library script downloaded
+from Nexus keeps its tuning constants at the top of the file the same way the
+built-ins do, so they can be offered here too -- but undeclared, which means no
+label beyond the global's own name and no range, because guessing a maximum for
+somebody else's constant would be inventing a fact. A numeric field, therefore,
+and no slider.
+*/
+func (u *ui) showModDetails(r modRow) {
+	check, haveCheck := u.checks[r.info.Name]
+
+	facts := container.NewVBox(
+		plainRow("Source", modSourceText(r.info)),
+		plainRow("Author", orNone(check.Author, "—")),
+		plainRow("Pak name", orNone(check.ModFilename, "—")),
+		plainRow("Written for", orNone(check.NMSVersion, "—")),
+		plainRow("Position", fmt.Sprintf("%d in the build order", r.order)),
+		factRow("Enabled", yesNoText(r.info.Enabled), enabledRowStatus(r.info.Enabled)),
+	)
+	if r.info.Path != "" {
+		facts.Add(plainRow("File", r.info.Path))
+	}
+	if r.info.Shadowed {
+		facts.Add(note("A library script of this name is present and is ignored: the built-in "+
+			"is what builds. Remove takes the library copy out; the built-in stays.",
+			StatusWarn))
+	}
+	if haveCheck && !check.OK {
+		facts.Add(note("This script does not load: "+check.Error+
+			". It contributes nothing to a build until that is fixed.", StatusBad))
+	}
+	if len(check.Unsupported) > 0 {
+		facts.Add(note("Directives this engine ignores, so the edits they ask for do not "+
+			"happen: "+strings.Join(check.Unsupported, ", ")+".", StatusWarn))
+	}
+	if len(check.Duplicates) > 0 {
+		facts.Add(note("These parameters are assigned more than once at the top of the "+
+			"script, so a value set here would be overwritten by the script itself and "+
+			"quietly ignored: "+strings.Join(check.Duplicates, ", ")+".", StatusWarn))
+	}
+
+	body := container.NewVBox(facts)
+	if len(check.Targets) > 0 {
+		body.Add(widget.NewSeparator())
+		body.Add(widget.NewLabelWithStyle(
+			fmt.Sprintf("Edits %d game file(s), %d edit block(s)", len(check.Targets), check.Blocks),
+			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+		files := widget.NewLabel(strings.Join(check.Targets, "\n"))
+		files.Importance = widget.LowImportance
+		body.Add(fixedHeight(container.NewVScroll(files), 120))
+	}
+	if len(check.Params) > 0 {
+		body.Add(widget.NewSeparator())
+		body.Add(widget.NewLabelWithStyle("Parameters",
+			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+		if r.info.Source == core.SourceBuiltin {
+			body.Add(note("These are also in the Tweaks section, with a slider each.",
+				StatusInfo))
+		} else {
+			body.Add(note("Numbers this script declares at the top of the file. It says "+
+				"nothing about what they may be set to, so there is no range here — the "+
+				"script itself, and whoever wrote it, is the documentation.", StatusInfo))
+		}
+		for _, p := range check.Params {
+			body.Add(u.libraryParamRow(r.info.Name, p))
+		}
+	}
+
+	u.showDetail(r.info.Name, container.NewVScroll(body), 820, 620)
+}
+
+// libraryParamRow is one undeclared parameter: a field and a Reset, no slider.
+func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
+	label := widget.NewLabel(p.Name)
+	label.Importance = widget.LowImportance
+
+	entry := widget.NewEntry()
+	entry.SetText(modscript.FormatValue(p.Current, p.Kind))
+	entry.OnSubmitted = func(text string) {
+		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+		if err != nil {
+			u.flash(p.Name+": "+strconv.Quote(text)+" is not a number.", StatusWarn)
+			entry.SetText(modscript.FormatValue(p.Current, p.Kind))
+			return
+		}
+		u.perform("Setting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
+			res, err := core.SetTweakParam(ctx, core.SetTweakParamRequest{
+				Request: u.request(), Name: mod, Param: p.Name, Value: v,
+			})
+			if err != nil {
+				return err
+			}
+			fyne.Do(func() {
+				entry.SetText(modscript.FormatValue(res.New, p.Kind))
+				u.flash(fmt.Sprintf("%s %s is %s for the next build. The script on disk is "+
+					"unchanged.", mod, p.Name, modscript.FormatValue(res.New, p.Kind)),
+					StatusGood)
+			})
+			return nil
+		})
+	}
+
+	reset := widget.NewButtonWithIcon("Reset", theme.ContentUndoIcon(), func() {
+		u.perform("Resetting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
+			if _, err := core.ResetTweak(ctx, core.ResetTweakRequest{
+				Request: u.request(), Name: mod, Param: p.Name,
+			}); err != nil {
+				return err
+			}
+			fyne.Do(func() { entry.SetText(modscript.FormatValue(p.Default, p.Kind)) })
+			return nil
+		})
+	})
+
+	return container.NewBorder(nil, nil, fixedWidth(label, 220),
+		container.NewHBox(fixedWidth(dim("script value "+
+			modscript.FormatValue(p.Default, p.Kind)), 190), reset), entry)
+}
+
+// modSourceText spells out where a mod's script comes from.
+func modSourceText(m core.ModInfo) string {
+	if m.Source == core.SourceBuiltin {
+		if m.Shadowed {
+			return "built in to nmsbonker (a library script of this name is ignored)"
+		}
+		return "built in to nmsbonker"
+	}
+	return "your library"
+}
+
+func yesNoText(b bool) string {
+	if b {
+		return "yes"
+	}
+	return "no"
+}
+
+func enabledRowStatus(enabled bool) Status {
+	if enabled {
+		return StatusGood
+	}
+	return StatusInfo
 }

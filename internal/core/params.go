@@ -27,7 +27,7 @@ place would make "reset to defaults" a lie.
 // scriptPath is what a load failure should name. A built-in has no path, so it
 // is named by its file as it would be on disk, which is what the user sees in
 // the interface.
-func scriptPath(s *session, m ModInfo) string {
+func scriptPath(m ModInfo) string {
 	if m.Path != "" {
 		return m.Path
 	}

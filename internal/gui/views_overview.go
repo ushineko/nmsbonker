@@ -29,6 +29,10 @@ func (u *ui) buildOverview() fyne.CanvasObject {
 	u.loadStatus()
 	u.loadMods()
 	u.loadReport()
+	u.loadSaves()
+	// The compatibility line is a measurement, not a lookup, so it is taken
+	// here rather than left saying "not checked yet" (R3.4).
+	u.loadCompat()
 
 	body := container.NewVBox(
 		heading("Overview", "What this machine has, and what a build would produce."),
@@ -64,15 +68,22 @@ func (u *ui) installCard() fyne.CanvasObject {
 		plainRow("Directory", in.Dir),
 		plainRow("Found by", in.Source),
 		factRow("Steam buildid", orNone(in.BuildID, "no appmanifest"), buildIDStatus(in.BuildID)),
-		plainRow("Game data version", orNone(u.status.GameDataVersion, "unknown")),
 		plainRow("Archives", fmt.Sprintf("%d .pak in %s", in.PakCount, in.PCBanksDir)),
 		factRow("GAMEDATA/MODS", mods, modsStateStatus(in.ModsState)),
 	}
 	if in.ModsState == steam.ModsSymlink {
-		rows = append(rows, note(
-			"The game reads mods through the link, so deploying here would write into the "+
-				"link's target rather than into the game. Deploy offers to replace the link — "+
-				"never its target — with a real directory.", StatusWarn))
+		// R6.2: the fact, the consequence, and the action, in that order. The
+		// text describes the symlink and nothing else -- whatever put it there
+		// is not this tool's business and naming a guess would be worse than
+		// saying nothing.
+		block, replace := action("GAMEDATA/MODS is a symlink",
+			"It points at "+in.ModsTarget+". The game reads mods through the link, so "+
+				"installing here would write into that directory rather than into the game. "+
+				"Replacing the link removes the link only — never what it points at — and "+
+				"creates a real directory in its place.",
+			"Replace symlink and deploy…", true, func() { u.replaceSymlinkAndDeploy() })
+		u.gate(replace)
+		rows = append(rows, block)
 	}
 	if in.ModSettingsOK {
 		rows = append(rows, factRow("DisableAllMods", fmt.Sprintf("%t", in.DisableAllMods),
@@ -164,13 +175,39 @@ func (u *ui) toolsCard() fyne.CanvasObject {
 		indexStatus = StatusWarn
 	}
 
+	compat, compatSt := u.compatLine()
 	return card("Tools",
 		factRow("MBINCompiler", c.Tag+" ("+c.Flavor+")", StatusGood),
 		plainRow("Reports", c.Version),
-		factRow("Compatibility", compatText(u.status.Compatibility), compatStatus(u.status.Compatibility)),
+		factRow("Compatibility", compat, compatSt),
 		factRow(".NET 10 runtime", dotnetText(c.Dotnet10, c.Flavor), dotnetStatus(c.Dotnet10, c.Flavor)),
 		factRow("Pak index", indexText, indexStatus),
 	)
+}
+
+/*
+compatLine is the Compatibility row, from the round-trip check (R3.4).
+
+Spec 001 derived this from version strings and could not answer the question:
+the game's own MBINs carry no libMBIN version. Spec 002 replaced it with a
+measurement -- decompile two known game files, recompile them, compare the bytes
+-- and this row now reports that measurement rather than the guess. While it is
+running the row says so, because "checking" and "unknown" are different states
+and a card that says "unknown" for two seconds and then changes its mind reads
+as a card that was wrong.
+*/
+func (u *ui) compatLine() (string, Status) {
+	switch {
+	case u.compatError != "":
+		return "could not be checked: " + u.compatError, StatusInfo
+	case u.compat.Status == "":
+		return "checking…", StatusInfo
+	}
+	text := compatText(u.compat.Status)
+	if u.compat.Detail != "" {
+		text += " (" + u.compat.Detail + ")"
+	}
+	return text, compatStatus(u.compat.Status)
 }
 
 // libraryCard is the mod side: how much is enabled, and what the last build
@@ -194,6 +231,7 @@ func (u *ui) libraryCard() fyne.CanvasObject {
 		rows = append(rows, factRow("Missing scripts", fmt.Sprintf("%d", missing), StatusWarn))
 	}
 	rows = append(rows, plainRow("Output folder", orNone(u.status.ModName, "COSMOS COMBINE")))
+	rows = append(rows, plainRow("Save backup", u.saveBackupText()))
 
 	switch {
 	case !u.lastReportOK:
@@ -267,7 +305,8 @@ func (u *ui) overviewActions() fyne.CanvasObject {
 		deploy.Disable()
 	}
 	return container.NewVBox(widget.NewSeparator(),
-		container.NewHBox(build, deploy, refresh))
+		container.NewHBox(build, deploy, refresh),
+		u.gameActions())
 }
 
 // --- small helpers shared by the cards --------------------------------------

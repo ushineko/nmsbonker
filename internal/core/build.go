@@ -213,7 +213,7 @@ func (s *session) loadScripts(ctx context.Context, all bool) ([]build.Script, er
 				script.Err = err
 				break
 			}
-			def, err := modscript.LoadSource(ctx, scriptPath(s, m), src)
+			def, err := modscript.LoadSource(ctx, scriptPath(m), src)
 			if err != nil {
 				script.Err = err
 			} else {

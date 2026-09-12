@@ -564,7 +564,7 @@ func CheckMods(ctx context.Context, req CheckModsRequest) (CheckModsResult, erro
 			}
 			check.Params = params
 			check.Duplicates = modscript.DuplicateAssignments(src)
-			def, err := modscript.LoadSource(ctx, scriptPath(s, m), src)
+			def, err := modscript.LoadSource(ctx, scriptPath(m), src)
 			if err != nil {
 				check.Error = err.Error()
 			} else {

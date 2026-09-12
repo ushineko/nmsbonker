@@ -28,6 +28,7 @@ explanations of WORKING~ would be two different decisions.
 */
 func (u *ui) buildReport() fyne.CanvasObject {
 	u.loadReport()
+	u.loadArchive()
 
 	if !u.lastReportOK {
 		return container.NewVScroll(container.NewVBox(
@@ -135,6 +136,13 @@ func (u *ui) reportActions() fyne.CanvasObject {
 	deploy := widget.NewButtonWithIcon("Deploy…", theme.DownloadIcon(), func() { u.deployLast() })
 	deploy.Importance = widget.DangerImportance
 
+	// Roll back sits beside Deploy because it is the same question asked the
+	// other way round: this report describes what Deploy would install, and the
+	// archive holds what installing it would displace.
+	rollBack := widget.NewButtonWithIcon("Roll back…", theme.HistoryIcon(),
+		func() { u.showRollback() })
+	rollBack.Importance = widget.DangerImportance
+
 	if r == nil {
 		openReport.Disable()
 		openOutput.Disable()
@@ -142,10 +150,14 @@ func (u *ui) reportActions() fyne.CanvasObject {
 	}
 	if !u.status.Install.Found {
 		deploy.Disable()
+		rollBack.Disable()
 	}
-	u.gate(openReport, openOutput, deploy)
+	if !u.archiveOK || len(u.archive.Entries) == 0 {
+		rollBack.Disable()
+	}
+	u.gate(openReport, openOutput, deploy, rollBack)
 	return container.NewVBox(widget.NewSeparator(),
-		container.NewHBox(openReport, openOutput, deploy))
+		container.NewHBox(openReport, openOutput, deploy, rollBack))
 }
 
 // modNote is the Notes column, worded as the CLI and the Markdown report word

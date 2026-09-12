@@ -66,6 +66,9 @@ func (u *ui) invalidate() {
 	u.statusOK = false
 	u.detectOK = false
 	u.modsOK = false
+	u.tweaksOK = false
+	u.savesOK = false
+	u.archiveOK = false
 	u.toolsOK = false
 	u.releasesOK = false
 	u.cacheOK = false
@@ -210,6 +213,76 @@ func (u *ui) loadMods() {
 			for _, n := range res.Notices {
 				u.flash(n, StatusInfo)
 			}
+		})
+	}()
+}
+
+/*
+loadTweaks fills the built-in tweaks and their parameters.
+
+It reads the last build report as well, to work out whether what is on screen
+has been built yet, so it is a section load rather than something the status bar
+needs.
+*/
+func (u *ui) loadTweaks() {
+	if u.tweaksOK {
+		return
+	}
+	u.tweaksOK = true
+	go func() {
+		done := u.busy("Reading the built-in tweaks…")
+		defer done()
+		res, err := core.ListTweaks(context.Background(), core.ListTweaksRequest{
+			Request: u.request(),
+		})
+		if err != nil {
+			u.report("Read the built-in tweaks", err)
+			return
+		}
+		fyne.Do(func() {
+			u.tweaks = res
+			u.rebuild()
+		})
+	}()
+}
+
+/*
+loadCompat runs the round-trip compatibility check, once per process (R3.4).
+
+The Overview's Tools card is the only place a user is told whether the compiler
+they installed can actually read this install's files, and spec 003 left that
+line reading "unknown -- not checked yet" even after a build had measured it.
+The check is the measurement: it decompiles two known game files, recompiles
+them and compares the bytes. Two MBINCompiler processes and about two seconds,
+so it runs in the background behind the busy strip and the card fills in.
+
+Once per process, not once per section: the answer changes when the game or the
+compiler changes, and both of those mean a restart or an explicit action that
+clears this itself.
+*/
+func (u *ui) loadCompat() {
+	if u.compatOK || u.compatError != "" {
+		return
+	}
+	if !u.status.Install.Found || !u.status.Compiler.Installed {
+		return // nothing to check against, or nothing to check with
+	}
+	u.compatOK = true
+	go func() {
+		done := u.busy("Checking compiler compatibility…")
+		defer done()
+		res, err := core.ToolCheck(context.Background(), core.ToolCheckRequest{
+			Request: u.request(),
+		})
+		fyne.Do(func() {
+			if err != nil {
+				// Not a banner: a compatibility check that could not run is a
+				// line on a card, not a failed operation the user asked for.
+				u.compatError = err.Error()
+			} else {
+				u.compat = res
+			}
+			u.refresh()
 		})
 	}()
 }

@@ -1,0 +1,419 @@
+package gui
+
+import (
+	"context"
+	"fmt"
+	"strconv"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/ushineko/nmsbonker/internal/core"
+	"github.com/ushineko/nmsbonker/internal/steam"
+)
+
+/*
+The operations that reach into the game (spec 004 R3.3, R4, R5).
+
+Everything here changes something outside this program's own directories, so
+every one of them is behind a confirmation that says what it touches and, as
+importantly, what it does not. The game directory is read-only to this tool
+except for these and for deploy.
+*/
+
+// --- save backup (R5.2) -----------------------------------------------------
+
+// loadSaves fills the save-backup listing the Overview reports and the dialog
+// lists.
+func (u *ui) loadSaves() {
+	if u.savesOK {
+		return
+	}
+	u.savesOK = true
+	go func() {
+		done := u.busy("Reading the save backups…")
+		defer done()
+		res, err := core.ListSaveBackups(context.Background(),
+			core.ListSaveBackupsRequest{Request: u.request()})
+		if err != nil {
+			u.report("Read the save backups", err)
+			return
+		}
+		fyne.Do(func() {
+			u.saves = res
+			u.refresh()
+		})
+	}()
+}
+
+// saveBackupText is the Overview's one line about the saves: when the last copy
+// was taken, and whether a deploy will take one.
+func (u *ui) saveBackupText() string {
+	if !u.savesOK {
+		return "reading…"
+	}
+	when := "never"
+	if len(u.saves.Backups) > 0 {
+		b := u.saves.Backups[0]
+		when = humanAgo(b.Created) + " (" + b.Created.Format("2006-01-02 15:04") + ")"
+	}
+	before := "a deploy takes one first"
+	if !u.saves.Enabled {
+		before = "a deploy does not take one (save_backup is off)"
+	}
+	return when + " · " + before
+}
+
+/*
+backupSaves copies the game's saves out of the Proton prefix.
+
+No confirmation: it reads the prefix and writes into this tool's own directory,
+and there is no state it can damage. The banner says where the copy went,
+because the only thing a user can do with a backup is find it again.
+*/
+func (u *ui) backupSaves() {
+	u.perform("Backing up the game's saves…", func(ctx context.Context) error {
+		res, err := core.BackupSaves(ctx, core.BackupSavesRequest{Request: u.request()})
+		if err != nil {
+			return err
+		}
+		fyne.Do(func() {
+			u.savesOK = false
+			if res.Skipped != "" {
+				u.flash("No saves were copied: "+res.Skipped, StatusWarn)
+				u.invalidate()
+				return
+			}
+			msg := fmt.Sprintf("Copied %d save profile(s), %d file(s), to %s.",
+				res.Profiles, res.Files, res.Dir)
+			if len(res.Pruned) > 0 {
+				msg += fmt.Sprintf(" %d older backup(s) were deleted to keep the newest %d.",
+					len(res.Pruned), core.SaveRetention)
+			}
+			u.flash(msg, StatusGood)
+			u.invalidate()
+		})
+		return nil
+	})
+}
+
+// showSaveBackups lists what has been copied and how to put one back.
+//
+// Restoring is a documented manual copy rather than a button, and that is the
+// design: a tool that can write into a save directory is a tool that can
+// destroy a save by getting one path wrong, and the whole value of this feature
+// is that it cannot.
+func (u *ui) showSaveBackups() {
+	var t detailTable
+	t.header("Taken", "Profiles", "Files", "Size")
+	t.setWidths(240, 100, 90, 120)
+	for _, b := range u.saves.Backups {
+		t.row(StatusInfo, b.Created.Format("2006-01-02 15:04")+" · "+humanAgo(b.Created),
+			strconv.Itoa(b.Profiles), strconv.Itoa(b.Files), humanSize(b.Bytes))
+	}
+
+	open := widget.NewButtonWithIcon("Open backup folder", theme.FolderOpenIcon(),
+		func() { u.openPath(u.saves.Dir) })
+	take := widget.NewButtonWithIcon("Back up now", theme.ContentCopyIcon(),
+		func() { u.backupSaves() })
+	take.Importance = widget.HighImportance
+
+	head := container.NewVBox(
+		plainRow("Backups", u.saves.Dir),
+		plainRow("Saves", orNone(u.saves.Source, "no Proton prefix for this game")),
+		plainRow("Kept", fmt.Sprintf("the newest %d", u.saves.Retention)),
+		wrapped("To restore one: close the game, then copy an st_* folder from a backup back "+
+			"into the saves directory above. nmsbonker never writes into the prefix itself, "+
+			"which is why this is a copy you do rather than a button here."),
+	)
+	body := container.NewBorder(head, container.NewHBox(take, open), nil, nil,
+		fixedHeight(t.widget(), 220))
+	u.showDetail("Save backups", body, 820, 560)
+}
+
+// --- the game's own mod switch (R3.3) ---------------------------------------
+
+/*
+toggleAllMods flips DisableAllMods in the game's settings.
+
+Turning mods off is the first thing to try when a game stops starting, and it is
+worth having in front of someone at that moment: it changes nothing that has to
+be rebuilt, and turning it back on restores exactly what was loading before.
+*/
+func (u *ui) toggleAllMods(off bool) {
+	verb, past := "Enabling mods", "Mods are enabled again"
+	if off {
+		verb, past = "Disabling all mods", "Every mod is switched off"
+	}
+	u.perform(verb+"…", func(ctx context.Context) error {
+		res, err := core.ModsToggle(ctx, core.ModsToggleRequest{
+			Request: u.request(), DisableAll: off,
+		})
+		if err != nil {
+			return err
+		}
+		if !res.Changed {
+			fyne.Do(func() {
+				u.flash("The game's switch was already set that way; nothing was written.",
+					StatusInfo)
+			})
+			return nil
+		}
+		u.ok(past + " in the game's own settings. Nothing was removed: every mod folder is " +
+			"still installed and every per-mod switch keeps its state.")
+		return nil
+	})
+}
+
+// confirmDisableAllMods says what the switch does before flipping it.
+func (u *ui) confirmDisableAllMods() {
+	u.confirmDestructive("Stop the game loading any mod?",
+		"This sets DisableAllMods in the game's own GCMODSETTINGS.MXML and changes nothing "+
+			"else. Every mod folder stays where it is, every per-mod switch keeps its state, "+
+			"and Enable mods puts it back exactly as it was. It is the cheapest thing to try "+
+			"when the game stops starting, because nothing has to be rebuilt afterwards.",
+		"Disable all mods", func() { u.toggleAllMods(true) })
+}
+
+// --- deploying into a symlinked MODS directory (R6.2) -----------------------
+
+/*
+replaceSymlinkAndDeploy turns a symlinked GAMEDATA/MODS into a real directory
+and installs the last build into it.
+
+The dialog states the three facts the CLI's refusal states, in the same order:
+what the link is, that removing it removes the link and never its target, and
+that a real directory takes its place. It names no cause -- a symlink there
+could have been put there by anything, and guessing would make the message wrong
+for everyone whose reason was different.
+*/
+func (u *ui) replaceSymlinkAndDeploy() {
+	in := u.status.Install
+	body := container.NewVBox(
+		wrapped("GAMEDATA/MODS is a symlink pointing at "+in.ModsTarget+"."),
+		wrapped("The game reads mods through the link, so installing here would write into "+
+			"that directory rather than into the game."),
+		wrapped("Replacing it removes the link, and only the link: "+in.ModsTarget+" and "+
+			"everything in it is left exactly as it is. A real directory is created in its "+
+			"place, and the build in the workspace is installed into it."),
+		wrapped("This is reversible by hand — the link can be re-made with ln -sfn — and "+
+			"Steam's \"verify integrity of game files\" restores the stock layout."),
+	)
+	u.confirmWithBody("Replace the symlink and deploy?", body, "Replace and deploy", func() {
+		u.perform("Replacing the symlink and installing…", func(ctx context.Context) error {
+			res, err := core.Deploy(ctx, core.DeployRequest{
+				Request: u.request(), ReplaceSymlink: true,
+			})
+			if err != nil {
+				return err
+			}
+			msg := fmt.Sprintf("Installed %d file(s) to %s. The symlink to %s was removed; "+
+				"its target was left alone.", res.Files, res.Dest, res.ReplacedSymlink)
+			u.deployed(res, msg)
+			return nil
+		})
+	}).Show()
+}
+
+// deployed reports a finished deploy, warnings included, and reloads.
+func (u *ui) deployed(res core.DeployResult, msg string) {
+	if res.SettingsAdded {
+		msg += " The game had no entry for this mod, so one was added and switched on."
+	}
+	if len(res.Warnings) > 0 {
+		fyne.Do(func() {
+			u.savesOK = false
+			u.flash(msg+" "+res.Warnings[0], StatusWarn)
+			u.invalidate()
+		})
+		return
+	}
+	fyne.Do(func() { u.savesOK = false })
+	u.ok(msg)
+}
+
+// --- taking it back out (R4.2, R4.3) ----------------------------------------
+
+// confirmUndeploy removes the installed mod folder, keeping a copy.
+func (u *ui) confirmUndeploy() {
+	dest := u.status.Install.ModsDir + "/" + orNone(u.status.ModName, "COSMOS COMBINE")
+	u.confirmDestructive("Remove the deployed mod?",
+		"The folder at "+dest+" is moved into "+u.status.Paths.Archive+" under a timestamp, "+
+			"so it can be rolled back. The game's own mod settings are left alone, and so is "+
+			"the build in the workspace — this removes what is installed, not what would be "+
+			"installed next. Your saves and every other mod folder are untouched.",
+		"Remove", func() {
+			u.perform("Removing the deployed mod…", func(ctx context.Context) error {
+				res, err := core.Undeploy(ctx, core.UndeployRequest{Request: u.request()})
+				if err != nil {
+					return err
+				}
+				u.ok(fmt.Sprintf("Removed %s. Its %d file(s) are in %s and `Roll back…` "+
+					"puts them back.", res.Dest, res.Files, res.Archived))
+				return nil
+			})
+		})
+}
+
+// loadArchive fills the rollback listing.
+func (u *ui) loadArchive() {
+	if u.archiveOK {
+		return
+	}
+	u.archiveOK = true
+	go func() {
+		done := u.busy("Reading the archive…")
+		defer done()
+		res, err := core.ListArchive(context.Background(),
+			core.ListArchiveRequest{Request: u.request()})
+		if err != nil {
+			u.report("Read the archive", err)
+			return
+		}
+		fyne.Do(func() {
+			u.archive = res
+			u.refresh()
+		})
+	}()
+}
+
+/*
+showRollback lists the archive and rolls one entry back.
+
+The entry has to be chosen rather than assumed: "roll back" usually means the
+last one, but the case this exists for is a game update three deploys ago, and a
+button that can only undo one step is a button that cannot reach it.
+*/
+func (u *ui) showRollback() {
+	if !u.archiveOK || len(u.archive.Entries) == 0 {
+		u.flash("Nothing has been deployed yet, so there is nothing to roll back to.",
+			StatusInfo)
+		return
+	}
+	selected := 0
+
+	var t detailTable
+	t.header("Taken", "Mod", "Holds", "Files", "Size")
+	t.setWidths(220, 220, 260, 80, 110)
+	for _, e := range u.archive.Entries {
+		st := StatusInfo
+		if e.HasMod {
+			st = StatusGood
+		}
+		t.row(st, e.Created.Format("2006-01-02 15:04")+" · "+humanAgo(e.Created),
+			e.ModName, archiveHolds(e), strconv.Itoa(e.Files), humanSize(e.Bytes))
+	}
+	table := t.widget()
+	table.OnSelected = func(id widget.TableCellID) {
+		if id.Row >= 0 && id.Row < len(u.archive.Entries) {
+			selected = id.Row
+		}
+	}
+
+	head := container.NewVBox(
+		plainRow("Archive", u.archive.Dir),
+		plainRow("Kept", fmt.Sprintf("the newest %d", u.archive.Retention)),
+		wrapped("Rolling back swaps what is installed in the game for the entry you pick. "+
+			"What is installed now becomes a new archive entry, so a rollback can itself be "+
+			"rolled back, and the build in the workspace is not touched — this changes what "+
+			"is in the game, not what the next deploy would install."),
+	)
+	body := container.NewBorder(head, nil, nil, nil, fixedHeight(table, 240))
+
+	d := u.confirmWithBody("Roll back to an earlier deployment?", body, "Roll back", func() {
+		entry := u.archive.Entries[selected]
+		u.rollback(entry)
+	})
+	d.Show()
+}
+
+// archiveHolds says what an entry can restore, in the words the CLI uses.
+func archiveHolds(e core.ArchiveEntry) string {
+	switch {
+	case e.HasMod && e.HasSettings:
+		return "mod folder + mod settings"
+	case e.HasMod:
+		return "mod folder"
+	case e.HasSettings:
+		return "mod settings (nothing was installed)"
+	}
+	return "nothing"
+}
+
+// rollback restores one archive entry.
+func (u *ui) rollback(entry core.ArchiveEntry) {
+	u.perform("Rolling back to "+entry.Timestamp+"…", func(ctx context.Context) error {
+		res, err := core.Rollback(ctx, core.RollbackRequest{
+			Request: u.request(), Timestamp: entry.Timestamp,
+		})
+		if err != nil {
+			return err
+		}
+		st := StatusGood
+		msg := fmt.Sprintf("Restored the deployment from %s: %d file(s) in %s.",
+			entry.Created.Format("2006-01-02 15:04"), res.Files, res.Dest)
+		if res.Removed {
+			st = StatusWarn
+			msg = "That entry recorded the state before anything was installed, so " +
+				res.Dest + " has been removed."
+		}
+		if res.SettingsRestored != "" {
+			msg += " The game's mod settings were restored as well."
+		}
+		msg += " What was installed is now in " + res.Archived + "."
+		fyne.Do(func() {
+			u.archiveOK = false
+			u.flash(msg, st)
+			u.invalidate()
+		})
+		return nil
+	})
+}
+
+// --- the Overview's game strip ----------------------------------------------
+
+/*
+gameActions is the second row of Overview buttons: the things that change what
+the game loads, as opposed to the things that build.
+
+Separated from Build and Deploy on purpose. The top row is the ordinary loop and
+the bottom row is what you reach for when something is wrong, and mixing them
+puts "Remove deployed mod" next to the button people press every day.
+*/
+func (u *ui) gameActions() fyne.CanvasObject {
+	in := u.status.Install
+
+	var switchMods *widget.Button
+	if in.DisableAllMods {
+		switchMods = widget.NewButtonWithIcon("Enable mods", theme.ConfirmIcon(),
+			func() { u.toggleAllMods(false) })
+	} else {
+		switchMods = widget.NewButtonWithIcon("Disable all mods", theme.CancelIcon(),
+			func() { u.confirmDisableAllMods() })
+	}
+
+	saves := widget.NewButtonWithIcon("Back up saves", theme.ContentCopyIcon(),
+		func() { u.showSaveBackups() })
+	remove := widget.NewButtonWithIcon("Remove deployed mod…", theme.DeleteIcon(),
+		func() { u.confirmUndeploy() })
+	remove.Importance = widget.DangerImportance
+
+	u.gate(switchMods, saves, remove)
+	if !in.Found {
+		switchMods.Disable()
+		saves.Disable()
+		remove.Disable()
+	}
+	if !in.ModSettingsOK {
+		switchMods.Disable()
+	}
+	if in.ModsState != steam.ModsDir {
+		// Nothing can be installed under a symlink or an absent directory, so
+		// there is nothing to remove. Disabled rather than hidden: the strip
+		// keeps its shape once the state is fixed.
+		remove.Disable()
+	}
+	return container.NewHBox(switchMods, saves, remove)
+}

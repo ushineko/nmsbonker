@@ -235,6 +235,10 @@ func (u *ui) toolCheck() {
 			return err
 		}
 		fyne.Do(func() {
+			// The Overview's Compatibility row reads this, so an explicit check
+			// here answers it there as well rather than leaving two verdicts on
+			// two cards.
+			u.compat, u.compatOK, u.compatError = res, true, ""
 			u.statusOK = false
 			u.loadStatus()
 			u.showToolCheck(res)
