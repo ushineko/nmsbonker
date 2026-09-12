@@ -61,9 +61,13 @@ lint: install-lint ## Lint files
 	@go version
 	$(BINDIR)/bin/$(LINT_PROGRAM) run --timeout 5m0s --config config/.golangci-$(LINT_VERSION).yml ./...
 
+# The parity test carries a build tag so that a plain `go test ./...` does not
+# need it, and `make test` always does: it is the guard that the CLI and the GUI
+# expose the same operations, and a guard that runs only when someone remembers
+# to ask for it is not a guard. It needs no display.
 .PHONY: test
 test: ## Run unit tests with the race detector (fast, no build)
-	@go test -race ./...
+	@go test -race -tags parity ./...
 
 .PHONY: coverage
 coverage: ## Run all tests and open a coverage report in the default browser
