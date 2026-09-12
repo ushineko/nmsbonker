@@ -120,6 +120,16 @@ type ui struct {
 	// lastReportErr is why there is no report, which for a machine that has
 	// never built is "no build yet" rather than a failure.
 	lastReportErr string
+	/*
+		freshAudit is a re-check of the last build's reward amounts against the
+		limits currently in force (spec 005 R3.1).
+
+		Nil until the user asks, and then it outranks what the report file
+		carries: the report records what the limits were when the build ran, and
+		the whole point of Re-check is trying a different one. Cleared by
+		invalidate() along with everything else loaded from the core.
+	*/
+	freshAudit *core.AuditResult
 
 	// run is everything the Build section shows. It outlives the section, so a
 	// build keeps streaming while the user reads the Report.
@@ -893,6 +903,7 @@ func Actions() []string {
 		"tweaks list", "tweaks set", "tweaks reset", "tweaks enable", "tweaks disable",
 		// Build, Report and what undoes them
 		"build", "deploy", "report",
+		"audit", // the Report section's amount-audit block and its Re-check button
 		"undeploy", "rollback", "archive list",
 		"mods-off", "mods-on",
 		"saves backup", "saves list",

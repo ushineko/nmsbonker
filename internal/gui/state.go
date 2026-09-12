@@ -74,6 +74,7 @@ func (u *ui) invalidate() {
 	u.cacheOK = false
 	u.configOK = false
 	u.lastReportOK = false
+	u.freshAudit = nil
 	if !u.onScreen() {
 		// No window to redraw. Clearing the flags is the whole of the work:
 		// whatever builds the sections next will fetch. Fetching here anyway

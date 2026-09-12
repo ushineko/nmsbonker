@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/steam"
@@ -248,9 +249,30 @@ func (u *ui) libraryCard() fyne.CanvasObject {
 			factRow("Result", fmt.Sprintf("%d built, %d dropped, %d edits applied, %d skipped",
 				r.Built, r.Dropped, r.Applied, r.Skipped), builtStatus(r.Dropped)),
 			plainRow("Verdicts", verdictCounts(r.Mods)),
+			amountFlagsRow(r.Audit),
 		)
 	}
 	return card("Mod library", rows...)
+}
+
+/*
+amountFlagsRow is the last build's reward-amount verdict, on Overview (R3.1).
+
+One line, because Overview is the "can this machine build, and what did it
+build" summary and the detail lives in the Report section. It is worth a line at
+all because the verdict counts above it cannot say it: every mod can be WORKING
+and the reward table still be wrong.
+*/
+func amountFlagsRow(a *audit.Result) fyne.CanvasObject {
+	switch {
+	case a == nil:
+		return plainRow("Amount audit", "no reward table in that build")
+	case len(a.Flags) == 0:
+		return factRow("Amount audit", "no amount flags", StatusGood)
+	default:
+		return factRow("Amount audit", fmt.Sprintf("%d amount flag(s) — see Report", len(a.Flags)),
+			auditStatus(len(a.Flags)))
+	}
 }
 
 // verdictCounts summarises the report table in one line, in verdict order.

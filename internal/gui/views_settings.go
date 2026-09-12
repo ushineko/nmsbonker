@@ -38,8 +38,32 @@ type settingsForm struct {
 	modName    *widget.Entry
 	jobs       *widget.Select
 	flavor     *widget.Select
-	save       *widget.Button
-	revert     *widget.Button
+	// limits are the six audit thresholds, keyed by their config key
+	// (spec 005 R3.3). Held in a map rather than six fields because they are
+	// six numbers that differ only in their name, and six named fields would be
+	// six chances to read one into another.
+	limits map[string]*widget.Entry
+	save   *widget.Button
+	revert *widget.Button
+}
+
+/*
+auditKeys are the six reward-amount limits, in the order the form lays them out
+and with the label each gets (R3.3).
+
+The order is absolute limits first, worst case last, and then the ratio, which
+is the odd one out: the other five are "an amount this large is wrong" and the
+ratio is "a change this large is suspicious whatever the amount".
+*/
+//
+//nolint:gochecknoglobals // a fixed list, read-only after initialisation
+var auditKeys = []struct{ key, label string }{
+	{"audit.max_product", "Largest product reward"},
+	{"audit.max_substance", "Largest substance reward"},
+	{"audit.max_units", "Largest units reward"},
+	{"audit.max_nanites", "Largest nanites reward"},
+	{"audit.max_specials", "Largest quicksilver reward"},
+	{"audit.max_ratio", "Largest change from stock (x)"},
 }
 
 // newSettingsForm builds the form from the loaded settings.
@@ -54,6 +78,10 @@ func (u *ui) newSettingsForm() *settingsForm {
 	f.jobs = widget.NewSelect(parallelOptions(), nil)
 	f.flavor = widget.NewSelect(
 		[]string{config.FlavorAuto, config.FlavorDotnet10, config.FlavorSelfContained}, nil)
+	f.limits = map[string]*widget.Entry{}
+	for _, l := range auditKeys {
+		f.limits[l.key] = widget.NewEntry()
+	}
 	f.set(values)
 
 	auto := widget.NewButton("Use auto-detection", func() { f.gameDir.SetText("") })
@@ -90,17 +118,74 @@ func (f *settingsForm) set(values map[string]string) {
 	f.modName.SetText(values["mod_name"])
 	f.jobs.SetSelected(parallelValue(values["parallel"]))
 	f.flavor.SetSelected(orNone(values["mbincompiler.flavor"], config.FlavorAuto))
+	for key, entry := range f.limits {
+		entry.SetText(values[key])
+	}
 }
 
 // values reads the widgets back into the map saveSettings compares.
 func (f *settingsForm) values() map[string]string {
-	return map[string]string{
+	out := map[string]string{
 		"game_dir":            f.gameDir.Text,
 		"library_dir":         f.libraryDir.Text,
 		"mod_name":            f.modName.Text,
 		"parallel":            parallelSetting(f.jobs.Selected),
 		"mbincompiler.flavor": f.flavor.Selected,
 	}
+	for key, entry := range f.limits {
+		out[key] = entry.Text
+	}
+	return out
+}
+
+/*
+auditGroup is the Audit limits block (R3.3).
+
+Plain numeric fields rather than sliders: the useful values span four orders of
+magnitude -- a product stack is five figures and a units payout is nine -- and a
+slider across that range cannot be aimed. Reset puts the six back to the
+defaults in the fields; nothing is written until Save, like the rest of the form.
+*/
+func (u *ui) auditGroup(f *settingsForm) fyne.CanvasObject {
+	items := make([]*widget.FormItem, 0, len(auditKeys))
+	for _, l := range auditKeys {
+		items = append(items, widget.NewFormItem(l.label, f.limits[l.key]))
+	}
+	reset := widget.NewButtonWithIcon("Reset limits to defaults", theme.ContentUndoIcon(),
+		func() {
+			for key, value := range defaultAuditValues() {
+				f.limits[key].SetText(value)
+			}
+			u.flash("The audit limits in the form are back to their defaults. "+
+				"Save to write them.", StatusInfo)
+		})
+	u.gate(reset)
+	return card("Audit limits",
+		note("What counts as a reward amount worth warning about. A build flags an amount "+
+			"over one of these and names the mods that made it; nothing is changed or "+
+			"disabled. The first five are absolute; the last is how many times the "+
+			"game's own value an amount may reach. Re-check in the Report section "+
+			"applies a new limit to the last build without rebuilding.", StatusInfo),
+		widget.NewForm(items...),
+		container.NewHBox(reset),
+	)
+}
+
+// defaultAuditValues is the audit package's defaults in the string form the
+// form and `config set` both use.
+func defaultAuditValues() map[string]string {
+	d := config.DefaultAudit()
+	cfg := config.Defaults()
+	cfg.Audit = d
+	out := map[string]string{}
+	for _, l := range auditKeys {
+		v, err := cfg.Get(l.key)
+		if err != nil {
+			continue
+		}
+		out[l.key] = v
+	}
+	return out
 }
 
 /*
@@ -148,6 +233,8 @@ func (u *ui) buildSettings() fyne.CanvasObject {
 		note("The colour scheme, the font and the text size are not in this file. They are the "+
 			"only thing this application keeps in Fyne's own preference store, because the "+
 			"command line has no use for them — see Appearance.", StatusInfo),
+		widget.NewSeparator(),
+		u.auditGroup(f),
 		widget.NewSeparator(),
 		resolved,
 	)

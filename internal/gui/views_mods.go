@@ -593,6 +593,18 @@ func (u *ui) showModDetails(r modRow) {
 	if r.info.Path != "" {
 		facts.Add(plainRow("File", r.info.Path))
 	}
+	// What the last build made of it, and the one-line reading of that (R4.1).
+	if check.Verdict != "" {
+		facts.Add(factRow("Last build", fmt.Sprintf("%s — %d edit(s) applied, %d skipped",
+			check.Verdict, check.Applied, check.Skipped), verdictStatus(check.Verdict)))
+	}
+	if check.Effect != "" {
+		facts.Add(note(effectBlurb(check), effectStatus(check)))
+	}
+	if len(check.NotFound) > 0 {
+		facts.Add(note("Keys the last build could not find, usually because a game update "+
+			"renamed or removed them: "+strings.Join(check.NotFound, ", ")+".", StatusWarn))
+	}
 	if r.info.Shadowed {
 		facts.Add(note("A library script of this name is present and is ignored: the built-in "+
 			"is what builds. Remove takes the library copy out; the built-in stays.",
@@ -640,6 +652,41 @@ func (u *ui) showModDetails(r modRow) {
 	}
 
 	u.showDetail(r.info.Name, container.NewVScroll(body), 820, 620)
+}
+
+/*
+effectBlurb turns the mechanical effectiveness note into a sentence (R4.1).
+
+The note itself is a phrase -- "no effective edits", "overlaps built-in X" --
+because it has to fit a CLI table cell. Here there is room to say what follows
+from it, and what follows is the part a user can act on.
+*/
+func effectBlurb(c core.ModCheck) string {
+	out := "From the last build: " + c.Effect + "."
+	switch {
+	case strings.Contains(c.Effect, core.EffectNoEdits):
+		out += " Nothing this script asks for reached the merged files, so it changes nothing " +
+			"in game. Usually it was written for an older version of the game."
+	case strings.Contains(c.Effect, core.EffectMostlyFailing):
+		out += " More of its edits failed to find their target than landed, which is what a " +
+			"script written for an older version of the game looks like."
+	}
+	if len(c.Overlaps) > 0 {
+		out += " It edits the same values as " + strings.Join(c.Overlaps, ", ") +
+			", so the two multiply in build order — which is how a reward ends up far " +
+			"larger than either one asked for. This is information, not a fault: check " +
+			"the Report section's amount audit to see whether it matters here."
+	}
+	return out
+}
+
+// effectStatus ranks the note. A script that applied nothing is a real problem;
+// an overlap on its own is a fact about the library.
+func effectStatus(c core.ModCheck) Status {
+	if strings.Contains(c.Effect, core.EffectNoEdits) {
+		return StatusBad
+	}
+	return StatusWarn
 }
 
 // libraryParamRow is one undeclared parameter: a field and a Reset, no slider.

@@ -59,6 +59,7 @@ func (u *ui) buildReport() fyne.CanvasObject {
 		factRow("MBINs", fmt.Sprintf("%d built, %d dropped", r.Built, r.Dropped),
 			builtStatus(r.Dropped)),
 		plainRow("Edits", fmt.Sprintf("%d applied, %d skipped", r.Applied, r.Skipped)),
+		plainRow("Capped values", cappedText(r.Capped)),
 		plainRow("Timings", fmt.Sprintf(
 			"%s wall clock; cache %s, merge %s and compile %s summed across %d worker(s)",
 			r.Timings.Total.Round(1e6), r.Timings.Cache.Round(1e6),
@@ -79,6 +80,8 @@ func (u *ui) buildReport() fyne.CanvasObject {
 	// of it and a page of numbers.
 	body := container.NewVBox(
 		heading("Report", "What the last build made of each mod."),
+		u.auditBlock(),
+		widget.NewSeparator(),
 		fixedHeight(t.widget(), 320),
 		note(reportLegend, StatusInfo),
 		widget.NewSeparator(),
@@ -158,6 +161,20 @@ func (u *ui) reportActions() fyne.CanvasObject {
 	u.gate(openReport, openOutput, deploy, rollBack)
 	return container.NewVBox(widget.NewSeparator(),
 		container.NewHBox(openReport, openOutput, deploy, rollBack))
+}
+
+/*
+cappedText says how many values a tweak's cap held back (spec 005 R2.2).
+
+"none" rather than "0" when no cap bit, and the row is there in both states: a
+build where a cap did something and a build where none did are different facts,
+and a row that appears and disappears moves everything under it.
+*/
+func cappedText(capped int) string {
+	if capped == 0 {
+		return "none — no tweak cap changed a value"
+	}
+	return fmt.Sprintf("%d value(s) held back by a tweak cap", capped)
 }
 
 // modNote is the Notes column, worded as the CLI and the Markdown report word
