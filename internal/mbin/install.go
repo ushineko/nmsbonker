@@ -96,9 +96,25 @@ type InstallResult struct {
 	Attempts []string
 }
 
-// Dir is where a release is installed under the tools directory.
-func Dir(toolsDir, tag string) string {
-	return filepath.Join(toolsDir, "mbincompiler", tag)
+// ErrInvalidTag reports a release tag that cannot be used as a path segment.
+var ErrInvalidTag = errors.New("unusable MBINCompiler release tag")
+
+/*
+Dir is where a release is installed under the tools directory.
+
+It returns an error rather than a best-effort path because the tag is untrusted:
+it comes from api.github.com, and a repository anyone can publish a release to
+should not get to choose where this program writes. Every producer of a tag
+(parseReleases, Installed, the config pin) already filters through ValidTag, so
+reaching the error here means a caller found a tag some other way -- exactly the
+case worth failing on rather than sanitising quietly, because a silently
+rewritten path installs a release under a name that no later lookup will find.
+*/
+func Dir(toolsDir, tag string) (string, error) {
+	if !ValidTag(tag) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidTag, tag)
+	}
+	return filepath.Join(toolsDir, "mbincompiler", tag), nil
 }
 
 /*
@@ -112,7 +128,10 @@ verification removes the directory so a retry is a clean download rather than a
 half-populated directory that looks installed.
 */
 func Install(ctx context.Context, toolsDir string, release Release, configuredFlavor string, client *http.Client) (*InstallResult, error) {
-	dir := Dir(toolsDir, release.Tag)
+	dir, err := Dir(toolsDir, release.Tag)
+	if err != nil {
+		return nil, err
+	}
 	result := &InstallResult{Tag: release.Tag}
 
 	if c, err := verifyDir(ctx, dir, release); err == nil {
@@ -284,7 +303,10 @@ func Installed(toolsDir string) []string {
 		if !e.IsDir() {
 			continue
 		}
-		if _, ok := ParseVersion(e.Name()); !ok {
+		// A directory in the tools tree is a path this program wrote, but it
+		// is also a path anything else can create, so it is filtered on the way
+		// out with the same rule that filters the release listing on the way in.
+		if !ValidTag(e.Name()) {
 			continue
 		}
 		tags = append(tags, e.Name())
@@ -306,15 +328,26 @@ func Installed(toolsDir string) []string {
 func Locate(toolsDir, pin string) (*Compiler, error) {
 	tags := Installed(toolsDir)
 	if pin != "" {
+		if !ValidTag(pin) {
+			return nil, fmt.Errorf("%w: %q", ErrInvalidTag, pin)
+		}
 		for _, tag := range tags {
 			if tag == pin {
-				return locateIn(Dir(toolsDir, tag), tag)
+				dir, err := Dir(toolsDir, tag)
+				if err != nil {
+					return nil, err
+				}
+				return locateIn(dir, tag)
 			}
 		}
 		return nil, fmt.Errorf("%w: pinned release %s is not in %s", ErrNoCompiler, pin, toolsDir)
 	}
 	for _, tag := range tags {
-		if c, err := locateIn(Dir(toolsDir, tag), tag); err == nil {
+		dir, err := Dir(toolsDir, tag)
+		if err != nil {
+			continue
+		}
+		if c, err := locateIn(dir, tag); err == nil {
 			return c, nil
 		}
 	}

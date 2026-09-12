@@ -193,6 +193,7 @@ func (s *session) releaseClient(req Request) *mbin.Client {
 		// (project rule: no credentials).
 		Token:     os.Getenv("GITHUB_TOKEN"),
 		NoNetwork: req.NoNetwork,
+		Debug:     func(msg string) { req.Events.logf(LevelDebug, "%s", msg) },
 	}
 }
 

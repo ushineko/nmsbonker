@@ -11,6 +11,7 @@ package mbin
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -42,12 +43,46 @@ type Version struct {
 // non-digit boundary so that "7.1.0.1" yields 7.1.0 and not 1.0.1.
 var versionRE = regexp.MustCompile(`(?:^|[^0-9.])(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.\-]+))?`)
 
+/*
+tagRE is what a release tag must match, in full, to be used at all.
+
+A tag arrives from api.github.com and becomes a directory name under the tools
+directory, so it is untrusted input on a path. findVersion is deliberately
+lenient -- it looks for an M.m.p triple *somewhere* in a string, which is what
+reading MBINCompiler's undocumented output needs -- and that leniency accepts
+"../../evil-1.2.3" and "v1.2.3/x" just as happily as "v7.02.0-pre1". Anchoring
+the whole tag here is what keeps a repository that anyone can publish a release
+to from choosing where this program writes.
+
+The prerelease suffix must start with an alphanumeric, so "v1.2.3-.." is
+refused: a segment of nothing but dots is not a version and has no business
+being a directory name.
+*/
+var tagRE = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-[A-Za-z0-9][A-Za-z0-9.]*)?$`)
+
+// ValidTag reports whether a release tag is usable, both as a version and as a
+// single path segment under the tools directory (R5.3).
+func ValidTag(tag string) bool {
+	if !tagRE.MatchString(tag) {
+		return false
+	}
+	// Defence in depth: tagRE already forbids a separator, but the property
+	// that actually matters at every call site is "this is one path element",
+	// so it is asserted rather than inferred.
+	return filepath.Base(tag) == tag && tag != "." && tag != ".."
+}
+
 // ParseVersion reads a release tag such as "v7.02.0-pre1".
 //
-// A tag without a parseable vM.m.p prefix is ignored rather than rejected
+// A tag that is not a well-formed vM.m.p is ignored rather than rejected
 // (R5.1): the repository has carried tags for tooling and branches, and one of
-// those must not stop the tool from finding the release it needs.
+// those must not stop the tool from finding the release it needs. It is ignored
+// for the second reason too -- see ValidTag -- which is that a tag it cannot
+// vouch for must never reach a file path.
 func ParseVersion(tag string) (Version, bool) {
+	if !ValidTag(tag) {
+		return Version{}, false
+	}
 	v, ok := findVersion(tag)
 	if !ok {
 		return Version{}, false

@@ -76,6 +76,8 @@ type Client struct {
 	// Token is an optional GitHub token, taken from the environment by the
 	// caller. It is never written to the cache and never logged (R5.1).
 	Token string
+	// Debug, when set, receives one line per ignored release tag. Nil is fine.
+	Debug func(msg string)
 	// NoNetwork forbids any request; the cache is used alone.
 	NoNetwork bool
 }
@@ -103,21 +105,21 @@ func (c *Client) Releases(ctx context.Context) (releases []Release, source strin
 		if cached == nil {
 			return nil, "", ErrNoNetwork
 		}
-		return parseReleases(cached.Body), SourceCacheOffline, nil
+		return c.parseReleases(cached.Body), SourceCacheOffline, nil
 	}
 
 	body, etag, notModified, err := c.fetch(ctx, cached)
 	switch {
 	case err != nil && cached != nil:
-		return parseReleases(cached.Body), SourceCacheOffline, err
+		return c.parseReleases(cached.Body), SourceCacheOffline, err
 	case err != nil:
 		return nil, "", err
 	case notModified:
-		return parseReleases(cached.Body), SourceNotModified, nil
+		return c.parseReleases(cached.Body), SourceNotModified, nil
 	}
 
 	c.writeCache(cacheDoc{ETag: etag, Fetched: time.Now().UTC(), Body: body})
-	return parseReleases(body), SourceNetwork, nil
+	return c.parseReleases(body), SourceNetwork, nil
 }
 
 func (c *Client) fetch(ctx context.Context, cached *cacheDoc) (body json.RawMessage, etag string, notModified bool, err error) {
@@ -169,8 +171,16 @@ func (c *Client) fetch(ctx context.Context, cached *cacheDoc) (body json.RawMess
 	return b, resp.Header.Get("ETag"), false, nil
 }
 
-// parseReleases decodes a listing and drops entries whose tag does not parse.
-func parseReleases(body []byte) []Release {
+// parseReleases decodes a listing and drops entries whose tag is not a
+// well-formed, path-safe version (see ValidTag).
+//
+// Dropped rather than sanitised, and reported at debug level rather than as an
+// error: the repository carries tags for tooling and branches that are simply
+// not releases, and one of those must not stop the tool from finding the
+// release it needs. A tag that looks like a path traversal lands in the same
+// bucket, which is the point -- there is no interpretation of it worth acting
+// on.
+func (c *Client) parseReleases(body []byte) []Release {
 	var raw []Release
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil
@@ -179,6 +189,7 @@ func parseReleases(body []byte) []Release {
 	for _, r := range raw {
 		v, ok := ParseVersion(r.Tag)
 		if !ok {
+			c.debugf("ignoring release tag %q: not a usable vM.m.p release tag", r.Tag)
 			continue
 		}
 		r.Version = v
@@ -186,6 +197,15 @@ func parseReleases(body []byte) []Release {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Version.Compare(out[j].Version) > 0 })
 	return out
+}
+
+// debugf reports something a user only wants under -v. Nil-safe, like
+// core.Events, so a zero-value Client works.
+func (c *Client) debugf(format string, args ...any) {
+	if c.Debug == nil {
+		return
+	}
+	c.Debug(fmt.Sprintf(format, args...))
 }
 
 func (c *Client) readCache() *cacheDoc {

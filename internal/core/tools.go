@@ -139,7 +139,14 @@ func ListTools(ctx context.Context, req ListToolsRequest) (ListToolsResult, erro
 
 	active, _ := mbin.Locate(s.paths.Tools, s.cfg.MBINCompiler.Pin)
 	for _, tag := range mbin.Installed(s.paths.Tools) {
-		entry := ToolEntry{Tag: tag, Dir: mbin.Dir(s.paths.Tools, tag)}
+		// Installed only yields tags that passed mbin.ValidTag, so Dir cannot
+		// fail here; skipping rather than reporting keeps the listing honest if
+		// that ever stops being true.
+		dir, err := mbin.Dir(s.paths.Tools, tag)
+		if err != nil {
+			continue
+		}
+		entry := ToolEntry{Tag: tag, Dir: dir}
 		if c, err := mbin.Locate(s.paths.Tools, tag); err == nil {
 			entry.Flavor = c.Flavor
 			entry.Bin = c.Bin
@@ -180,10 +187,9 @@ func PinTool(_ context.Context, req PinToolRequest) (PinToolResult, error) {
 	if err != nil {
 		return PinToolResult{}, err
 	}
-	if req.Tag != "" {
-		if _, ok := mbin.ParseVersion(req.Tag); !ok {
-			return PinToolResult{}, fmt.Errorf("%q does not look like an MBINCompiler release tag (expected vM.m.p...)", req.Tag)
-		}
+	if req.Tag != "" && !mbin.ValidTag(req.Tag) {
+		return PinToolResult{}, fmt.Errorf(
+			"%q does not look like an MBINCompiler release tag (expected vM.m.p, optionally -suffix)", req.Tag)
 	}
 	if err := s.cfg.Set("mbincompiler.pin", req.Tag); err != nil {
 		return PinToolResult{}, err

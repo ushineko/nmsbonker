@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -172,4 +173,50 @@ func TestSelectionPrefersTheGameVersionAndFallsBackToTheHighest(t *testing.T) {
 
 	_, err = mbin.Select(nil, "", mbin.Version{}, false)
 	require.ErrorIs(t, err, mbin.ErrNoReleases)
+}
+
+/*
+The release listing is untrusted input that turns into a directory name.
+
+Anyone can publish a release to a public repository, and the tag goes straight
+into tools_dir/mbincompiler/<tag>. A tag that is not one clean path segment is
+dropped on the way in, before anything can join it to a path, and reported at
+debug level so `-v` shows why a release the user can see on GitHub was ignored.
+R5.1, R5.3.
+*/
+func TestATraversalTagIsDroppedFromTheListingAndReported(t *testing.T) {
+	const hostile = `[
+  {"tag_name": "../../evil-1.2.3", "prerelease": false, "assets": [
+     {"name": "MBINCompiler-linux-dotnet10", "browser_download_url": "http://example/evil/bin", "size": 1},
+     {"name": "libMBIN-linux-dotnet10.so", "browser_download_url": "http://example/evil/lib", "size": 1}]},
+  {"tag_name": "v7.02.0-pre1/x", "prerelease": false, "assets": []},
+  {"tag_name": "v7.02.0-pre1", "prerelease": false, "assets": [
+     {"name": "MBINCompiler-linux-dotnet10", "browser_download_url": "http://example/7.02/bin", "size": 1},
+     {"name": "libMBIN-linux-dotnet10.so", "browser_download_url": "http://example/7.02/lib", "size": 1}]}
+]`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(hostile))
+	}))
+	defer srv.Close()
+
+	var debug []string
+	client := &mbin.Client{
+		APIBase:   srv.URL,
+		CachePath: filepath.Join(t.TempDir(), "releases.json"),
+		UserAgent: "nmsbonker/test",
+		Debug:     func(msg string) { debug = append(debug, msg) },
+	}
+
+	releases, _, err := client.Releases(context.Background())
+	require.NoError(t, err)
+	require.Len(t, releases, 1, "only the well-formed tag survives")
+	require.Equal(t, "v7.02.0-pre1", releases[0].Tag)
+	require.Len(t, debug, 2, "and each ignored tag is reported")
+	require.Contains(t, strings.Join(debug, "\n"), "../../evil-1.2.3")
+	require.Contains(t, strings.Join(debug, "\n"), "v7.02.0-pre1/x")
+
+	// The one that survived is also the only one Select can hand to Install.
+	sel, err := mbin.Select(releases, "", mbin.Version{}, false)
+	require.NoError(t, err)
+	require.True(t, mbin.ValidTag(sel.Release.Tag))
 }

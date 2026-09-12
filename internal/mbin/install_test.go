@@ -110,7 +110,9 @@ func TestAFailedVerificationLeavesNothingBehind(t *testing.T) {
 		},
 	}, mbin.FlavorAuto, srv.Client())
 	require.Error(t, err)
-	require.NoDirExists(t, mbin.Dir(tools, "v7.01.0-pre1"))
+	dir, err := mbin.Dir(tools, "v7.01.0-pre1")
+	require.NoError(t, err)
+	require.NoDirExists(t, dir)
 }
 
 // Both assets are required: the framework-dependent binary loads libMBIN from
@@ -132,7 +134,7 @@ func TestAReleaseWithOnlyOneOfTheTwoAssetsIsRefused(t *testing.T) {
 func TestLocateFindsTheHighestInstalledReleaseAndHonoursAPin(t *testing.T) {
 	tools := t.TempDir()
 	for _, tag := range []string{"v6.45.0", "v7.01.0-pre1", "v7.02.0-pre1", "not-a-version"} {
-		dir := mbin.Dir(tools, tag)
+		dir := filepath.Join(tools, "mbincompiler", tag)
 		require.NoError(t, os.MkdirAll(dir, 0o750))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "MBINCompiler-linux-dotnet10"), []byte("x"), 0o700))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "libMBIN-linux-dotnet10.so"), []byte("x"), 0o600))
@@ -160,10 +162,93 @@ func TestLocateFindsTheHighestInstalledReleaseAndHonoursAPin(t *testing.T) {
 // build instead of "run tools ensure". R5.6.
 func TestAHalfPopulatedToolsDirectoryIsNotAnInstall(t *testing.T) {
 	tools := t.TempDir()
-	dir := mbin.Dir(tools, "v7.01.0-pre1")
+	dir, err := mbin.Dir(tools, "v7.01.0-pre1")
+	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(dir, 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "MBINCompiler-linux-dotnet10"), []byte("x"), 0o700))
 
-	_, err := mbin.Locate(tools, "")
+	_, err = mbin.Locate(tools, "")
 	require.ErrorIs(t, err, mbin.ErrNoCompiler)
+}
+
+/*
+A release tag becomes a directory name under the tools directory, and it comes
+from api.github.com.
+
+findVersion is deliberately lenient because MBINCompiler's own output has no
+documented format, and that leniency accepts an M.m.p triple anywhere in a
+string -- including "../../evil-1.2.3". Anything reaching a file path has to be
+held to the stricter rule instead, or a repository anyone can publish a release
+to gets to choose where this program writes. R5.3.
+*/
+func TestATagThatIsNotOneWholePathSegmentIsRefused(t *testing.T) {
+	for _, tag := range []string{
+		"v7.02.0-pre1", "v6.45.0", "7.1.0", "v7.02.0-rc.2",
+	} {
+		require.True(t, mbin.ValidTag(tag), tag)
+		_, ok := mbin.ParseVersion(tag)
+		require.True(t, ok, tag)
+	}
+
+	for _, tag := range []string{
+		"../../evil-1.2.3",
+		"v1.2.3/x",
+		"x/v1.2.3",
+		"..",
+		".",
+		"v1.2.3-..",
+		"v1.2.3\x00",
+		"release v1.2.3",
+		"v1.2.3 ",
+		"tooling-2026",
+		"latest",
+		"v7.1",
+		"",
+	} {
+		require.False(t, mbin.ValidTag(tag), "ValidTag accepted %q", tag)
+		_, ok := mbin.ParseVersion(tag)
+		require.False(t, ok, "ParseVersion accepted %q", tag)
+	}
+}
+
+// Dir is the choke point: every path under the tools directory goes through it,
+// so it refuses a tag it cannot vouch for rather than sanitising one quietly. A
+// silently rewritten path installs a release under a name no later lookup finds.
+func TestDirRefusesATagItCannotVouchFor(t *testing.T) {
+	tools := t.TempDir()
+
+	dir, err := mbin.Dir(tools, "v7.02.0-pre1")
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(tools, "mbincompiler", "v7.02.0-pre1"), dir)
+
+	for _, tag := range []string{"../../evil-1.2.3", "v1.2.3/x", "..", ""} {
+		_, err := mbin.Dir(tools, tag)
+		require.ErrorIs(t, err, mbin.ErrInvalidTag, tag)
+	}
+}
+
+// A hostile or merely odd release must not be installable at all: Install joins
+// the tag into the tools directory before it downloads anything.
+func TestInstallRefusesAReleaseWhoseTagIsNotAPathSegment(t *testing.T) {
+	srv, release := assetServer(t, false)
+	release.Tag = "../../evil-1.2.3"
+
+	tools := t.TempDir()
+	_, err := mbin.Install(t.Context(), tools, release, mbin.FlavorDotnet10, srv.Client())
+	require.ErrorIs(t, err, mbin.ErrInvalidTag)
+	require.NoDirExists(t, filepath.Join(tools, "mbincompiler"), "nothing was created")
+}
+
+// The tools tree is a directory anything on the machine can write to, so what
+// comes out of it is filtered by the same rule as what goes in.
+func TestInstalledSkipsDirectoriesThatAreNotValidTags(t *testing.T) {
+	tools := t.TempDir()
+	base := filepath.Join(tools, "mbincompiler")
+	for _, name := range []string{"v7.02.0-pre1", "v6.45.0", "not-a-version", "v1.2.3 stray", "latest"} {
+		require.NoError(t, os.MkdirAll(filepath.Join(base, name), 0o750))
+	}
+	require.Equal(t, []string{"v7.02.0-pre1", "v6.45.0"}, mbin.Installed(tools))
+
+	_, err := mbin.Locate(tools, "../../evil-1.2.3")
+	require.ErrorIs(t, err, mbin.ErrInvalidTag)
 }
