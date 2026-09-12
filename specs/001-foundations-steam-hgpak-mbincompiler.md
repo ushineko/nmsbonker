@@ -1,6 +1,6 @@
 # Spec 001 — Foundations: project scaffold, config, Steam detection, native HGPAK reader, MBINCompiler manager, CLI skeleton
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 ## Context
 
@@ -268,33 +268,194 @@ Facts established during investigation (2026-09-11), to be relied on:
 
 ## Acceptance Criteria
 
-- [ ] AC1 `make lint`, `make test`, `make build` pass from a clean checkout with
+- [x] AC1 `make lint`, `make test`, `make build` pass from a clean checkout with
   `NMSBONKER_*` unset; `./nmsbonker version` prints the VERSION file value and
   the commit.
-- [ ] AC2 `./nmsbonker status` on this machine reports the game dir under
+- [x] AC2 `./nmsbonker status` on this machine reports the game dir under
   `~/.local/share/Steam`, buildid `25233815`, `ModsState=symlink` (current
   legacy setup), `DisableAllMods=false`, and the compiler state.
-- [ ] AC3 `./nmsbonker tools ensure` downloads and verifies a MBINCompiler
+- [x] AC3 `./nmsbonker tools ensure` downloads and verifies a MBINCompiler
   release into the tools dir on first run and is a no-op (says "already
   installed") on the second; `--no-network` with a populated tools dir succeeds.
-- [ ] AC4 `./nmsbonker pak find '*rewardtable*'` lists
+- [x] AC4 `./nmsbonker pak find '*rewardtable*'` lists
   `metadata/reality/tables/rewardtable.mbin` in `NMSARC.Precache.pak`;
   `./nmsbonker pak extract metadata/reality/tables/rewardtable.mbin -o /tmp/x`
   writes a file whose first 8 bytes are the MBIN magic, and `Decompile` of it
   succeeds.
-- [ ] AC5 `./nmsbonker pak extract gcgameplayglobals.global.mbin` is
+- [x] AC5 `./nmsbonker pak extract gcgameplayglobals.global.mbin` is
   byte-identical to the legacy hgpaktool extraction in
   `~/Games/nms-modding/extract/GLOBALS/`.
-- [ ] AC6 Cold pak index over the real PCBANKS completes in < 5 s; warm load
+- [x] AC6 Cold pak index over the real PCBANKS completes in < 5 s; warm load
   < 200 ms; numbers recorded in the spec's Status notes.
-- [ ] AC7 Integration tests (R9.2) pass with `NMSBONKER_GAME_DIR` and
+- [x] AC7 Integration tests (R9.2) pass with `NMSBONKER_GAME_DIR` and
   `NMSBONKER_LEGACY_DIR=~/Games/nms-modding` set, and are skipped (not failed)
   without them.
-- [ ] AC8 No file under `internal/`, `cmd/`, or `testdata/` contains game data,
+- [x] AC8 No file under `internal/`, `cmd/`, or `testdata/` contains game data,
   a Nexus script, or a personal absolute path (grep for `/home/`, `nverenin`,
   `Data2`).
-- [ ] AC9 `go vet` and `golangci-lint` report nothing; `govulncheck ./...` clean
+- [x] AC9 `go vet` and `golangci-lint` report nothing; `govulncheck ./...` clean
   or findings documented.
+
+## Status notes
+
+Verified on njv-cachyos, 2026-09-11, against Steam buildid `25233815` (97 paks,
+194,531 internal paths) at commit `8d73d43`. Go 1.27.1, golangci-lint v2.12.2,
+MBINCompiler v7.02.0-pre1 (`dotnet10` flavor), .NET runtime 10.0.11.
+
+### Measured numbers
+
+| What | Measured | Budget |
+| --- | --- | --- |
+| Cold pak index, 97 paks (`go test`, no race) | 61 ms | < 5 s (AC6) |
+| Warm pak index load (`go test`, no race) | 64 ms | < 200 ms (AC6) |
+| Cold pak index, `./nmsbonker -v pak find` | 37 ms | — |
+| Warm pak index load, `./nmsbonker -v pak find` | 57 ms | — |
+| `pak-index.json` on disk | 14,847,470 bytes | — |
+| `tools ensure`, empty tools dir and empty release cache | 1.19 s wall | — |
+| `tools ensure`, second run ("already installed") | 0.22 s wall | — |
+| `tools ensure --no-network`, populated tools dir | 0.11 s wall | — |
+| Installed MBINCompiler on disk | 4.0 MB | — |
+| Cold index under `-race` | 486 ms | 50 s (10x factor) |
+| Warm index under `-race` | 441 ms | 2 s (10x factor) |
+
+The index numbers were taken with a warm OS page cache; dropping
+`/proc/sys/vm/drop_caches` needs root and was not done. Both figures are an
+order of magnitude inside the budget, so the difference does not change the
+verdict. `make test` runs with `-race`, which is roughly 8x slower on the warm
+path (dominated by building a 195k-entry map); the timing assertions are
+therefore scaled by a build-tagged `budgetFactor`
+(`internal/hgpak/race_test.go`, `norace_test.go`).
+
+### Command output, condensed
+
+`./nmsbonker version` → `nmsbonker 0.1.0 (8d73d43)` (AC1).
+
+`./nmsbonker status` (AC2):
+
+```
+game dir:              <steam>/steamapps/common/No Man's Sky
+steam library:         <steam root>
+buildid:               25233815
+paks:                  97 in <game>/GAMEDATA/PCBANKS
+GAMEDATA/MODS:         symlink -> <legacy>/MODS
+DisableAllMods:        false
+  mod:                 COSMOS COMBINE (enabled=true, priority=0)
+MBINCompiler:          v7.02.0-pre1 (dotnet10)
+  reports:             MBINCompiler v7.02.0-pre1
+game data version:     unknown
+compatibility:         unknown
+pak index:             current: 97 paks, 194531 files
+```
+
+`./nmsbonker tools ensure` (AC3): first run
+`dotnet10: installed and verified (MBINCompiler v7.02.0-pre1)` /
+`result: installed`; second run `result: already installed`,
+`release listing: cache (unchanged upstream)` (a 304, so it costs nothing
+against the 60/hour unauthenticated rate limit); `--no-network` with a populated
+tools dir succeeds with `release listing: cache (offline)`.
+
+`./nmsbonker pak find '*rewardtable*'` (AC4) returns five matches, including
+`metadata/reality/tables/rewardtable.mbin` in `NMSARC.Precache.pak`.
+`pak extract metadata/reality/tables/rewardtable.mbin -o /tmp/x` wrote
+1,221,928 bytes beginning `cc cc cc cc cc cc cc cc`; MBINCompiler decompiled it
+to a 9,660,495-byte MXML beginning `<?xml` with `template="cGcRewardTable"`.
+
+`go vet ./...` clean; `golangci-lint run` **0 issues**;
+`go test -race ./...` green with and without the integration environment;
+9 tests skip when `NMSBONKER_GAME_DIR` is unset (AC7). A grep for `/home/`,
+`nverenin` and `Data2` over `cmd/`, `internal/` and `config/` finds nothing, and
+there is no `testdata/` directory (AC8).
+
+`govulncheck -mode=binary ./nmsbonker`: **No vulnerabilities found**, after
+taking `github.com/klauspost/compress` from v1.18.0 to v1.18.7 for GO-2026-5841
+(an out-of-bounds read in the `s2` package, which this project does not use --
+only the zstd decoder). Source mode reports 17 standard-library findings, every
+one of them "fixed in go1.26.x": that is an artifact of having to run the
+scanner under `GOTOOLCHAIN=go1.26.0`, because the installed govulncheck is built
+with Go 1.26 and cannot parse the Go 1.27 standard library. The binary this
+project builds uses Go 1.27.1, which is newer than every "fixed in" version, and
+the binary-mode scan above confirms it.
+
+### Deviations from the spec, and why
+
+**AC5's named oracle is not an hgpaktool extraction.** The spec compares against
+`<legacy>/extract/GLOBALS/gcgameplayglobals.global.MBIN`. That file differs from
+the pak's bytes in 7 places: two ranges in the MBIN header (0x0A-0x0B and
+0x18-0x1D, where libMBIN stamps its own version) and one at 0x17A0, where
+`MaxNumSameGroupTech` is 25 rather than the game's 3. Its sibling `.MXML` is
+timestamped 0.16 s *earlier* than the `.MBIN`. It is a modded recompile
+(StackingTechnologyModules), not an extraction. The genuine hgpaktool output is
+in the legacy build cache, which `build_cache.py` fills by running hgpaktool
+directly: `<legacy>/cache/raw/f3/GLOBALS/gcgameplayglobals.global.mbin`. This
+reader's output is **byte-identical** to that file (8,648 bytes, `cmp` clean),
+which is the property AC5 exists to establish. AC5 is ticked on that basis; the
+test skips if the legacy build cache is absent.
+
+**R6.1/R6.2: the game data version cannot be read this way.** `version <file>`
+on a pak-extracted MBIN does not yield the game's data version, because the
+game's own MBINs are not produced by MBINCompiler.
+`metadata/reality/tables/rewardtable.mbin` answers `Unknown MBIN version! Not
+compiled by MBINCompiler.`; `gcgameplayglobals.global.mbin` has a non-zero value
+in that header field and answers `Compiled with MBINCompiler v61.124.112.44`,
+which is the four header bytes `3d 7c 70 2c` read as a version quad. Both
+MBINCompiler 7.01.0-pre1 and 7.02.0-pre1 agree, so this is the format and not a
+bug in one release. (The earlier belief that it returned `7.1.0` came from
+running `version` on the modded recompile above, which *is* MBINCompiler output
+and does carry a real stamp.)
+
+The mechanism is implemented as specified and then guarded: an output matching
+`not compiled by MBINCompiler` / `Unknown MBIN version`, or a quad with any
+component outside 1-99, degrades to `unknown` with a reason. It is kept rather
+than removed because it is correct for the files it was meant for -- everything
+in spec 002's build cache is MBINCompiler output -- and because a future libMBIN
+may learn to read the game's field. On this machine the reported game data
+version is therefore `unknown` and compatibility is `unknown`, and release
+selection falls back to the highest release (R5.2's documented path). **Spec 002
+should not assume a known game data version.** Finding a real source for it
+(the Steam buildid is the only reliable identifier found so far) is open work.
+
+**R9.2's MXML assertion.** The spec asks for `template="GcGameplayGlobals"`.
+MBINCompiler writes the libMBIN class name, which carries a leading `c`:
+`template="cGcGameplayGlobals"` (and `template="cGcRewardTable"`). The spec's
+literal string never appears in any MXML. The tests assert the actual string.
+
+**R5.3's verification test.** "checking the output contains the tag's numeric
+version" fails on the real data: tag `v7.01.0-pre1` prints
+`MBINCompiler v7.01.0-pre1`, and `7.1.0` is not a substring of that because the
+tag zero-pads the minor component. Verification parses both sides and compares
+the numbers instead, which is the same check without the padding trap.
+
+**R4.5's cache encoding.** Still `cache_dir/pak-index.json`, keyed per pak by
+`(size, mtime)` as specified, but each pak's file list is stored as one
+newline-joined string rather than a JSON array, and the basename fallback map is
+built on first use rather than at load. An array of 195k JSON strings, plus an
+eagerly built second map, put the warm load at 164 ms -- inside AC6's 200 ms but
+with no headroom. The two changes brought it to 57 ms.
+
+**Makefile: lint pins GOTOOLCHAIN.** angou pins it to go.mod's `toolchain`
+line; R1.1 forbids that line here. golangci-lint v2.12.2 is built with Go 1.26
+and panics outright ("file requires newer Go version go1.27") type-checking a Go
+1.27 standard library, so `make lint` exports `GOTOOLCHAIN=go1.26.0`,
+documented in the Makefile and bumped alongside `LINT_VERSION`. The same
+constraint applies to the installed govulncheck.
+
+**steam.Locate with an explicit game directory now reads the appmanifest.**
+R3.3 says an override "skips discovery but is validated the same way". Taken
+literally that also skipped the manifest, so `--game-dir` and
+`$NMSBONKER_GAME_DIR` blanked the buildid that AC2 requires `status` to report.
+When the override sits inside a Steam library
+(`<library>/steamapps/common/<installdir>`) the manifest is read for
+`buildid`, `name`, `LastUpdated` and `StateFlags`; a game copied out of Steam
+simply has none, which is correct.
+
+### Left for later phases
+
+- `cmd/nmsbonker-gui`, `build-gui`, `build-all` and `install` are deliberately
+  absent (R1.3): stubbing them would misreport what the tool can do.
+- `config.mods` and `config.parallel` are carried, validated and preserved, but
+  only `parallel` is consumed (as the MBINCompiler process limit). `mods` is
+  spec 002's.
+- Pak *writing*, mac (lz4) and Switch (Oodle) archives remain out of scope.
 
 ## Risks & Assumptions
 
