@@ -54,7 +54,11 @@ func (u *ui) installCard() fyne.CanvasObject {
 
 	mods := in.ModsState
 	if in.ModsTarget != "" {
-		mods += " → " + in.ModsTarget
+		// "->" rather than an arrow glyph: the font Fyne bundles has no U+2192
+		// and draws a replacement box for it, which in the one row that warns
+		// about the legacy symlink reads as a rendering fault. The CLI spells
+		// it the same way.
+		mods += " -> " + in.ModsTarget
 	}
 	rows := []fyne.CanvasObject{
 		plainRow("Directory", in.Dir),

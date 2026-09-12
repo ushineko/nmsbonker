@@ -72,13 +72,16 @@ func (u *ui) buildReport() fyne.CanvasObject {
 			strconv.Itoa(m.Applied), strconv.Itoa(m.Skipped), modNote(m))
 	}
 
+	// The table first, the facts under it. The table is what the section is
+	// for -- it is the list of mods to re-download after a game update -- and
+	// with the header facts above it a default-sized window opened on two rows
+	// of it and a page of numbers.
 	body := container.NewVBox(
 		heading("Report", "What the last build made of each mod."),
-		facts,
-		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Mods", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		fixedHeight(t.widget(), 320),
 		note(reportLegend, StatusInfo),
+		widget.NewSeparator(),
+		facts,
 	)
 
 	if len(r.UnsupportedKeys) > 0 {

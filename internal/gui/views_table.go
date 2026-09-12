@@ -83,8 +83,8 @@ func (t *detailTable) widget() *widget.Table {
 		},
 		func(id widget.TableCellID, o fyne.CanvasObject) {
 			l := o.(*widget.Label)
-			l.Importance = widget.MediumImportance
 			if id.Row < 0 || id.Row >= len(t.rows) {
+				l.Importance = widget.MediumImportance
 				l.SetText("")
 				return
 			}
@@ -93,8 +93,12 @@ func (t *detailTable) widget() *widget.Table {
 			if id.Col >= 0 && id.Col < len(row) {
 				text = row[id.Col]
 			}
-			l.SetText(text)
+			// Importance before SetText: SetText is what refreshes the label,
+			// and the refresh is where importance becomes a colour. The other
+			// way round, a scrolled table paints each recycled cell in the
+			// colour of the row it last held.
 			l.Importance = importanceFor(t.stat[id.Row])
+			l.SetText(text)
 		},
 	)
 	table.ShowHeaderRow = true

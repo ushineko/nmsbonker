@@ -107,8 +107,13 @@ func (u *ui) buildMods() fyne.CanvasObject {
 				return
 			}
 			text, importance := modCell(rows[id.Row], id.Col)
-			l.SetText(text)
+			// Importance first, text second. SetText refreshes the label, and
+			// a refresh is when the importance is turned into a colour -- so
+			// assigning it afterwards paints this cell in the colour of
+			// whatever row the recycled widget held last. In a scrolling table
+			// that shows up as verdict colours landing on file counts.
 			l.Importance = importance
+			l.SetText(text)
 		},
 	)
 	for i, c := range cols {
