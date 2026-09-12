@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -157,6 +158,17 @@ type Result struct {
 	// Workers is how many targets were processed at once, which is what makes
 	// the summed merge and compile timings larger than the wall clock.
 	Workers int `json:"workers"`
+	/*
+		Params records the parameter overrides this build was produced with
+		(spec 004 R2.1).
+
+		It is what makes "unbuilt changes" a fact rather than a session flag: a
+		front end compares the settings in force against this and knows whether
+		the mod folder on disk was built from them, across restarts and across
+		front ends. It is also the answer to "what was this built with" three
+		weeks later, which is why it is in the Markdown as well.
+	*/
+	Params map[string]map[string]float64 `json:"params,omitempty"`
 }
 
 // Events converts engine events into the stored line form.
@@ -181,6 +193,39 @@ func (l Line) Render() string {
 	default:
 		return "       " + l.Detail
 	}
+}
+
+/*
+paramLine summarises the non-default parameters one line of the header.
+
+Only the ones the user changed: the defaults are in the scripts and repeating
+them would bury the two numbers that are actually interesting in twenty that
+are not.
+*/
+func paramLine(r *Result) string {
+	mods := make([]string, 0, len(r.Params))
+	for mod, params := range r.Params {
+		if len(params) > 0 {
+			mods = append(mods, mod)
+		}
+	}
+	if len(mods) == 0 {
+		return ""
+	}
+	sort.Strings(mods)
+	var parts []string
+	for _, mod := range mods {
+		names := make([]string, 0, len(r.Params[mod]))
+		for name := range r.Params[mod] {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			parts = append(parts, fmt.Sprintf("%s.%s=%s", mod, name,
+				strconv.FormatFloat(r.Params[mod][name], 'f', -1, 64)))
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 // SortMods orders the table rows by verdict then name (R4.4).
@@ -224,6 +269,9 @@ func Markdown(r *Result) string {
 	}
 	if len(r.CacheMisses) > 0 {
 		w("- Sources not found in the game's paks: %s", strings.Join(r.CacheMisses, ", "))
+	}
+	if line := paramLine(r); line != "" {
+		w("- Parameters changed from their defaults: %s", line)
 	}
 	// Merge and compile are sums over the targets, which run concurrently, so
 	// they are routinely larger than the wall clock. Saying so beats a reader

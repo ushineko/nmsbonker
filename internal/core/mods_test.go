@@ -3,13 +3,37 @@ package core_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
+	"github.com/ushineko/nmsbonker/internal/tweaks"
 )
+
+/*
+libraryMods is the listing with the built-in tweaks taken out.
+
+Every configuration holds the ten built-ins from spec 004 R1.4 onwards, disabled
+until asked for. The tests below are about what the library does, so they filter
+them rather than counting eleven where they mean one; the built-ins have their
+own tests.
+*/
+func libraryMods(list core.ListModsResult) []core.ModInfo {
+	var out []core.ModInfo
+	for _, m := range list.Mods {
+		if m.Source != core.SourceBuiltin {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// notices is every notice joined, so a test can look for one without depending
+// on how many others were emitted alongside it.
+func notices(list core.ListModsResult) string { return strings.Join(list.Notices, "\n") }
 
 // writeScript puts a minimal valid mod script somewhere outside the library.
 func writeScript(t *testing.T, dir, name, body string) string {
@@ -40,9 +64,11 @@ func TestAddingAScriptCopiesItIntoTheLibraryAndEnablesIt(t *testing.T) {
 
 	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
 	require.NoError(t, err)
-	require.Len(t, list.Mods, 1)
-	require.True(t, list.Mods[0].Enabled)
-	require.Equal(t, core.ModOK, list.Mods[0].Status)
+	mods := libraryMods(list)
+	require.Len(t, mods, 1)
+	require.True(t, mods[0].Enabled)
+	require.Equal(t, core.ModOK, mods[0].Status)
+	require.Equal(t, core.SourceLibrary, mods[0].Source)
 }
 
 /*
@@ -106,14 +132,15 @@ func TestAScriptThatAppearsInTheLibraryIsAddedDisabledWithANotice(t *testing.T) 
 
 	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
 	require.NoError(t, err)
-	require.Len(t, list.Mods, 1)
-	require.False(t, list.Mods[0].Enabled)
-	require.Contains(t, list.Notices[0], "added 1 script(s) found in the library, disabled: Surprise")
+	mods := libraryMods(list)
+	require.Len(t, mods, 1)
+	require.False(t, mods[0].Enabled)
+	require.Contains(t, notices(list), "added 1 script(s) found in the library, disabled: Surprise")
 
 	// And it is persisted, so `mods enable Surprise` can find it.
 	again, err := core.ListMods(t.Context(), core.ListModsRequest{})
 	require.NoError(t, err)
-	require.Len(t, again.Mods, 1)
+	require.Len(t, libraryMods(again), 1)
 	require.Empty(t, again.Notices)
 }
 
@@ -137,10 +164,11 @@ func TestAnEntryWhoseScriptIsGoneKeepsItsPlace(t *testing.T) {
 
 	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
 	require.NoError(t, err)
-	require.Len(t, list.Mods, 2)
-	require.Equal(t, "First", list.Mods[0].Name)
-	require.Equal(t, core.ModMissing, list.Mods[0].Status)
-	require.Contains(t, list.Notices[0], "have no .lua in the library: First")
+	mods := libraryMods(list)
+	require.Len(t, mods, 2)
+	require.Equal(t, "First", mods[0].Name)
+	require.Equal(t, core.ModMissing, mods[0].Status)
+	require.Contains(t, notices(list), "have no .lua in the library: First")
 }
 
 // R6.2: enable, disable and remove.
@@ -154,7 +182,7 @@ func TestEnableDisableAndRemove(t *testing.T) {
 	require.NoError(t, err)
 	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
 	require.NoError(t, err)
-	require.False(t, list.Mods[0].Enabled)
+	require.False(t, libraryMods(list)[0].Enabled)
 
 	_, err = core.SetModEnabled(t.Context(), core.SetModEnabledRequest{Names: []string{"Nope"}, Enabled: true})
 	require.ErrorContains(t, err, `no mod named "Nope"`)
@@ -164,7 +192,7 @@ func TestEnableDisableAndRemove(t *testing.T) {
 	require.NoFileExists(t, res.Deleted)
 	list, err = core.ListMods(t.Context(), core.ListModsRequest{})
 	require.NoError(t, err)
-	require.Empty(t, list.Mods)
+	require.Empty(t, libraryMods(list))
 }
 
 /*
@@ -247,4 +275,90 @@ func TestCheckReportsAMissingScriptPlainly(t *testing.T) {
 	res, err := core.CheckMods(t.Context(), core.CheckModsRequest{})
 	require.NoError(t, err)
 	require.Equal(t, "no .lua in the library", res.Mods[0].Error)
+}
+
+/*
+R1.4: the built-ins are in every configuration, in their own order, disabled.
+
+Disabled matters more than the order does. Installing a mod builder is not
+consent to change anyone's game, and a fresh install that quietly enabled ten
+tweaks would produce a first build nobody asked for.
+*/
+func TestTheBuiltInsAreListedInOrderAndStartDisabled(t *testing.T) {
+	bare(t)
+
+	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+
+	var names []string
+	for _, m := range list.Mods {
+		require.Equal(t, core.SourceBuiltin, m.Source)
+		require.False(t, m.Enabled, "%s is enabled on a fresh install", m.Name)
+		require.Equal(t, core.ModOK, m.Status)
+		require.Empty(t, m.Path, "a built-in has no file in the library")
+		require.Positive(t, m.Params, "%s declares no parameters", m.Name)
+		names = append(names, m.Name)
+	}
+	require.Equal(t, tweaks.Names(), names)
+	require.Contains(t, notices(list), "added 10 built-in tweak(s), disabled")
+
+	// Persisted, so the second call has nothing to add and nothing to say.
+	again, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+	require.Empty(t, again.Notices)
+	require.Len(t, again.Mods, len(tweaks.Names()))
+}
+
+/*
+R1.4: a library script with a built-in's name is shadowed, not applied twice.
+
+This is what happens to anyone who imported the reference script set before the
+built-ins existed. The build must use one copy, the interface must say which,
+and the ignored one must be removable.
+*/
+func TestALibraryScriptWithABuiltInsNameIsShadowed(t *testing.T) {
+	bare(t)
+	cfg := config.Defaults()
+	require.NoError(t, config.MkdirAll(cfg.Paths().Library))
+	writeScript(t, cfg.Paths().Library, "ItemValueBoost", minimalScript)
+
+	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+	require.Len(t, list.Mods, len(tweaks.Names()), "one entry, not two")
+	require.Contains(t, notices(list), "same name as a built-in tweak and are ignored")
+
+	var shadowed core.ModInfo
+	for _, m := range list.Mods {
+		if m.Name == "ItemValueBoost" {
+			shadowed = m
+		}
+	}
+	require.True(t, shadowed.Shadowed)
+	require.Equal(t, core.SourceBuiltin, shadowed.Source)
+	require.FileExists(t, shadowed.ShadowedPath)
+
+	// Remove deletes the ignored copy and leaves the built-in in place.
+	res, err := core.RemoveMod(t.Context(), core.RemoveModRequest{Name: "ItemValueBoost"})
+	require.NoError(t, err)
+	require.True(t, res.KeptEntry)
+	require.NoFileExists(t, shadowed.ShadowedPath)
+
+	after, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+	require.Len(t, after.Mods, len(tweaks.Names()))
+	for _, m := range after.Mods {
+		require.False(t, m.Shadowed)
+	}
+}
+
+// R1.4: a built-in cannot be removed. It is compiled in, so reconcile would put
+// it straight back; disabling is the action that means what remove would mean.
+func TestABuiltInCannotBeRemoved(t *testing.T) {
+	bare(t)
+	_, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+
+	_, err = core.RemoveMod(t.Context(), core.RemoveModRequest{Name: "BigStacks"})
+	require.ErrorIs(t, err, core.ErrBuiltInMod)
+	require.ErrorContains(t, err, "disable it instead")
 }

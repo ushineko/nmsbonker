@@ -13,6 +13,7 @@ import (
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/modscript"
+	"github.com/ushineko/nmsbonker/internal/tweaks"
 )
 
 // Mod statuses reported by ListMods (spec 002 R6.1).
@@ -24,6 +25,14 @@ const (
 	ModMissing = "missing"
 )
 
+// Where a mod's script comes from (spec 004 R1.4).
+const (
+	// SourceBuiltin is one of the tweaks embedded in the binary.
+	SourceBuiltin = "builtin"
+	// SourceLibrary is a .lua in the user's library directory.
+	SourceLibrary = "library"
+)
+
 // ModInfo is one entry in the build order.
 type ModInfo struct {
 	Name    string `json:"name"`
@@ -31,6 +40,22 @@ type ModInfo struct {
 	Status  string `json:"status"`
 	Path    string `json:"path"`
 	Size    int64  `json:"size"`
+	// Source is SourceBuiltin or SourceLibrary (R1.4).
+	Source string `json:"source"`
+	/*
+		Shadowed reports a library script with the same basename as a built-in.
+
+		It happens to anyone who imported the reference script set before the
+		built-ins existed. The built-in wins -- it is the copy this project
+		maintains and the one the parameter headers describe -- and the library
+		file is ignored by the build rather than silently applied twice.
+	*/
+	Shadowed bool `json:"shadowed,omitempty"`
+	// ShadowedPath is the ignored library file, which `mods remove` deletes.
+	ShadowedPath string `json:"shadowedPath,omitempty"`
+	// Params is the number of tunable parameters the script declares, which is
+	// what tells a front end whether there is anything to show a Details… for.
+	Params int `json:"params"`
 }
 
 // ListModsRequest asks for the reconciled build order.
@@ -100,7 +125,14 @@ func libraryScripts(dir string) (map[string]os.FileInfo, []string, error) {
 	return found, names, nil
 }
 
-// reconcile builds the mod list and reports whether the config changed.
+/*
+reconcile builds the mod list and reports whether the config changed.
+
+Built-ins come first on a fresh configuration, in the order tweaks.Names() gives
+(R1.4), and disabled: installing this tool is not consent to change the game.
+Library scripts follow in name order, also disabled. Both are appended rather
+than inserted, so a hand-tuned order survives a release that adds a built-in.
+*/
 func reconcile(s *session) (ListModsResult, bool, error) {
 	out := ListModsResult{LibraryDir: s.paths.Library}
 	found, names, err := libraryScripts(s.paths.Library)
@@ -108,45 +140,86 @@ func reconcile(s *session) (ListModsResult, bool, error) {
 		return out, false, err
 	}
 
+	describe := func(entry config.ModEntry) ModInfo {
+		info := ModInfo{Name: entry.Name, Enabled: entry.Enabled, Status: ModMissing}
+		if src, ok := tweaks.Source(entry.Name); ok {
+			info.Source, info.Status = SourceBuiltin, ModOK
+			info.Size = int64(len(src))
+			info.Params = len(modscript.Parameters(src))
+			if _, shadow := found[entry.Name]; shadow {
+				info.Shadowed = true
+				info.ShadowedPath = filepath.Join(s.paths.Library, entry.Name+".lua")
+			}
+			return info
+		}
+		info.Source = SourceLibrary
+		fi, ok := found[entry.Name]
+		if !ok {
+			return info
+		}
+		info.Status = ModOK
+		info.Path = filepath.Join(s.paths.Library, entry.Name+".lua")
+		info.Size = fi.Size()
+		if src, err := os.ReadFile(info.Path); err == nil {
+			info.Params = len(modscript.Parameters(src))
+		}
+		return info
+	}
+
 	known := map[string]bool{}
 	for _, entry := range s.cfg.Mods {
 		known[entry.Name] = true
-		info := ModInfo{Name: entry.Name, Enabled: entry.Enabled, Status: ModMissing}
-		if fi, ok := found[entry.Name]; ok {
-			info.Status = ModOK
-			info.Path = filepath.Join(s.paths.Library, entry.Name+".lua")
-			info.Size = fi.Size()
-		}
-		out.Mods = append(out.Mods, info)
+		out.Mods = append(out.Mods, describe(entry))
 	}
 
-	var added []string
+	var addedBuiltins, added []string
+	for _, name := range tweaks.Names() {
+		if known[name] {
+			continue
+		}
+		known[name] = true
+		addedBuiltins = append(addedBuiltins, name)
+		entry := config.ModEntry{Name: name, Enabled: false}
+		s.cfg.Mods = append(s.cfg.Mods, entry)
+		out.Mods = append(out.Mods, describe(entry))
+	}
 	for _, name := range names {
 		if known[name] {
 			continue
 		}
 		added = append(added, name)
-		s.cfg.Mods = append(s.cfg.Mods, config.ModEntry{Name: name, Enabled: false})
-		out.Mods = append(out.Mods, ModInfo{
-			Name: name, Enabled: false, Status: ModOK,
-			Path: filepath.Join(s.paths.Library, name+".lua"), Size: found[name].Size(),
-		})
+		entry := config.ModEntry{Name: name, Enabled: false}
+		s.cfg.Mods = append(s.cfg.Mods, entry)
+		out.Mods = append(out.Mods, describe(entry))
+	}
+	if len(addedBuiltins) > 0 {
+		out.Notices = append(out.Notices, fmt.Sprintf(
+			"added %d built-in tweak(s), disabled: %s",
+			len(addedBuiltins), strings.Join(addedBuiltins, ", ")))
 	}
 	if len(added) > 0 {
 		out.Notices = append(out.Notices, fmt.Sprintf(
 			"added %d script(s) found in the library, disabled: %s", len(added), strings.Join(added, ", ")))
 	}
-	var missing []string
+	var missing, shadowed []string
 	for _, m := range out.Mods {
 		if m.Status == ModMissing {
 			missing = append(missing, m.Name)
+		}
+		if m.Shadowed {
+			shadowed = append(shadowed, m.Name)
 		}
 	}
 	if len(missing) > 0 {
 		out.Notices = append(out.Notices, fmt.Sprintf(
 			"%d configured mod(s) have no .lua in the library: %s", len(missing), strings.Join(missing, ", ")))
 	}
-	return out, len(added) > 0, nil
+	if len(shadowed) > 0 {
+		out.Notices = append(out.Notices, fmt.Sprintf(
+			"%d library script(s) have the same name as a built-in tweak and are ignored by the "+
+				"build; the built-in is used instead: %s", len(shadowed), strings.Join(shadowed, ", ")))
+	}
+	return out, len(added)+len(addedBuiltins) > 0, nil
 }
 
 // AddModRequest copies scripts into the library (R6.2).
@@ -266,9 +339,25 @@ type RemoveModRequest struct {
 type RemoveModResult struct {
 	Name    string `json:"name"`
 	Deleted string `json:"deleted,omitempty"`
+	// KeptEntry reports that only a shadowing library file was deleted and the
+	// built-in itself is still in the build order (R1.4).
+	KeptEntry bool `json:"keptEntry,omitempty"`
 }
 
-// RemoveMod drops a config entry, and optionally the script itself.
+// ErrBuiltInMod reports an attempt to take a built-in tweak out of the build
+// order. It is embedded in the binary, so there is nothing to remove; the
+// equivalent action is to disable it.
+var ErrBuiltInMod = errors.New("built-in tweaks cannot be removed")
+
+/*
+RemoveMod drops a config entry, and optionally the script itself.
+
+A built-in is a special case in both directions. It cannot be removed, because
+it is compiled in and reconcile would put it straight back. But a library script
+with the same basename -- imported before the built-ins existed -- can be, and
+that is what Remove means on a row marked "shadowed by built-in": delete the
+ignored copy and leave the built-in where it is.
+*/
 func RemoveMod(_ context.Context, req RemoveModRequest) (RemoveModResult, error) {
 	s, err := open(req.Request)
 	if err != nil {
@@ -278,6 +367,18 @@ func RemoveMod(_ context.Context, req RemoveModRequest) (RemoveModResult, error)
 	idx := indexOfMod(s.cfg.Mods, req.Name)
 	if idx < 0 {
 		return out, fmt.Errorf("no mod named %q is in the build order", req.Name)
+	}
+	if tweaks.Has(req.Name) {
+		path := filepath.Join(s.paths.Library, req.Name+".lua")
+		if _, err := os.Stat(path); err != nil {
+			return out, fmt.Errorf("%w: %s is embedded in nmsbonker; disable it instead",
+				ErrBuiltInMod, req.Name)
+		}
+		if err := os.Remove(path); err != nil {
+			return out, fmt.Errorf("remove %s: %w", path, err)
+		}
+		out.Deleted, out.KeptEntry = path, true
+		return out, nil
 	}
 	s.cfg.Mods = append(s.cfg.Mods[:idx], s.cfg.Mods[idx+1:]...)
 	if req.DeleteFile {
@@ -399,6 +500,14 @@ type ModCheck struct {
 	Unsupported []string `json:"unsupported,omitempty"`
 	// Globals are the script's tuning constants, rendered as the report would.
 	Globals map[string]string `json:"globals,omitempty"`
+	// Source is SourceBuiltin or SourceLibrary.
+	Source string `json:"source,omitempty"`
+	// Params are the script's tunable parameters with the overrides applied,
+	// which is what the Tweaks section and the Mods detail dialog draw (R2.2).
+	Params []modscript.Param `json:"params,omitempty"`
+	// Duplicates names parameters the script assigns more than once, where an
+	// override would be silently ignored (R1's risk note).
+	Duplicates []string `json:"duplicates,omitempty"`
 	// Dump is the decoded container, present only when the caller asked.
 	Dump json.RawMessage `json:"dump,omitempty"`
 }
@@ -441,12 +550,21 @@ func CheckMods(ctx context.Context, req CheckModsRequest) (CheckModsResult, erro
 		if !m.Enabled && !req.All {
 			continue
 		}
-		check := ModCheck{Name: m.Name, Path: m.Path}
+		check := ModCheck{Name: m.Name, Path: m.Path, Source: m.Source}
 		switch m.Status {
 		case ModMissing:
 			check.Error = "no .lua in the library"
 		default:
-			def, err := modscript.Load(ctx, m.Path)
+			src, params, err := s.scriptSource(m)
+			if err != nil {
+				check.Error = err.Error()
+				out.Failed++
+				out.Mods = append(out.Mods, check)
+				continue
+			}
+			check.Params = params
+			check.Duplicates = modscript.DuplicateAssignments(src)
+			def, err := modscript.LoadSource(ctx, scriptPath(s, m), src)
 			if err != nil {
 				check.Error = err.Error()
 			} else {

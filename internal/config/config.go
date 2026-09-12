@@ -36,6 +36,11 @@ type ModEntry struct {
 	Enabled bool   `json:"enabled"`
 }
 
+// DefaultSaveBackup is whether a deploy backs the saves up first. On by
+// default: the operation this tool exists to perform writes into a game whose
+// saves are not versioned anywhere else, and a copy costs seconds.
+const DefaultSaveBackup = true
+
 // MBINCompiler holds the compiler-selection settings (R2.2).
 type MBINCompiler struct {
 	// Pin is a release tag ("v7.01.0-pre1"); empty means automatic selection.
@@ -59,6 +64,13 @@ type Config struct {
 	MBINCompiler MBINCompiler `json:"mbincompiler"`
 	Mods         []ModEntry   `json:"mods"`
 	Parallel     int          `json:"parallel"`
+	// Params holds per-mod parameter overrides (spec 004 R1.3):
+	// {"<mod name>": {"<GLOBAL>": <number>}}. They are applied by rewriting the
+	// assignment in an in-memory copy of the script; the file is never touched.
+	Params map[string]map[string]float64 `json:"params"`
+	// SaveBackup is whether the first deploy of a process copies the game's
+	// saves first (R5.2).
+	SaveBackup bool `json:"save_backup"`
 
 	// path is the file this was loaded from and will be saved to.
 	path string
@@ -86,6 +98,8 @@ func Defaults() *Config {
 		ModName:      DefaultModName,
 		MBINCompiler: MBINCompiler{Flavor: FlavorAuto},
 		Mods:         []ModEntry{},
+		Params:       map[string]map[string]float64{},
+		SaveBackup:   DefaultSaveBackup,
 		path:         FilePath(),
 	}
 }
@@ -141,7 +155,7 @@ func LoadFrom(path string) (*Config, error) {
 func knownKeys() []string {
 	return []string{
 		"game_dir", "library_dir", "tools_dir", "cache_dir", "workspace_dir",
-		"mod_name", "mbincompiler", "mods", "parallel",
+		"mod_name", "mbincompiler", "mods", "parallel", "params", "save_backup",
 	}
 }
 
@@ -176,6 +190,9 @@ func (c *Config) fillDefaults() {
 	if c.Mods == nil {
 		c.Mods = []ModEntry{}
 	}
+	if c.Params == nil {
+		c.Params = map[string]map[string]float64{}
+	}
 }
 
 // Path is the file this config was loaded from.
@@ -196,17 +213,19 @@ func (c *Config) Save() error {
 	// of each key's JSON shape (the struct tags) instead of a second, hand-kept
 	// encoder that would drift from it.
 	known, err := json.Marshal(struct {
-		GameDir      string       `json:"game_dir"`
-		LibraryDir   string       `json:"library_dir"`
-		ToolsDir     string       `json:"tools_dir"`
-		CacheDir     string       `json:"cache_dir"`
-		WorkspaceDir string       `json:"workspace_dir"`
-		ModName      string       `json:"mod_name"`
-		MBINCompiler MBINCompiler `json:"mbincompiler"`
-		Mods         []ModEntry   `json:"mods"`
-		Parallel     int          `json:"parallel"`
+		GameDir      string                        `json:"game_dir"`
+		LibraryDir   string                        `json:"library_dir"`
+		ToolsDir     string                        `json:"tools_dir"`
+		CacheDir     string                        `json:"cache_dir"`
+		WorkspaceDir string                        `json:"workspace_dir"`
+		ModName      string                        `json:"mod_name"`
+		MBINCompiler MBINCompiler                  `json:"mbincompiler"`
+		Mods         []ModEntry                    `json:"mods"`
+		Parallel     int                           `json:"parallel"`
+		Params       map[string]map[string]float64 `json:"params"`
+		SaveBackup   bool                          `json:"save_backup"`
 	}{c.GameDir, c.LibraryDir, c.ToolsDir, c.CacheDir, c.WorkspaceDir,
-		c.ModName, c.MBINCompiler, c.Mods, c.Parallel})
+		c.ModName, c.MBINCompiler, c.Mods, c.Parallel, c.Params, c.SaveBackup})
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
@@ -331,6 +350,7 @@ func Keys() []string {
 	return []string{
 		"game_dir", "library_dir", "tools_dir", "cache_dir", "workspace_dir",
 		"mod_name", "mbincompiler.pin", "mbincompiler.flavor", "parallel",
+		"save_backup",
 	}
 }
 
@@ -355,6 +375,8 @@ func (c *Config) Get(key string) (string, error) {
 		return c.MBINCompiler.Flavor, nil
 	case "parallel":
 		return strconv.Itoa(c.Parallel), nil
+	case "save_backup":
+		return strconv.FormatBool(c.SaveBackup), nil
 	default:
 		return "", fmt.Errorf("%w: %s", ErrUnknownKey, key)
 	}
@@ -397,6 +419,12 @@ func (c *Config) Set(key, value string) error {
 			return fmt.Errorf("parallel must be a non-negative integer (got %q)", value)
 		}
 		c.Parallel = n
+	case "save_backup":
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("save_backup must be true or false (got %q)", value)
+		}
+		c.SaveBackup = b
 	default:
 		return fmt.Errorf("%w: %s (known keys: %s)", ErrUnknownKey, key, strings.Join(Keys(), ", "))
 	}

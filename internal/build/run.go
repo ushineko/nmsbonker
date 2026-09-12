@@ -53,6 +53,10 @@ type Options struct {
 	CacheReused         int
 	CacheBuilt          int
 	CacheMisses         []string
+	// Params are the parameter overrides the scripts were loaded with, recorded
+	// in the report so a front end can tell whether the output on disk was
+	// built from the settings currently in force (spec 004 R2.1).
+	Params map[string]map[string]float64
 }
 
 // outcome is one target's finished work, held until its turn to be reported.
@@ -100,7 +104,7 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 		Compatibility: opts.Compatibility, CompatibilityDetail: opts.CompatibilityDetail,
 		UnsupportedKeys: plan.Unsupported, CacheMisses: opts.CacheMisses,
 		CacheReused: opts.CacheReused, CacheBuilt: opts.CacheBuilt,
-		Complex: plan.Complex, Workers: opts.Workers,
+		Complex: plan.Complex, Workers: opts.Workers, Params: opts.Params,
 	}
 
 	stats := newTally()

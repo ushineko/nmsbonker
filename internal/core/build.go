@@ -140,7 +140,7 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 		CompilerVersion: compilerVersion, GameBuildID: s.install.BuildID,
 		Compatibility: compat.Status, CompatibilityDetail: compat.Detail,
 		CacheTime: cached.Duration, CacheReused: cached.Reused, CacheBuilt: cached.Extracted,
-		CacheMisses: misses,
+		CacheMisses: misses, Params: s.cfg.Params,
 	})
 	if err != nil {
 		return BuildResult{}, err
@@ -205,7 +205,15 @@ func (s *session) loadScripts(ctx context.Context, all bool) ([]build.Script, er
 		case m.Status == ModMissing:
 			script.Missing = true
 		case script.Enabled:
-			def, err := modscript.Load(ctx, m.Path)
+			// The overrides are applied here, to a copy, before the script is
+			// ever executed (spec 004 R1.3). Everything downstream sees a
+			// script with the user's numbers already in it.
+			src, _, err := s.scriptSource(m)
+			if err != nil {
+				script.Err = err
+				break
+			}
+			def, err := modscript.LoadSource(ctx, scriptPath(s, m), src)
 			if err != nil {
 				script.Err = err
 			} else {
