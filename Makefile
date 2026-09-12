@@ -104,6 +104,26 @@ build-all: ## Build static CLI binaries for every platform, plus the host's GUI
 	fi
 	@ls -l dist/
 
+.PHONY: install
+install: ## Install the CLI, the GUI, the desktop entry and the icon into ~/.local
+	./install.sh
+
+.PHONY: uninstall
+uninstall: ## Remove what install put in ~/.local, leaving your data alone
+	./uninstall.sh
+
+# One tarball per target plus a checksum file, which is what a release page
+# needs and what `curl | sha256sum -c` checks. The GUI is host-only (it needs
+# CGO), so it is packaged only for the platform it was built on.
+.PHONY: release
+release: build-all ## Package dist/ into per-target tar.gz archives with SHA256SUMS
+	@set -e; 	rm -f dist/*.tar.gz dist/SHA256SUMS; 	stage=$$(mktemp -d); trap 'rm -rf "$$stage"' EXIT; 	for bin in dist/nmsbonker-*; do 		case "$$bin" in *.tar.gz|*SHA256SUMS) continue;; esac; 		name=$$(basename "$$bin"); 		target=$${name#nmsbonker-}; target=$${target#gui-}; 		dir="$$stage/nmsbonker-$(VERSION)-$$target"; 		mkdir -p "$$dir"; 		case "$$name" in 			nmsbonker-gui-*) cp "$$bin" "$$dir/nmsbonker-gui";; 			*) cp "$$bin" "$$dir/nmsbonker";; 		esac; 		cp README.md LICENSE "$$dir/"; 		mkdir -p "$$dir/packaging"; 		cp packaging/io.ushineko.nmsbonker.desktop packaging/nmsbonker.svg "$$dir/packaging/"; 	done; 	for dir in "$$stage"/*; do 		base=$$(basename "$$dir"); 		tar -C "$$stage" -czf "dist/$$base.tar.gz" "$$base"; 	done; 	cd dist && (sha256sum *.tar.gz 2>/dev/null || shasum -a 256 *.tar.gz) > SHA256SUMS
+	@ls -l dist/*.tar.gz dist/SHA256SUMS
+
+.PHONY: screenshots
+screenshots: build-gui ## Refresh the README screenshots (KDE/Wayland; needs kdotool and spectacle)
+	NMSBONKER_GUI=./nmsbonker-gui ./tools/screenshot.sh --all
+
 .PHONY: clean
 clean: ## Remove build artifacts
 	@rm -rf nmsbonker nmsbonker-gui dist/ coverage.out count.out

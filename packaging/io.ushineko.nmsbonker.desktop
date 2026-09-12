@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=nmsbonker
+GenericName=No Man's Sky mod builder
+Comment=Rebuild and deploy No Man's Sky mods, natively on Linux
+Exec=nmsbonker-gui
+Icon=nmsbonker
+Terminal=false
+Categories=Game;Utility;
+Keywords=No Man's Sky;NMS;mod;AMUMSS;MBIN;Proton;
+StartupNotify=true
+# The basename of this file must stay io.ushineko.nmsbonker.desktop. Fyne sets
+# the Wayland app_id from the application's unique ID (app.NewWithID in
+# internal/gui), and a Wayland compositor resolves a window's icon by matching
+# that app_id to a desktop file of the same name. Renaming this file to
+# nmsbonker.desktop silently costs the taskbar icon on every Wayland session.
+# StartupWMClass covers the X11 and XWayland case, where the match is on
+# WM_CLASS instead.
+StartupWMClass=io.ushineko.nmsbonker
