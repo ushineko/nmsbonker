@@ -3,6 +3,7 @@ package hgpak_test
 import (
 	"bytes"
 	"crypto/md5" //nolint:gosec // asserting the game's own hash choice
+	"encoding/binary"
 	"io"
 	"math/rand"
 	"os"
@@ -233,4 +234,76 @@ func TestAnEmptyPakOpensWithNoNames(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { require.NoError(t, pak.Close()) }()
 	require.Empty(t, pak.Names())
+}
+
+// entrySizeOffset is where the decompressed_size of one index entry lives:
+// the header is 0x30 bytes, each entry is 0x20 (md5, offset u64, size u64).
+func entrySizeOffset(entry int) int { return 0x30 + entry*0x20 + 24 }
+
+/*
+A truncated or self-inconsistent archive has to fail here, not later.
+
+The reader used to return whatever bytes it could reach: the compressed path
+stopped when a file ran past the last chunk, the uncompressed path treated an
+EOF short read as success, and both handed back a short slice with no error. The
+result was a plausible-looking MBIN that failed inside MBINCompiler with a
+message about a malformed struct, naming neither the pak nor the file. R4.1.
+*/
+func TestATruncatedArchiveIsAnErrorRatherThanShortBytes(t *testing.T) {
+	entries := fixtureEntries()
+	last := entries[len(entries)-1]
+
+	t.Run("compressed, the index claims a file longer than the archive", func(t *testing.T) {
+		raw, err := hgpaktest.Build(entries, true)
+		require.NoError(t, err)
+		// Entry 0 is the manifest, so the last file is entry len(entries).
+		off := entrySizeOffset(len(entries))
+		binary.LittleEndian.PutUint64(raw[off:],
+			binary.LittleEndian.Uint64(raw[off:])+2*hgpak.ChunkSize)
+
+		path := filepath.Join(t.TempDir(), "lying.pak")
+		require.NoError(t, os.WriteFile(path, raw, 0o600))
+		pak, err := hgpak.Open(path)
+		require.NoError(t, err, "the manifest is intact, so the archive still opens")
+		defer func() { require.NoError(t, pak.Close()) }()
+
+		got, err := pak.ReadFile(last.Name)
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+		require.Nil(t, got, "no short slice comes back alongside the error")
+		require.Contains(t, err.Error(), "lying.pak", "the error names the archive")
+	})
+
+	t.Run("uncompressed, the file is physically truncated", func(t *testing.T) {
+		raw, err := hgpaktest.Build(entries, false)
+		require.NoError(t, err)
+
+		path := filepath.Join(t.TempDir(), "cut.pak")
+		require.NoError(t, os.WriteFile(path, raw[:len(raw)-4096], 0o600))
+		pak, err := hgpak.Open(path)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, pak.Close()) }()
+
+		got, err := pak.ReadFile(last.Name)
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+		require.Nil(t, got)
+	})
+
+	t.Run("compressed, the data section is physically truncated", func(t *testing.T) {
+		raw, err := hgpaktest.Build(entries, true)
+		require.NoError(t, err)
+
+		path := filepath.Join(t.TempDir(), "cut.pak")
+		require.NoError(t, os.WriteFile(path, raw[:len(raw)-4096], 0o600))
+		pak, err := hgpak.Open(path)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, pak.Close()) }()
+
+		// A chunk whose bytes are gone fails to decompress, which is its own
+		// error rather than ErrUnexpectedEOF. What matters is the same: an
+		// error, and no bytes.
+		got, err := pak.ReadFile(last.Name)
+		require.Error(t, err)
+		require.ErrorIs(t, err, hgpak.ErrCorruptChunk)
+		require.Nil(t, got)
+	})
 }

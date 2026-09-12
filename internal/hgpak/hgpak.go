@@ -356,8 +356,18 @@ func (p *File) Open(name string) (io.ReadCloser, error) {
 	return &entryReader{pak: p, entry: e}, nil
 }
 
-// readAbsolute reads size bytes starting at an offset in the archive's logical
-// (decompressed) address space.
+/*
+readAbsolute reads exactly size bytes from the archive's logical (decompressed)
+address space, or fails.
+
+A short read is an error, not a short slice. The index says how long a file is;
+if the archive cannot produce that many bytes it is truncated, its chunk table
+disagrees with its data section, or an entry offset points past the end -- and
+in every one of those cases the right answer is to say so here. Returning the
+bytes that were available instead produced a plausible-looking MBIN that failed
+much later, inside MBINCompiler, with a message about a malformed struct that
+named neither the pak nor the file.
+*/
 func (p *File) readAbsolute(offset, size uint64) ([]byte, error) {
 	if size == 0 {
 		return []byte{}, nil
@@ -367,7 +377,11 @@ func (p *File) readAbsolute(offset, size uint64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return out[:n], nil
+	if uint64(n) != size { //nolint:gosec // readAt returns a non-negative count
+		return nil, fmt.Errorf("%s: %w: wanted %d bytes at %#x, the archive holds %d",
+			p.path, io.ErrUnexpectedEOF, size, offset, n)
+	}
+	return out, nil
 }
 
 // readAt fills dst from the archive's logical address space.
