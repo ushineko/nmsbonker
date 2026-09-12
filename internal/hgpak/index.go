@@ -379,3 +379,61 @@ func matches(name, pattern string, literal bool) bool {
 }
 
 func hasGlobMeta(s string) bool { return strings.ContainsAny(s, "*?[") }
+
+// Freshness describes the cached index without opening a single pak (R7.2).
+//
+// `status` wants to say whether the index is current; rebuilding it to find out
+// would make the cheap command the expensive one.
+type Freshness struct {
+	Exists  bool
+	Written time.Time
+	Paks    int
+	Files   int
+	// Stale counts paks whose (size, mtime) no longer matches the cache, plus
+	// paks the cache has never seen.
+	Stale int
+	// Missing counts indexed paks that are no longer on disk.
+	Missing int
+}
+
+// IndexFreshness reports the state of the cache against the current paks.
+func IndexFreshness(cachePath string, paks []string) Freshness {
+	idx, ok := LoadIndex(cachePath)
+	out := Freshness{Exists: ok}
+	if !ok {
+		out.Stale = len(paks)
+		return out
+	}
+	if fi, err := os.Stat(cachePath); err == nil {
+		out.Written = fi.ModTime()
+	}
+	known := make(map[string]pakRecord, len(idx.paks))
+	for _, rec := range idx.paks {
+		known[rec.Path] = rec
+		out.Files += strings.Count(rec.Files, "\n") + 1
+	}
+	out.Paks = len(idx.paks)
+
+	present := make(map[string]bool, len(paks))
+	for _, p := range paks {
+		abs, err := filepath.Abs(p)
+		if err != nil {
+			abs = p
+		}
+		present[abs] = true
+		fi, err := os.Stat(abs)
+		if err != nil {
+			continue
+		}
+		rec, seen := known[abs]
+		if !seen || rec.Size != fi.Size() || rec.MTime != fi.ModTime().UnixNano() {
+			out.Stale++
+		}
+	}
+	for path := range known {
+		if !present[path] {
+			out.Missing++
+		}
+	}
+	return out
+}

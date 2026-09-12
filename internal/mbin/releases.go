@@ -267,6 +267,6 @@ func Select(releases []Release, pin string, game Version, haveGame bool) (Select
 	}
 	return Selection{
 		Release: releases[0],
-		Reason:  "game data version is unknown (no compiler installed yet); using the highest release, " + releases[0].Tag,
+		Reason:  "the game data version is unknown; using the highest release, " + releases[0].Tag,
 	}, nil
 }
