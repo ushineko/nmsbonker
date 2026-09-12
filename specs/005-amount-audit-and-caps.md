@@ -1,6 +1,6 @@
 # Spec 005 — Reward-amount audit in the build report, and caps on the multiplier tweaks
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 ## Context
 
@@ -163,30 +163,56 @@ Facts to rely on:
 
 ## Acceptance Criteria
 
-- [ ] AC1 Golden stages A/B/C unchanged and passing; the built-in
-  dump-equality test passes with `CAP` stripped.
-- [ ] AC2 With the compounding script enabled in a scratch config
-  (re-enable `BetterRewards` there only), `build` flags `BP_SALVAGE`
-  (ratio 625000, contributors `BetterRewards ×2, ChestAndLootMaterials10x`),
-  the 206 ×250 entries and the four int32-saturated money entries; the
-  report's audit table and `nmsbonker audit --json` agree.
-- [ ] AC3 With the user's current config (compounding scripts disabled), the
-  audit is clean at default thresholds, and setting `audit.max_ratio 5` flags
-  the ×10 loot entries — proving thresholds are live without a rebuild via
-  `nmsbonker audit`.
-- [ ] AC4 A synthetic MXML test shows `CAP` clamping a `WRAPPER_MULT`,
-  a `CURRENCY_MULT` and a `VALUE_CHANGE_TABLE` `*` result, and that an absent
-  `CAP` leaves output byte-identical to the previous engine.
-- [ ] AC5 Setting `LOOT_CAP` to 1000 via `tweaks set` produces a merged
-  `REWARDTABLE` whose largest product/substance reward is exactly 1000 and the
-  report says how many values were capped.
-- [ ] AC6 GUI Report shows the audit block in both states; Settings edits the
-  thresholds; Tweaks shows the cap sliders; headless tests cover the audit
-  block rendering; parity test passes.
-- [ ] AC7 `mods check` prints the effectiveness notes; a script with 0 applied
-  edits says `no effective edits`.
-- [ ] AC8 `make lint`, `make test`, gated suites, both grep gates clean; no
-  personal path or superseded term anywhere.
+- [x] AC1 Golden stages A/B/C unchanged and passing; the built-in
+  dump-equality test passes with `CAP` stripped. Stage B: 100 of 100 targets
+  byte-identical and all 504 report lines matching, unchanged. Stage C: 100
+  built, 0 dropped, every one of the 27 verdicts equal to the reference table.
+  `TestBuiltInsDecodeAsTheReferenceCopiesDo` passes with `CAP` stripped from
+  both sides and `ANTIMATTER_HARVESTER_CAP` set to 0.
+- [x] AC2 With `BetterRewards` re-enabled in a scratch config and every cap
+  set to 0 (the state the incident happened in), the build flags 211 of 4064
+  amounts, including `BP_SALVAGE` 2-4 → 1,250,000-2,500,000 at ×625,000 with
+  contributors `BetterRewards x250 -> 1000, BetterRewards x250 -> 250000,
+  ChestAndLootMaterials10x x10 -> 2500000`, exactly **206** entries at ratio
+  ×250, and exactly **four** int32-saturated money entries (`R_CV_HIGH`,
+  `R_MB_HIGH`, `R_CV_MEGA`, `R_MB_MEGA`, all Units). The report's 211 flags and
+  `nmsbonker audit --json`'s 211 compare equal field by field, contributors
+  included.
+- [x] AC3 With the current mod list (compounding scripts disabled), mirrored
+  into a scratch config, the build reports `amount audit: clean` at default
+  thresholds over 4064 blocks. `config set audit.max_ratio 5` followed by
+  `nmsbonker audit` — no rebuild — flags 2270 amounts, every one of them a ×10
+  loot entry attributed to `ChestAndLootMaterials10x`, in **109 ms**.
+- [x] AC4 `internal/mxml/cap_test.go`: a cap clamps a `CURRENCY_MULT`, a
+  `WRAPPER_MULT` and a `VALUE_CHANGE_TABLE` `*`, and with no cap the merged
+  bytes and the report line are asserted in full against what the engine
+  produced before the key existed. Also covered: a cap that never bites says
+  nothing about it, a negative cap is no cap, a verbatim (no-`MATH_OPERATION`)
+  value is never clamped, and the int32 clamp and the cap both hold.
+- [x] AC5 `tweaks set ChestAndLootMaterials10x LOOT_CAP 1000` then `build`:
+  the merged `REWARDTABLE`'s largest `GcRewardSpecificProduct` amount is
+  **exactly 1000** across 1689 blocks and its largest
+  `GcRewardSpecificSubstance` amount is **exactly 1000** across 359, and the
+  report says `capped values: 191`.
+- [x] AC6 Verified on screen in both states: a green marker with "No reward
+  amount exceeds the configured limits — 4064 block(s) checked (from the last
+  build)", and a red one with the flag table, the 161-not-shown line and the
+  advice paragraph. Settings shows the `Audit limits` group with its six fields
+  and Reset; Tweaks draws the cap parameters as ordinary sliders with no new UI
+  code (R3.2 verified, "Largest mined amount" and "Largest asteroid resource
+  amount" among them). `internal/gui/views_audit_test.go` covers the three
+  states, the row contents, the clipboard form, the markers and the Settings
+  group; the parity guard passes with `audit` claimed.
+- [x] AC7 `mods check` gained a `LAST BUILD` column (`NOT BUILT 0/1`) and the
+  note column carries the effectiveness signal. A script whose only key the
+  game no longer has reports `no effective edits; keys not found: …`; in the
+  AC2 configuration `BetterRewards` reports `structural edits skipped; overlaps
+  built-in ChestAndLootMaterials10x; overlaps built-in LearnMoreWords`.
+- [x] AC8 `make lint` 0 issues; `make test` (race + parity tag) green;
+  `go test -race -count=1 -tags parity ./...` with all three gated variables
+  set, green including golden A/B/C; `make build` and `make build-gui` both
+  produce binaries; `govulncheck -mode=binary` reports no vulnerabilities for
+  either; both grep gates return nothing.
 
 ## Risks & Assumptions
 
@@ -197,3 +223,145 @@ Facts to rely on:
   anything that breaks stacks); all are sliders.
 - Rollback: `git revert`; caps default on but only bite above 50,000, which
   no single ×10/×5 built-in reaches from stock values.
+
+---
+
+## Status notes
+
+Verified 2026-09-11 against Steam buildid `25233815`, MBINCompiler
+**v7.02.0-pre1** (`dotnet10`), Go 1.27.1, golangci-lint v2.12.2, Fyne v2.8.1, on
+KDE/Wayland.
+
+**Nothing of the user's was touched.** Every command below ran with `--config`
+pointing at a scratch settings file under a temporary root, with its own copy of
+the mod library, its own workspace and its own pristine cache. The real
+`config.json`, the real library and the real build output are as they were, and
+nothing was deployed, rolled back or undeployed against the game — the only
+thing read from the install is its `.pak` archives.
+
+### The audit reads values; the caps stop them
+
+The two halves answer different questions and both are needed. The audit says
+"this reward came out at 2,500,000 and these three edits made it", which no
+per-mod verdict can. The cap says "and it will not, whatever your library
+does". A capped build is still flagged, deliberately: the ratio is the fact
+about the library, and the cap only hides its effect.
+
+### Deviations from the spec text, and why
+
+- **The `## Amount audit` section sits after the header bullets and before the
+  verdict legend.** R1.4 asks for it "right after the totals", and the totals
+  are a bullet in the header block; a `##` heading inside that list would break
+  it, and putting the section after the mod table would put the finding after
+  the thing it contradicts. The legend belongs to the table it explains, so the
+  audit goes above both.
+- **A cap is rendered plainly in a report line, not as Python's `repr`.** The
+  multipliers beside it print as `x5.0` because the golden fixtures were
+  captured from a Python builder; a cap is a stack size that no reference script
+  ever wrote, so `cap 50000` rather than `cap 50000.0`. The count follows as
+  `(capped N)` and is omitted when the cap never bit.
+- **Attribution is per edit block, not per mod pass.** R1.3 says "one mod at a
+  time"; the spec's own example names `BetterRewards` twice, which only happens
+  at block granularity, and AC2 asks for `BetterRewards ×2`. Per block is also
+  *cheaper*, not dearer: the cumulative state after k edits is the running
+  document, so the whole attribution is one extra merge with a look after each
+  block rather than one re-merge per mod. Reading a flagged block costs a few
+  lines while the line count matches the stock document's, and falls back to a
+  full re-parse only after a structural edit has moved things.
+- **`GcRewardMultiSpecificItems` carries `Amount` per nested item in this game
+  version**, not `AmountMin`/`AmountMax` as R1.1 assumes. Each `Items` entry
+  becomes one audited block with its own Id and its `MultiItemRewardType`
+  deciding product or substance; treating the wrapper as one block would have
+  audited the first entry of 1484 and ignored the rest.
+- **BigStacks anchors the harvester edit on two keywords, not on
+  `PRECEDING_KEY_WORDS GcMaintenanceElement`.** R2.5 suggests the latter, and it
+  is wrong on this file: `ANTIMATTERHARVESTER.ENTITY.MBIN` holds *two*
+  `GcMaintenanceElement` blocks with a `MaxCapacity` each — `MAINT_FUEL4` first,
+  `ANTIMATTER` second — and the library script this replaces disambiguated with
+  `SECTION_ACTIVE = {2}`, a key this engine ignores. A bare
+  `PRECEDING_KEY_WORDS` would therefore have capped the fuel slot: one
+  `MaxCapacity` changed, the wrong one, and nothing in the report able to say
+  so. `SPECIAL_KEY_WORDS = {"GcMaintenanceElement", "ANTIMATTER"}` anchors on
+  the second block and scopes the value change to it.
+- **An `audit.*` limit of 0 restores the default rather than removing the
+  limit.** A threshold of zero would flag every reward in the game, so it is
+  never what somebody typing `0` meant.
+- **Audit warnings are marked and left out of the per-mod tallies.** A flagged
+  amount is not a skipped edit; counting it as one would turn a mod whose every
+  edit landed into a `WORKING~` row about a value it may not have touched.
+- **The overlap signal is deliberately coarse.** R4.1 asks for a comparison of
+  `(file, VCT key)` pairs and wrapper names, and that is what it does — so
+  `LearnMoreWords` and `ChestAndLootMaterials10x` are reported as overlapping,
+  both editing `AmountMin`/`AmountMax` in `REWARDTABLE`, although their
+  `SPECIAL_KEY_WORDS` anchors put them on different sections. It answers "these
+  two could compound"; the amount audit answers whether they did, and the Mods
+  dialog says so in as many words.
+- **Golden Stage C now reports 466 applied edits rather than 465.** Not a
+  regression: the stage builds the embedded built-ins for the ten names the
+  reference library shares, and BigStacks gained the harvester edit. The file
+  was already a target (`StacksizeChanger` edits it), so the built count is
+  still 100 and every verdict is unchanged.
+- **`nmsbonker audit` needs the game only to name the cache directory.** With
+  the install missing it falls back to the last report's game buildid, because
+  "what did that build come out at" has an answer that does not need the game to
+  be present.
+- **The GUI's `audit` affordance is `Re-check amounts` on the Report section**,
+  and the Report's facts card gained a `Capped values` row that is present in
+  both states so it cannot appear and disappear between builds.
+
+### R2.5 on the real file
+
+Built against the installed game with `ANTIMATTER_HARVESTER_CAP` at its default
+of 20, the merged `ANTIMATTERHARVESTER.ENTITY.MXML` differs from the pristine
+copy by exactly one line:
+
+```
+640c640
+< 						<Property name="MaxCapacity" value="-1" />
+---
+> 						<Property name="MaxCapacity" value="20" />
+```
+
+Line 619, the `MAINT_FUEL4` element's `MaxCapacity`, is untouched. With the
+parameter at 0 the script produces no change-table entry for the file at all and
+declares one target instead of two.
+
+### Caps bite in the current configuration
+
+At their defaults, and with no compounding script in the library, the caps hold
+back **11 values** in a build of the current mod list:
+
+| Tweak | Cap | Values held back |
+| --- | --- | --- |
+| `ChestAndLootMaterials10x` | `LOOT_CAP` 50000 | 1 |
+| `LearnMoreWords` | `WORDS_CAP` 25 | 8 |
+| `NaniteRewardBuff` | `NANITES_CAP` 250000 | 2 |
+
+That is a behaviour change from spec 004's output, and it is the intended one:
+those eleven values were above the ceiling this phase introduces. Setting the
+cap to 0 restores the previous, unbounded result for any tweak.
+
+### Measured numbers
+
+| What | Measured |
+| --- | --- |
+| Audit, clean build (22 mods, no flags), summed over 15 workers | 74 ms |
+| Audit, 195 flags with attribution, summed over 15 workers | 1.36 s |
+| Audit, 211 flags with attribution (every cap off) | 1.22 s |
+| `nmsbonker audit`, 211 flags, re-read of the kept merge | 1.03 s |
+| `nmsbonker audit`, 2270 flags at `max_ratio 5` | 109 ms |
+| Reward blocks compared (REWARDTABLE + EXPEDITIONREWARDTABLE) | 4064 |
+| Build wall clock, warm cache, audit included | 4.8-5.1 s |
+
+The attribution's cost is bounded by the fast path: while a pass has the stock
+document's line count — which every value edit does — a flagged block is read
+from its recorded position rather than by re-parsing nine megabytes. The 2270-
+flag re-run is faster than the 211-flag one because it needs no re-parse at all.
+
+### What a reviewer should look at first
+
+`internal/build/audit/audit.go`'s `Parse` and `Tracker`, and
+`internal/build/amounts.go`'s `attribute`. Everything else is plumbing; those
+three are where an error would be a confident wrong answer rather than an
+obvious one — a block paired against the wrong stock value, or a change
+attributed to the mod that happened to run next.
