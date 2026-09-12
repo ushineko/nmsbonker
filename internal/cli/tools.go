@@ -17,7 +17,7 @@ func newToolsEnsureCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "ensure",
 		Short: "Install the MBINCompiler release this game needs, if it is not already installed",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.EnsureTools(cmd.Context(), core.EnsureToolsRequest{Request: request()})
 			w := cmd.OutOrStdout()
@@ -53,7 +53,7 @@ func newToolsListCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "list",
 		Short: "List the installed MBINCompiler releases",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.ListTools(cmd.Context(), core.ListToolsRequest{Request: request()})
 			if err != nil {
@@ -106,7 +106,7 @@ func newToolsUnpinCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "unpin",
 		Short: "Go back to choosing an MBINCompiler release automatically",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if _, err := core.PinTool(cmd.Context(), core.PinToolRequest{Request: request()}); err != nil {
 				return err
@@ -130,7 +130,7 @@ func newToolsCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Round-trip game files through the installed compiler to prove it matches",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.ToolCheck(cmd.Context(), core.ToolCheckRequest{Request: request()})
 			if err != nil {

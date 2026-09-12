@@ -269,7 +269,10 @@ func (c *Cache) Ensure(ctx context.Context, sources []string, force bool) (Resul
 
 	sort.Slice(out.Misses, func(i, j int) bool { return out.Misses[i].Source < out.Misses[j].Source })
 	out.Duration = time.Since(started)
-	return out, ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return out, fmt.Errorf("prepare the pristine cache: %w", err)
+	}
+	return out, nil
 }
 
 // reusable reports a cached entry that is still current.
@@ -349,6 +352,9 @@ func (c *Cache) one(ctx context.Context, j job) (Entry, error) {
 	if c.compiler == nil {
 		return Entry{}, errors.New("no MBINCompiler is installed; run `nmsbonker tools ensure`")
 	}
+	if err := checkInternal(j.loc.Name); err != nil {
+		return Entry{}, err
+	}
 	pak, err := hgpak.Open(j.loc.Pak)
 	if err != nil {
 		return Entry{}, err
@@ -419,6 +425,26 @@ func MXMLRel(internal string) string {
 	return "mxml/" + upper + ".MXML"
 }
 
+/*
+checkInternal refuses a pak-internal path that would escape the cache directory.
+
+The path comes out of an archive's own manifest, so it is data, not something
+this program chose. A pak carrying "../../.ssh/authorized_keys" is far-fetched
+-- it would have to be planted in the game's PCBANKS -- but the cost of not
+checking is writing an arbitrary file as the user, and the check is three lines.
+*/
+func checkInternal(name string) error {
+	if name == "" || strings.HasPrefix(name, "/") || filepath.IsAbs(name) {
+		return fmt.Errorf("refusing an absolute pak-internal path %q", name)
+	}
+	for _, part := range strings.Split(name, "/") {
+		if part == ".." {
+			return fmt.Errorf("refusing a pak-internal path that escapes the cache: %q", name)
+		}
+	}
+	return nil
+}
+
 // path joins forward-slash cache-relative components.
 func path(parts ...string) string { return strings.Join(parts, "/") }
 
@@ -439,7 +465,9 @@ func move(from, to string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", from, err)
 	}
-	if err := os.WriteFile(to, data, 0o600); err != nil {
+	// The destination is built from a pak-internal path that checkInternal has
+	// already refused to let escape the cache directory.
+	if err := os.WriteFile(to, data, 0o600); err != nil { //nolint:gosec // guarded by checkInternal
 		return fmt.Errorf("write %s: %w", to, err)
 	}
 	if err := os.Remove(from); err != nil {

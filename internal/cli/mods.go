@@ -24,7 +24,7 @@ func newModsListCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List the mods in build order",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.ListMods(cmd.Context(), core.ListModsRequest{Request: request()})
 			if err != nil {
@@ -64,7 +64,7 @@ func newModsAddCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "add PATH...",
 		Short: "Copy .lua mod scripts into the library and enable them",
-		Args:  cobra.MinimumNArgs(1),
+		Args:  minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := core.AddMod(cmd.Context(), core.AddModRequest{
 				Request: request(), Paths: args, Replace: replace, Enabled: true,
@@ -118,7 +118,7 @@ func newModsEnableCmd(enable bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   verb + " NAME...",
 		Short: "Include mods in the next build",
-		Args:  cobra.MinimumNArgs(1),
+		Args:  minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := core.SetModEnabled(cmd.Context(), core.SetModEnabledRequest{
 				Request: request(), Names: args, Enabled: enable,
@@ -194,7 +194,7 @@ func newModsCheckCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "check",
 		Short: "Load every enabled mod script and report what it says",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.CheckMods(cmd.Context(), core.CheckModsRequest{
 				Request: request(), All: all, IncludeDump: asJSON,

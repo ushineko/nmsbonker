@@ -99,7 +99,7 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 		Compatibility: opts.Compatibility, CompatibilityDetail: opts.CompatibilityDetail,
 		UnsupportedKeys: plan.Unsupported, CacheMisses: opts.CacheMisses,
 		CacheReused: opts.CacheReused, CacheBuilt: opts.CacheBuilt,
-		Complex: plan.Complex,
+		Complex: plan.Complex, Workers: opts.Workers,
 	}
 
 	stats := newTally()
@@ -153,7 +153,10 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 	res.Lines = report.Events(events)
 	res.Timings.Cache = opts.CacheTime
 	res.Timings.Total = time.Since(started)
-	return res, ctx.Err()
+	if err := ctx.Err(); err != nil {
+		return res, fmt.Errorf("build: %w", err)
+	}
+	return res, nil
 }
 
 func (r *runner) emit(e mxml.Event) {
@@ -400,6 +403,9 @@ func (r *runner) compile(ctx context.Context, internalUpper string, lines []stri
 	if err := os.MkdirAll(filepath.Dir(mxmlPath), 0o750); err != nil {
 		return "", fmt.Errorf("create %s: %w", filepath.Dir(mxmlPath), err)
 	}
+	// The path comes from the cache, which refuses a pak-internal path that
+	// would escape its own directory; this joins it under the workspace.
+	//nolint:gosec // the internal path is validated where it enters the cache
 	if err := os.WriteFile(mxmlPath, []byte(strings.Join(lines, "\n")), 0o600); err != nil {
 		return "", fmt.Errorf("write %s: %w", mxmlPath, err)
 	}
@@ -453,6 +459,7 @@ func (r *runner) mirrorGlobals() error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
+		//nolint:gosec // name is a directory entry this build just wrote
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
 			return fmt.Errorf("write %s: %w", filepath.Join(dir, name), err)
 		}
@@ -469,7 +476,9 @@ func moveFile(from, to string) error {
 	if err != nil {
 		return fmt.Errorf("read %s: %w", from, err)
 	}
-	if err := os.WriteFile(to, data, 0o600); err != nil {
+	// Both ends are inside this build's own workspace, under a path the cache
+	// already refused to let escape its directory.
+	if err := os.WriteFile(to, data, 0o600); err != nil { //nolint:gosec // workspace-internal path
 		return fmt.Errorf("write %s: %w", to, err)
 	}
 	if err := os.Remove(from); err != nil {

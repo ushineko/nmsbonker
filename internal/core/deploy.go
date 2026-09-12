@@ -89,13 +89,12 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 	case steam.ModsSymlink:
 		if !req.ReplaceSymlink {
 			return out, fmt.Errorf(
-				"%w pointing at %s.\n"+
-					"That is the layout the legacy AMUMSS-on-Linux setup used: the game reads mods "+
-					"through the link, so installing here would write into %s instead of the game "+
-					"directory.\n"+
-					"Pass --replace-symlink to remove the link (never its target) and create a real "+
-					"GAMEDATA/MODS, or wait for `nmsbonker migrate` in a later release.",
-				ErrModsSymlink, s.install.ModsTarget, s.install.ModsTarget)
+				"%w pointing at %s. That is the layout the legacy AMUMSS-on-Linux setup used: "+
+					"the game reads mods through the link, so installing here would write into that "+
+					"directory instead of the game. Pass --replace-symlink to remove the link "+
+					"(never its target) and create a real GAMEDATA/MODS, or wait for "+
+					"`nmsbonker migrate` in a later release",
+				ErrModsSymlink, s.install.ModsTarget)
 		}
 		// Remove removes the link itself, not what it points at.
 		if err := os.Remove(modsDir); err != nil {
@@ -163,7 +162,7 @@ func treeSize(dir string) (files int, bytes int64, err error) {
 		}
 		info, err := d.Info()
 		if err != nil {
-			return err
+			return fmt.Errorf("stat %s: %w", d.Name(), err)
 		}
 		files++
 		bytes += info.Size()
@@ -183,6 +182,16 @@ func treeSize(dir string) (files int, bytes int64, err error) {
 // 0755/0644: the game reads these files, and a mod folder the user cannot list
 // from a file manager is a support question waiting to happen.
 func copyTree(src, dest string) error {
+	if err := walkCopy(src, dest); err != nil {
+		return fmt.Errorf("copy %s to %s: %w", src, dest, err)
+	}
+	return nil
+}
+
+func walkCopy(src, dest string) error {
+	//nolint:gosec,wrapcheck // both trees are this program's own -- its workspace
+	// output and the mod folder it is installing -- and the callback's errors
+	// are already wrapped with the path they concern.
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

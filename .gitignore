@@ -18,3 +18,12 @@ count.out
 *.pak
 /golden/
 /library/
+
+# Third-party AMUMSS mod scripts belong to their authors and stay in the user's
+# library directory. Only this project's own tweaks are committed, so .lua is
+# ignored everywhere else as a backstop against a stray import.
+*.lua
+!/internal/tweaks/scripts/*.lua
+
+# Python bytecode from the legacy fixture generator.
+__pycache__/

@@ -18,7 +18,7 @@ func newConfigShowCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "show",
 		Short: "Print every setting and the directories they resolve to",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.ConfigShow(cmd.Context(), core.ConfigShowRequest{Request: request()})
 			if err != nil {

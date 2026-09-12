@@ -58,8 +58,12 @@ func Apply(lines []string, blk *modscript.Block, actx ApplyContext) ([]string, [
 		}
 	}
 
+	// The guard is deliberately this specific: the legacy engine took this path
+	// only for REPLACE_TYPE=ALL with a bare SPECIAL_KEY_WORDS, a value table,
+	// and neither a truthy ADD nor a truthy REMOVE. Loosening any clause sends
+	// blocks down a branch that edits different lines.
 	if blk.ReplaceType == "ALL" && blk.HasSKW && len(blk.ForEachSKWGroup) == 0 &&
-		blk.HasVCT && !(blk.Add != "" || blk.Remove) {
+		blk.HasVCT && blk.Add == "" && !blk.Remove {
 		return applyAllSections(lines, blk, actx, start, end)
 	}
 	return applyGroups(lines, blk, actx, groups, start, end)

@@ -151,6 +151,27 @@ func exactArgs(n int) cobra.PositionalArgs {
 	}
 }
 
+// noArgs is cobra.NoArgs with the error marked as a usage error (R8.2).
+func noArgs() cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return usagef("unknown command %q for %q", args[0], cmd.CommandPath())
+		}
+		return nil
+	}
+}
+
+// minArgs is cobra.MinimumNArgs with the same treatment.
+func minArgs(n int) cobra.PositionalArgs {
+	return func(cmd *cobra.Command, args []string) error {
+		if len(args) < n {
+			return usagef("%s takes at least %d argument(s), got %d\n\nUsage:\n  %s",
+				cmd.CommandPath(), n, len(args), cmd.UseLine())
+		}
+		return nil
+	}
+}
+
 // maxArgs is cobra.MaximumNArgs with the same treatment.
 func maxArgs(n int) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
@@ -166,7 +187,7 @@ func newVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
 		Short: "Print the version and commit this binary was built from",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			say(cmd.OutOrStdout(), "nmsbonker %s (%s)", buildinfo.Version, buildinfo.Commit)
 			return nil

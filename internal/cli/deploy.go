@@ -16,7 +16,7 @@ func newDeployCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "deploy",
 		Short: "Install the last build under GAMEDATA/MODS",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.Deploy(cmd.Context(), core.DeployRequest{
 				Request: request(), ReplaceSymlink: replaceSymlink, ModName: modName,

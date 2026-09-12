@@ -23,7 +23,7 @@ func newBuildCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "build",
 		Short: "Merge every enabled mod into one collision-free mod folder",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.Build(cmd.Context(), core.BuildRequest{
 				Request: request(), Recache: recache, Deploy: deploy,
@@ -71,7 +71,7 @@ func newReportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "report",
 		Short: "Show the last build's report",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.Report(cmd.Context(), core.ReportRequest{Request: request()})
 			if err != nil {
@@ -119,9 +119,9 @@ func printReport(w io.Writer, r *report.Result) {
 	for _, m := range r.CacheMisses {
 		fact(w, "missing game file", m)
 	}
-	fact(w, "timings", fmt.Sprintf("cache %s, merge %s, compile %s, total %s",
-		r.Timings.Cache.Round(1e6), r.Timings.Merge.Round(1e6),
-		r.Timings.Compile.Round(1e6), r.Timings.Total.Round(1e6)))
+	fact(w, "timings", fmt.Sprintf("%s wall clock (cache %s; merge %s and compile %s summed over %d workers)",
+		r.Timings.Total.Round(1e6), r.Timings.Cache.Round(1e6),
+		r.Timings.Merge.Round(1e6), r.Timings.Compile.Round(1e6), r.Workers))
 }
 
 func modNote(m report.ModResult) string {

@@ -26,7 +26,7 @@ func newStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Report the game, the tools and the caches this machine has",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.Status(cmd.Context(), core.StatusRequest{Request: request()})
 			if err != nil {
@@ -116,7 +116,7 @@ func newDetectCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "detect",
 		Short: "Show every place the game was looked for, and why each was rejected",
-		Args:  cobra.NoArgs,
+		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			res, err := core.Detect(cmd.Context(), core.DetectRequest{Request: request()})
 			if err != nil {

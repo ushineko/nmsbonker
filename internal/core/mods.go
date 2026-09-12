@@ -366,8 +366,14 @@ func MoveMod(_ context.Context, req MoveModRequest) (MoveModResult, error) {
 		return MoveModResult{}, fmt.Errorf("position %d is outside 1..%d", req.To, len(s.cfg.Mods))
 	}
 	entry := s.cfg.Mods[from]
-	rest := append(s.cfg.Mods[:from:from], s.cfg.Mods[from+1:]...)
-	s.cfg.Mods = append(rest[:to:to], append([]config.ModEntry{entry}, rest[to:]...)...)
+	rest := make([]config.ModEntry, 0, len(s.cfg.Mods)-1)
+	rest = append(rest, s.cfg.Mods[:from]...)
+	rest = append(rest, s.cfg.Mods[from+1:]...)
+	reordered := make([]config.ModEntry, 0, len(s.cfg.Mods))
+	reordered = append(reordered, rest[:to]...)
+	reordered = append(reordered, entry)
+	reordered = append(reordered, rest[to:]...)
+	s.cfg.Mods = reordered
 
 	out := MoveModResult{Name: req.Name, From: from + 1, To: req.To}
 	for _, e := range s.cfg.Mods {
@@ -436,8 +442,8 @@ func CheckMods(ctx context.Context, req CheckModsRequest) (CheckModsResult, erro
 			continue
 		}
 		check := ModCheck{Name: m.Name, Path: m.Path}
-		switch {
-		case m.Status == ModMissing:
+		switch m.Status {
+		case ModMissing:
 			check.Error = "no .lua in the library"
 		default:
 			def, err := modscript.Load(ctx, m.Path)

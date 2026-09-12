@@ -154,6 +154,9 @@ type Result struct {
 	CacheMisses []string `json:"cacheMisses"`
 	CacheReused int      `json:"cacheReused"`
 	CacheBuilt  int      `json:"cacheBuilt"`
+	// Workers is how many targets were processed at once, which is what makes
+	// the summed merge and compile timings larger than the wall clock.
+	Workers int `json:"workers"`
 }
 
 // Events converts engine events into the stored line form.
@@ -210,7 +213,8 @@ func Markdown(r *Result) string {
 	w("# No Man's Sky combined-mod build report")
 	w("")
 	w("- Generated: %s", r.Generated.Format("2006-01-02 15:04"))
-	w("- Game: No Man's Sky, Steam buildid %s; MBINCompiler %s", orUnknown(r.GameBuildID), orUnknown(r.CompilerVersion))
+	w("- Game: No Man's Sky, Steam buildid %s", orUnknown(r.GameBuildID))
+	w("- Compiler: %s", orUnknown(r.CompilerVersion))
 	w("- Compiler compatibility: %s", compatLine(r))
 	w("- Output: `MODS/%s/` (%d merged MBIN files)", r.ModName, r.Built)
 	w("- Totals: %d MBINs built, %d dropped, %d edits applied, %d skipped",
@@ -221,8 +225,12 @@ func Markdown(r *Result) string {
 	if len(r.CacheMisses) > 0 {
 		w("- Sources not found in the game's paks: %s", strings.Join(r.CacheMisses, ", "))
 	}
-	w("- Timings: cache %s, merge %s, compile %s, total %s",
-		round(r.Timings.Cache), round(r.Timings.Merge), round(r.Timings.Compile), round(r.Timings.Total))
+	// Merge and compile are sums over the targets, which run concurrently, so
+	// they are routinely larger than the wall clock. Saying so beats a reader
+	// concluding the numbers are wrong.
+	w("- Timings: %s wall clock; cache %s, merge %s and compile %s summed across %d worker(s)",
+		round(r.Timings.Total), round(r.Timings.Cache), round(r.Timings.Merge),
+		round(r.Timings.Compile), r.Workers)
 	w("")
 	w("Legend: **WORKING** all edits applied; **WORKING~** applied, some keys not " +
 		"found (renamed/removed by a game update — verify); **WORKING(star)** applies " +
