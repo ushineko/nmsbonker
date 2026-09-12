@@ -14,7 +14,7 @@ const libraryFolders = `"libraryfolders"
 {
 	"0"
 	{
-		"path"		"/home/player/.local/share/Steam"
+		"path"		"/srv/steam-library"
 		"label"		""
 		"apps"
 		{
@@ -65,7 +65,7 @@ func TestLibraryPathsSurviveWindowsStyleEscaping(t *testing.T) {
 	libs := steam.Libraries(root)
 	require.Equal(t, root, libs[0], "the root is always a library, listed or not")
 	require.Contains(t, libs, `D:\SteamLibrary`)
-	require.Contains(t, libs, "/home/player/.local/share/Steam")
+	require.Contains(t, libs, "/srv/steam-library")
 }
 
 // The manifest is the only place the install directory name is written down;

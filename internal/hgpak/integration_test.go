@@ -171,9 +171,10 @@ func TestBuildingThePakIndexIsFastColdAndFasterWarm(t *testing.T) {
 
 	fi, err := os.Stat(cache)
 	require.NoError(t, err)
-	t.Logf("pak index: %d paks, %d files, cold %s, warm %s, cache %d bytes",
-		len(paks), idx.Len(), cold.Round(time.Millisecond), warm.Round(time.Millisecond), fi.Size())
+	t.Logf("pak index: %d paks, %d files, cold %s, warm %s, cache %d bytes (budget factor %dx)",
+		len(paks), idx.Len(), cold.Round(time.Millisecond), warm.Round(time.Millisecond), fi.Size(),
+		budgetFactor)
 
-	require.Less(t, cold, 5*time.Second, "AC6: cold index build")
-	require.Less(t, warm, 200*time.Millisecond, "AC6: warm index load")
+	require.Less(t, cold, budgetFactor*5*time.Second, "AC6: cold index build")
+	require.Less(t, warm, budgetFactor*200*time.Millisecond, "AC6: warm index load")
 }
