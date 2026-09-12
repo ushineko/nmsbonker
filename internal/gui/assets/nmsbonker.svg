@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="nmsbonker">
+  <!-- Three shapes and nothing else. The hexagon is No Man's Sky's own UI
+       language and carries the silhouette; the mallet is the bonk. Everything
+       here survives a 16px taskbar: the handle is 7px wide at a 64px viewBox,
+       the head is a 14px capsule, and there is no detail below that size to
+       turn to mush. -->
+  <polygon points="32,3 58,18 58,46 32,61 6,46 6,18" fill="#e6791b"/>
+  <path d="M18 48 L38 26" fill="none" stroke="#2a1705" stroke-width="7" stroke-linecap="round"/>
+  <path d="M32 20.6 L44 31.4" fill="none" stroke="#2a1705" stroke-width="14" stroke-linecap="round"/>
+</svg>
