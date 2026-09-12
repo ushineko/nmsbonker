@@ -15,8 +15,8 @@ folder, and deploys it. Native Go: no Wine, no Windows VM, no Python, no
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
 
-**Version**: 0.1.0 (phases 1 and 2 of 4 — the mod pipeline builds and deploys;
-the GUI is spec 003)
+**Version**: 0.1.0 (phases 1 to 3 of 4 — the mod pipeline builds and deploys and
+the desktop window is up; tweaks, rollback and packaging are spec 004)
 
 > The specs are the design of record, including the alternatives that were
 > rejected and why:
@@ -72,6 +72,14 @@ every contributing mod is told.
 verdict per mod, the keys a game update renamed out from under it, the files
 that shipped degraded, and what to do about each.
 
+**Has a window, if you want one.** `nmsbonker-gui` is the same operations with
+the facts ranked and the build watchable: the install and the compiler with a
+verdict beside each, the mod library as a reorderable table with each mod's
+author and last verdict, and a Build section that streams the build's output
+live with a step list and a Cancel that puts the previous mod folder back. It
+reads and writes the same `config.json` the command line does, so the two never
+disagree about where your game is.
+
 ## Requirements
 
 - **Linux.** macOS is a secondary target and untested here.
@@ -82,15 +90,23 @@ that shipped degraded, and what to do about each.
   `Microsoft.NETCore.App 10.x`, and falls back to the self-contained build
   otherwise.
 - **Go 1.25 or newer**, to build it. The CLI builds with `CGO_ENABLED=0`.
+- **For the window only**: CGO, OpenGL, and X11 or Wayland development headers,
+  which is what Fyne needs. The command line needs none of them and never links
+  them — everything the tool does is reachable without a display.
 
 ## Building
 
 ```
 make build          # ./nmsbonker, CGO-free, version and commit baked in
-make test           # go test -race ./...
+make build-gui      # ./nmsbonker-gui, needs CGO and the toolkit's headers
+make build-all      # static CLI for linux/darwin x amd64/arm64, plus this host's GUI
+make test           # go test -race -tags parity ./...
 make lint           # golangci-lint, pinned to v2.12.2
 make help           # every target
 ```
+
+The window is built for the host only. It needs CGO, so cross-compiling it would
+mean a C toolchain per target, and nothing about the tool's job depends on it.
 
 ## Using it
 
@@ -101,11 +117,17 @@ nmsbonker tools ensure              # install the MBINCompiler this game needs
 nmsbonker tools list                # what is installed
 nmsbonker tools pin v7.02.0-pre1    # always use this release
 nmsbonker tools unpin
+nmsbonker tools releases            # what GitHub offers, and what would be installed
+nmsbonker tools remove v7.01.0-pre1 # delete an installed release that is not in use
 nmsbonker pak list                  # the archives, with file counts
 nmsbonker pak list --pak globals    # what is inside one of them
 nmsbonker pak find '*rewardtable*'  # across every archive
 nmsbonker pak extract metadata/reality/tables/rewardtable.mbin -o /tmp/x
-nmsbonker tools check                # does this compiler match this install?
+nmsbonker pak reindex               # read every archive again, ignoring the cache
+nmsbonker tools check               # does this compiler match this install?
+
+nmsbonker cache show                # what the pristine cache and the index hold
+nmsbonker cache clear               # throw the decompiled game files away
 
 nmsbonker mods import ~/Downloads/nms-mods   # copy a folder of .lua in
 nmsbonker mods add SomeMod.lua               # or one at a time
@@ -125,6 +147,21 @@ nmsbonker config set mod_name "COSMOS COMBINE"
 nmsbonker version
 ```
 
+And the window:
+
+```
+nmsbonker-gui                                # opens on Overview
+nmsbonker-gui --config /path/to/config.json  # the same flag the CLI takes
+nmsbonker-gui --section build                # open straight on a section
+nmsbonker-gui --scheme "Breeze Light"        # for this run only; not saved
+nmsbonker-gui --version
+```
+
+Everything the window does is a `nmsbonker` command underneath, and a test fails
+the build if either front end grows an operation the other lacks. The colour
+scheme, the font and the text size are the only things it keeps to itself, in
+Fyne's own preference store; every other setting is in `config.json`.
+
 Global flags: `--config PATH`, `--game-dir PATH`, `-v/--verbose`,
 `--no-network`. `status`, `detect`, `pak find`, `tools check`, `mods list`,
 `mods check` and `report` also take `--json`.
@@ -140,6 +177,11 @@ Whatever was installed before is archived under
 
 `pak extract` keeps the file's internal path under the output directory, so an
 extraction tree can be compared with the archive that produced it.
+
+`cache clear` deletes only derived data — the game files a build has already
+extracted and decompiled. The next build rebuilds them, at the cost of the few
+seconds the cache normally saves. Your mod library, the build output and the
+game itself are not touched.
 
 ## Configuration
 
@@ -191,7 +233,9 @@ are never committed.
 | Path | What is in it |
 | --- | --- |
 | `cmd/nmsbonker` | The CLI entry point |
+| `cmd/nmsbonker-gui` | The desktop entry point; four flags and nothing else |
 | `internal/cli` | The cobra command tree; renders, decides nothing |
+| `internal/gui` | The Fyne window; renders, decides nothing |
 | `internal/core` | Every operation, headless, as request/result structs |
 | `internal/config` | Settings and directory resolution |
 | `internal/steam` | Steam manifest parsing and game detection |
@@ -201,8 +245,15 @@ are never committed.
 | `internal/mxml` | The line-based MXML edit engine |
 | `internal/build` | The target plan, the merge and recompile gate, the report |
 | `internal/buildinfo` | Version and commit, injected at build time |
+| `tests/parity` | The guard that the CLI and the window expose the same operations |
+| `packaging` | The application icon |
 
 ## Credit
+
+The window's design system — the colour schemes, the font scanner, the flash
+slot, the busy strip and the small shared widgets — is copied from
+[angou](https://github.com/ushineko/angou) (MIT, same author). The copied files
+say so at the top; they are kept in step by hand.
 
 The HGPAK v2 read path is a port of
 [HGPAKtool](https://github.com/monkeyman192/HGPAKtool) (MIT). The edit engine is

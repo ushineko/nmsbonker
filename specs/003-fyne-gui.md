@@ -1,6 +1,6 @@
 # Spec 003 — Fyne GUI: application shell and sections
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 ## Context
 
@@ -169,23 +169,23 @@ where the report is shown.
 
 ## Acceptance Criteria
 
-- [ ] AC1 `make build-gui` succeeds; `./nmsbonker-gui --version` prints the
+- [x] AC1 `make build-gui` succeeds; `./nmsbonker-gui --version` prints the
   version; `make build` still succeeds with `CGO_ENABLED=0`.
-- [ ] AC2 Launching on this machine shows Overview with the real install,
+- [x] AC2 Launching on this machine shows Overview with the real install,
   compiler and library facts; `--section build --scheme "Breeze Light"` opens
   there in that scheme without persisting it.
-- [ ] AC3 A full build from the GUI streams log lines live, shows step
+- [x] AC3 A full build from the GUI streams log lines live, shows step
   progress, can be cancelled mid-compile (the step list says cancelled, no
   partial output is left in `workspace_dir/<MOD_NAME>`, the `.prev` output is
   restored), and on completion the Report section shows the same table as
   `nmsbonker report`.
-- [ ] AC4 Mods: add, disable, move and remove round-trip through `config.json`
+- [x] AC4 Mods: add, disable, move and remove round-trip through `config.json`
   and are reflected by `nmsbonker mods list`.
-- [ ] AC5 Parity test passes; `gui.Actions()` covers every command from spec
+- [x] AC5 Parity test passes; `gui.Actions()` covers every command from spec
   001 and 002 except the documented allow-list.
-- [ ] AC6 `make test` passes headless (no `DISPLAY`/`WAYLAND_DISPLAY`) including
+- [x] AC6 `make test` passes headless (no `DISPLAY`/`WAYLAND_DISPLAY`) including
   all GUI unit tests; `make lint` clean.
-- [ ] AC7 No transient element reflows the layout: banners, busy strip and
+- [x] AC7 No transient element reflows the layout: banners, busy strip and
   step states occupy fixed slots (verify by inspection while a build runs).
 
 ## Risks & Assumptions
@@ -205,3 +205,149 @@ where the report is shown.
   same author; hand-copying with a "keep in sync" note is less ceremony.
 - Data binding (`fyne.io/fyne/v2/data/binding`): rejected — angou deliberately
   rebuilds views from plain state; consistency wins.
+
+## Status notes
+
+Verified on njv-cachyos, 2026-09-11, against Steam buildid `25233815` (97 paks,
+194,531 internal paths), MBINCompiler **v7.02.0-pre1** (`dotnet10`, .NET runtime
+present), Fyne **v2.8.1**, Go 1.27.1, golangci-lint v2.12.2. The mod library for
+the acceptance run is the same 27 scripts spec 002 used, through a scratch
+`--config`.
+
+**Nothing was deployed.** The real install's `GAMEDATA/MODS` is still the legacy
+symlink to `~/Games/nms-modding/MODS`, and the window's Overview says so with a
+warning marker. `core.Deploy` was exercised only by the phase-2 tests against
+temporary fake game directories; the GUI's Deploy button was never pressed
+against the real game.
+
+### Manual smoke checklist (R5.3)
+
+Driven under a nested `Xvfb :99` rather than the desktop session: the window is
+a native Wayland client on this machine, and KDE's compositor owns the pointer,
+so XTEST clicks cannot be aimed at it. Under Xvfb the window maps at a known
+origin at exactly 1180×760 and `xdotool` drives it 1:1. Software GL (llvmpipe);
+the window is responsive throughout a build at that.
+
+| Section | What was exercised | Result |
+| --- | --- | --- |
+| Overview | Real install, tools and library cards | game dir, buildid `25233815`, 97 paks, `GAMEDATA/MODS symlink -> …` with a warning marker and the legacy-layout paragraph, `DisableAllMods false`, compiler `v7.02.0-pre1 (dotnet10)`, .NET 10 present, 27 of 27 mods |
+| Mods | Table, sort arrow, tap-to-toggle, select, Move down, Add…, Remove… | 27 rows with `#`/On/Name/Author/Files/Last verdict, verdicts coloured, footer "27 of 27 enabled · build order is table order…" |
+| Build | Build, live log, step markers, Cancel, Rebuild cache | see AC3 |
+| Report | Table, header facts, actions | identical to `nmsbonker report` (below) |
+| Tools | Compiler table, tools dir, pin state, .NET line, cache card, archives card | active release marked `*`, Pin/Unpin/Remove correctly disabled with no selection and no pin |
+| Settings | Form, resolved paths | reads and writes the scratch `config.json` |
+| Appearance | `--scheme "Breeze Light"` for the run | applied without persisting: `preferences.json` still says `Breeze Dark` |
+| About | Icon at 72 px, version, capability notes, facts | renders; the icon reads at 16 px on both a dark and a light ground |
+
+### Acceptance evidence
+
+- **AC1** `make build-gui` builds `nmsbonker-gui` (26,841,768 bytes);
+  `./nmsbonker-gui --version` prints `nmsbonker-gui 0.1.0 (6c1b232)`;
+  `make build` still builds the CLI with `CGO_ENABLED=0`, and
+  `go list -deps ./cmd/nmsbonker` names neither `internal/gui` nor Fyne.
+- **AC2** Launched with `--config <scratch> --section build --scheme "Breeze
+  Light"`: opens on Build in the light scheme, status bar reads
+  `game 25233815 · compiler v7.02.0-pre1 · mods 27/27 · output COSMOS COMBINE`.
+  Overview shows the real install, tools and library facts. The saved scheme is
+  unchanged afterwards.
+- **AC3** A warm build streamed 685 log lines live, the step list walked
+  Detect → Tools → Cache → Merge → Compile → Report, and the run finished with
+  "Built 100 file(s) from 27 mod(s); 465 edit(s) applied, 115 skipped. 11 mod(s)
+  need checking — see the report." A second run (`Rebuild cache`) was cancelled
+  nine seconds in, mid-compile: the Compile step showed `cancelled; the previous
+  output was put back`, Report stayed pending, and the banner said nothing was
+  installed. On disk, `workspace_dir/COSMOS COMBINE` held the previous build's
+  107 MBINs with `METADATA/REALITY/DEFAULTREALITY.MBIN` byte-identical
+  (`06259963…`) to before the cancelled run, and no `COSMOS COMBINE.prev` was
+  left behind. The Report section matches `nmsbonker --config <scratch> report`
+  line for line: 100 built / 0 dropped, 465 applied / 115 skipped, compiler
+  `MBINCompiler v7.02.0-pre1`, `compatible (2 file(s) round-tripped
+  byte-identical outside the header)`, timings `6.19s wall clock; cache 1ms,
+  merge 899ms and compile 23.71s summed across 8 worker(s)`.
+- **AC4** Tapping the `On` cell of row 3 turned `BetterFrigateRewards` off and
+  `mods list` immediately reported `no`. Selecting it and pressing `Move down`
+  moved it from 3 to 4 in `mods list`. `Add…` copied a script from `$HOME` into
+  the library as entry 28, enabled, author read from the script header, verdict
+  `—`. `Remove…` with "also delete the file" ticked took it back out and deleted
+  the `.lua`; `mods list` was back to 27.
+- **AC5** `go test -tags parity ./tests/parity/` passes. The two sets are equal:
+  27 leaf commands on each side, with `version` the only allow-list entry.
+- **AC6** `env -u DISPLAY -u WAYLAND_DISPLAY make test` is green, including the
+  GUI unit tests and the parity test. `make lint`: **0 issues**.
+  `govulncheck -mode=binary` on both binaries: **No vulnerabilities found**,
+  after raising `golang.org/x/image`, `x/net` and `x/text` off the versions Fyne
+  2.8.1 pins (22 findings before, all transitive).
+- **AC7** Compared pixel-for-pixel between an idle window and the same window
+  mid-build: the left navigation column is byte-identical, and the only part of
+  the status bar that differs is the 187×34 busy strip at its right-hand end.
+  The cancelled run's warning banner appears in the reserved 48 px slot without
+  moving the content above it.
+
+### Bugs this found
+
+Running a build in the window found four faults no test had:
+
+- `internal/build.Run` deleted `<ModName>.prev` and returned on cancellation,
+  so cancelling destroyed the mod folder the user had and left a third of a new
+  one in its place. Fixed with a regression test; it was the CLI's bug too.
+- The log pump stopped its ticker and then waited on the goroutine the ticker
+  was the only thing waking, so a finished build never reported itself.
+- Sections disable their buttons while work is running and do that as they are
+  built, so the first section — drawn while the two startup loads were still in
+  flight — came up permanently disabled.
+- `show()` dropped the live build widgets *after* the incoming section had
+  registered them, so any rebuild mid-build left the log streaming into nothing.
+
+Two rendering faults as well: table cells took the colour of whichever row the
+recycled widget last held (Importance must be set before `SetText`, which is
+what refreshes the label), and the `GAMEDATA/MODS` row drew a replacement box
+for `→`, which the bundled font lacks.
+
+### Deviations from the spec text
+
+- **`--config` on the GUI** (not in R1.1). Added so the window and
+  `nmsbonker --config …` can be pointed at one settings document deliberately,
+  which is also what made this acceptance run possible without touching the
+  user's own library.
+- **Five new core operations and their CLI commands.** R2.5 asks the Tools
+  section for a release listing, a Remove, a cache card with a Clear and a
+  Rebuild index; none of those operations existed. They landed in
+  `internal/core` with `tools releases`, `tools remove`, `cache show`,
+  `cache clear` and `pak reindex` beside them, because the project rule forbids
+  a capability in one front end and not the other.
+- **`StatusResult` gained `ModName` and `Compiler.Dotnet10`**, which the status
+  bar, the Overview tools card and `status` all now show.
+- **Tools also reaches `pak list`, `pak find` and `pak extract`** through an
+  "Archives…" and a "Find a file…" dialog. Beyond R2.5's text, and the reason is
+  the parity guard: the alternative was three allow-list entries excusing a
+  whole command group from having a GUI.
+- **The `On` column toggles on a tap in the cell**, not on a double-click:
+  Fyne 2.8.1's table has no double-tap. The column is two characters wide and
+  does nothing else, so a tap in it has no other possible meaning.
+- **`Add…` takes one file at a time.** Fyne 2.8.1 has no multi-select file
+  chooser; `core.AddMod` still takes a list, and `Import folder…` is the answer
+  for a directory.
+- **Sorting the mod table by anything but `#` disables Move up/Move down** and
+  the footer stops claiming the rows are the build order. Sorted by name, "up"
+  would move a mod to a position the user cannot see.
+- **The Report section leads with the verdict table**, with the header facts
+  under it. The other way round, a default-sized window opened on two rows of
+  the table and a page of numbers.
+- **`perform` runs synchronously when there is no content pane.** Fyne's test
+  driver runs `fyne.Do` inline on the calling goroutine rather than serialising
+  onto a main loop, so a worker refreshing a widget genuinely races the test
+  driving it. With no window there is no render thread to keep free, so the
+  goroutine buys nothing and costs determinism.
+- **The parity test compares leaf commands** (`tools pin`, not `tools`).
+  Comparing at the group level would let a whole subcommand land with no GUI
+  surface as long as its siblings had one.
+
+### Not done here
+
+- Screenshots for the README: spec 004 R7.3 owns `tools/screenshot.sh`, and the
+  capture harness this run used (nested Xvfb) is worth carrying into it.
+- The compatibility line on Overview reads "unknown — not checked yet" even
+  after a build reported `compatible`, because `core.Status` derives it from
+  version parsing (spec 001 R6.2) while the build uses the round-trip check
+  (spec 002 R3.4). Both are truthful; reconciling them is a core question, not
+  a GUI one.
