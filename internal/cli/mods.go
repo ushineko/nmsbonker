@@ -43,9 +43,13 @@ func newModsListCmd() *cobra.Command {
 				return nil
 			}
 			var t table
-			t.header("#", "MOD", "ENABLED", "STATUS")
+			t.header("#", "MOD", "SOURCE", "ENABLED", "STATUS")
 			for i, m := range res.Mods {
-				t.row(strconv.Itoa(i+1), m.Name, yesNo(m.Enabled), m.Status)
+				status := m.Status
+				if m.Shadowed {
+					status += ", shadowing a library script"
+				}
+				t.row(strconv.Itoa(i+1), m.Name, m.Source, yesNo(m.Enabled), status)
 			}
 			t.write(w)
 			// The order is the conflict rule, so it is worth saying once rather

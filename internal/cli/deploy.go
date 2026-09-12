@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/spf13/cobra"
@@ -42,6 +43,31 @@ func printDeploy(w io.Writer, res core.DeployResult) {
 	}
 	if res.Archived != "" {
 		fact(w, "archived", res.Archived)
+	}
+	if res.SettingsPath != "" {
+		state := "already correct"
+		switch {
+		case res.SettingsAdded:
+			state = "entry added, enabled"
+		case res.SettingsChanged:
+			state = "updated"
+		}
+		fact(w, "mod settings", state+" ("+res.SettingsPath+")")
+		fact(w, "DisableAllMods", res.DisableAllMods)
+	}
+	if b := res.SaveBackup; b != nil {
+		switch {
+		case b.Error != "":
+			fact(w, "save backup", "failed: "+b.Error)
+		case b.Skipped != "":
+			fact(w, "save backup", "skipped: "+b.Skipped)
+		default:
+			fact(w, "save backup", fmt.Sprintf("%d profile(s), %d file(s) in %s",
+				b.Profiles, b.Files, b.Dir))
+		}
+	}
+	if len(res.Pruned) > 0 {
+		fact(w, "pruned", fmt.Sprintf("%d older archive(s): %s", len(res.Pruned), join(res.Pruned)))
 	}
 	for _, warning := range res.Warnings {
 		fact(w, "warning", warning)

@@ -85,3 +85,24 @@ operations themselves, in core, return real errors; this is presentation.
 func say(w io.Writer, format string, args ...any) {
 	_, _ = fmt.Fprintf(w, format+"\n", args...)
 }
+
+/*
+humanSize is a byte count in a listing column.
+
+The rest of the CLI prints raw byte counts, and deliberately: `cache show` is
+read by a person deciding whether to delete something and by a script checking a
+number. These two listings are different — an archive entry and a save backup
+are both hundreds of megabytes, and a column of nine-digit numbers is a column
+nobody reads. The `--json` form of each carries the exact figure.
+*/
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<30:
+		return fmt.Sprintf("%.1f GiB", float64(n)/(1<<30))
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
+	}
+	return fmt.Sprintf("%d B", n)
+}
