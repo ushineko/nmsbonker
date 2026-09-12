@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -211,16 +212,10 @@ func newModsCheckCmd() *cobra.Command {
 			}
 			w := cmd.OutOrStdout()
 			var t table
-			t.header("MOD", "FILES", "EDITS", "NOTE")
+			t.header("MOD", "FILES", "EDITS", "LAST BUILD", "NOTE")
 			for _, m := range res.Mods {
-				note := ""
-				switch {
-				case !m.OK:
-					note = m.Error
-				case len(m.Unsupported) > 0:
-					note = "ignored keys: " + join(m.Unsupported)
-				}
-				t.row(m.Name, strconv.Itoa(len(m.Targets)), strconv.Itoa(m.Blocks), note)
+				t.row(m.Name, strconv.Itoa(len(m.Targets)), strconv.Itoa(m.Blocks),
+					lastBuildCell(m), checkNote(m))
 			}
 			t.write(w)
 			say(w, "")
@@ -234,6 +229,44 @@ func newModsCheckCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result, including the decoded scripts, as JSON")
 	cmd.Flags().BoolVar(&all, "all", false, "check disabled mods too")
 	return cmd
+}
+
+/*
+lastBuildCell is what the last build made of one script (spec 005 R4.1).
+
+Verdict and counts in one cell rather than three columns: they are read
+together -- "NOT BUILT 0/12" is one fact -- and three narrow columns of numbers
+pushed the note that says what to do about it off the right of the terminal.
+*/
+func lastBuildCell(m core.ModCheck) string {
+	if m.Verdict == "" {
+		return "—"
+	}
+	return fmt.Sprintf("%s %d/%d", m.Verdict, m.Applied, m.Skipped)
+}
+
+/*
+checkNote is the one note column, worst thing first.
+
+A script that will not load has nothing else worth saying about it, so that
+wins; after it come the effectiveness signals, then the keys a game update took
+away, then the directives this engine ignores.
+*/
+func checkNote(m core.ModCheck) string {
+	if !m.OK {
+		return m.Error
+	}
+	var parts []string
+	if m.Effect != "" {
+		parts = append(parts, m.Effect)
+	}
+	if len(m.NotFound) > 0 {
+		parts = append(parts, "keys not found: "+join(m.NotFound))
+	}
+	if len(m.Unsupported) > 0 {
+		parts = append(parts, "ignored keys: "+join(m.Unsupported))
+	}
+	return strings.Join(parts, "; ")
 }
 
 func yesNo(b bool) string {

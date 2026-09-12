@@ -102,10 +102,15 @@ func TestAnOverrideReachesTheEditsTheBuildWillApply(t *testing.T) {
 	require.NotContains(t, dump, `["AmountMin",10]`, "the script's own value is gone")
 	require.NotContains(t, dump, `["AmountMax",10]`)
 
-	// The parameter the front ends draw agrees with what was decoded.
-	require.Len(t, res.Mods[0].Params, 1)
+	// The parameter the front ends draw agrees with what was decoded. The
+	// script also declares a cap (spec 005 R2.3), which this override did not
+	// touch and which must still report the script's own value.
+	require.Len(t, res.Mods[0].Params, 2)
+	require.Equal(t, "MATERIAL_MULTIPLIER", res.Mods[0].Params[0].Name)
 	require.Equal(t, 20.0, res.Mods[0].Params[0].Current)
 	require.Equal(t, 10.0, res.Mods[0].Params[0].Default)
+	require.Equal(t, "YIELD_CAP", res.Mods[0].Params[1].Name)
+	require.Equal(t, 50000.0, res.Mods[0].Params[1].Current)
 }
 
 // R2.3: an out-of-range value is clamped to the declared bounds and says so,

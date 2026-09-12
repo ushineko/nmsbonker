@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/modscript"
 	"github.com/ushineko/nmsbonker/internal/tweaks"
@@ -508,6 +509,25 @@ type ModCheck struct {
 	// Duplicates names parameters the script assigns more than once, where an
 	// override would be silently ignored (R1's risk note).
 	Duplicates []string `json:"duplicates,omitempty"`
+
+	/*
+		What the last build made of this script (spec 005 R4.1).
+
+		Read back from the stored report rather than recomputed, so `mods check`
+		describes the build whose output is on disk. Verdict is empty when
+		nothing has been built or when the build did not include this mod.
+	*/
+	Verdict string `json:"verdict,omitempty"`
+	Applied int    `json:"applied"`
+	Skipped int    `json:"skipped"`
+	// NotFound lists the keys the last build could not find, de-duplicated.
+	NotFound []string `json:"notFound,omitempty"`
+	// Effect is the mechanically derived effectiveness note (R4.1). Empty when
+	// there is nothing to say, which is the state a healthy script is in.
+	Effect string `json:"effect,omitempty"`
+	// Overlaps names the enabled built-in tweaks that edit the same file and
+	// keys. Information only: an overlap is sometimes exactly what was wanted.
+	Overlaps []string `json:"overlaps,omitempty"`
 	// Dump is the decoded container, present only when the caller asked.
 	Dump json.RawMessage `json:"dump,omitempty"`
 }
@@ -546,6 +566,10 @@ func CheckMods(ctx context.Context, req CheckModsRequest) (CheckModsResult, erro
 		return CheckModsResult{}, err
 	}
 	var out CheckModsResult
+	last := s.lastReport()
+	// Two passes: the signatures of every script that loaded have to exist
+	// before any of them can be told what it overlaps with.
+	defs := map[string]*modscript.Definition{}
 	for _, m := range list.Mods {
 		if !m.Enabled && !req.All {
 			continue
@@ -568,6 +592,7 @@ func CheckMods(ctx context.Context, req CheckModsRequest) (CheckModsResult, erro
 			if err != nil {
 				check.Error = err.Error()
 			} else {
+				defs[m.Name] = def
 				check.OK = true
 				check.ModFilename = def.ModFilename
 				check.Author = def.Author
@@ -593,7 +618,62 @@ func CheckMods(ctx context.Context, req CheckModsRequest) (CheckModsResult, erro
 		}
 		out.Mods = append(out.Mods, check)
 	}
+	annotate(out.Mods, defs, list, last)
 	return out, nil
+}
+
+/*
+annotate fills in the last build's verdict and the effectiveness notes (R4.1).
+
+Separate from the loading loop because the overlap test needs every script's
+signature, and a script cannot be told what it overlaps with until the scripts
+after it in the build order have been read.
+*/
+func annotate(checks []ModCheck, defs map[string]*modscript.Definition,
+	list ListModsResult, last *report.Result,
+) {
+	enabledBuiltin := map[string]bool{}
+	for _, m := range list.Mods {
+		if m.Enabled && m.Source == SourceBuiltin {
+			enabledBuiltin[m.Name] = true
+		}
+	}
+	builtins := map[string]map[string]bool{}
+	for name, def := range defs {
+		if enabledBuiltin[name] {
+			builtins[name] = signature(def)
+		}
+	}
+
+	for i := range checks {
+		name := checks[i].Name
+		if row := modRow(last, name); row != nil {
+			checks[i].Verdict = row.Verdict
+			checks[i].Applied = row.Applied
+			checks[i].Skipped = row.Skipped
+			checks[i].NotFound = uniqueSorted(row.NotFound)
+		}
+		checks[i].Overlaps = overlaps(name, signature(defs[name]), builtins)
+		checks[i].Effect = effectNote(modRow(last, name), degradedFor(last, name), checks[i].Overlaps)
+	}
+}
+
+// uniqueSorted de-duplicates a key list for display. The report records one
+// entry per failed lookup, and a key that twenty blocks looked for is one fact.
+func uniqueSorted(keys []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if !seen[k] {
+			seen[k] = true
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func indexOfMod(mods []config.ModEntry, name string) int {
