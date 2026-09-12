@@ -105,8 +105,10 @@ func (u *ui) logPane() fyne.CanvasObject {
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			line := log.at(i)
 			l := o.(*widget.Label)
-			l.SetText(line.text)
+			// Importance first: SetText refreshes, and the refresh is what
+			// applies it. See the note in views_table.go.
 			l.Importance = importanceFor(levelStatus(line.level))
+			l.SetText(line.text)
 		},
 	)
 	u.run.list = list
@@ -122,6 +124,7 @@ func (u *ui) logPane() fyne.CanvasObject {
 		}
 	})
 	follow.SetChecked(u.run.follow)
+	u.run.followBox = follow
 
 	copyLog := widget.NewButtonWithIcon("Copy log", theme.ContentCopyIcon(), func() {
 		u.app.Clipboard().SetContent(log.text())
@@ -192,6 +195,12 @@ func (u *ui) drawLog() {
 		u.run.counter.SetText(text)
 	}
 	u.run.follow = followTail(u.run.follow, u.run.list.GetScrollOffset(), u.run.wantOffset)
+	// The box is the state, so it has to say what the state is. Left alone it
+	// stays ticked while the pane has quietly stopped following, and the way
+	// back — untick, retick — is not one anybody would guess at.
+	if u.run.followBox != nil && u.run.followBox.Checked != u.run.follow {
+		u.run.followBox.SetChecked(u.run.follow)
+	}
 	u.run.list.Refresh()
 	if !u.run.follow {
 		return

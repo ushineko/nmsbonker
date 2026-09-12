@@ -268,7 +268,7 @@ func Run(o Options) {
 	)
 	u.nav.OnSelected = func(i widget.ListItemID) {
 		u.current = i
-		u.show(secs[i].build(u))
+		u.swap(secs[i].build)
 	}
 
 	split := container.NewHSplit(u.nav, u.content)
@@ -308,9 +308,11 @@ func Run(o Options) {
 
 	u.win.Resize(fyne.NewSize(1180, 760))
 	u.nav.Select(sectionIndex(secs, o.Section))
-	// The status bar names the game, the compiler and the library, so it is not
-	// the Overview section's to fetch.
+	// The status bar names the game, the compiler and the mod library from every
+	// section, so both are fetched here rather than left to Overview. Left to a
+	// section, the bar read "reading…" and "—" everywhere else.
 	u.loadStatus()
+	u.loadMods()
 	u.win.SetMaster()
 	u.win.ShowAndRun()
 }
@@ -362,19 +364,31 @@ func (u *ui) refresh() {
 	}
 	secs := sections()
 	if u.current >= 0 && u.current < len(secs) {
-		u.show(secs[u.current].build(u))
+		u.swap(secs[u.current].build)
 	}
+}
+
+/*
+swap replaces the content pane with a freshly built section.
+
+The live build widgets are dropped before the new section is built, not after.
+Built first and dropped afterwards -- which is what this did, inside show() --
+the Build section registered its brand-new log list and step rows and then had
+them thrown away by the very call that put them on screen, so a running build
+streamed into nothing.
+*/
+func (u *ui) swap(build func(*ui) fyne.CanvasObject) {
+	if u.content == nil {
+		return
+	}
+	u.run.detach()
+	u.show(build(u))
 }
 
 func (u *ui) show(o fyne.CanvasObject) {
 	if u.content == nil {
 		return
 	}
-	// A section that is being replaced no longer owns the live build widgets;
-	// the next build of the Build section will hand them over again. Without
-	// this, a build streaming into a section that is no longer on screen keeps
-	// refreshing widgets nothing is drawing.
-	u.run.detach()
 	u.content.Content = o
 	u.content.Refresh()
 	u.content.ScrollToTop()
@@ -507,6 +521,9 @@ func (u *ui) busy(what string) func() {
 		u.busyCount++
 		u.busyWhat = what
 		u.redrawStatus()
+		if u.busyCount == 1 {
+			u.regate()
+		}
 	})
 
 	var once sync.Once
@@ -516,11 +533,31 @@ func (u *ui) busy(what string) func() {
 				u.busyCount--
 				if u.busyCount <= 0 {
 					u.busyCount, u.busyWhat = 0, ""
+					u.regate()
 				}
 				u.redrawStatus()
 			})
 		})
 	}
+}
+
+/*
+regate rebuilds the current section when work starts and when it stops.
+
+Every section disables the buttons that start work while something is running,
+and it does that as it is built -- so a section built while an operation was in
+flight comes out with dead buttons and nothing turns them back on. That is not
+hypothetical: the two loads this window starts at launch are still running when
+the first section is drawn, so the Build toolbar came up permanently disabled
+and the window looked finished while refusing to do anything.
+
+Rebuilding from state is the fix rather than walking a list of buttons, because
+"disabled" has several causes at once -- no game found, no row selected, the
+active compiler cannot be removed -- and only the builder knows all of them.
+*/
+func (u *ui) regate() {
+	u.refresh()
+	u.drawControls()
 }
 
 // working reports whether a core operation is in flight. R4.2: one at a time,

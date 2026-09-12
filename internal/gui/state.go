@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -76,10 +77,11 @@ func (u *ui) invalidate() {
 		// would send a headless test off to read the user's Steam install.
 		return
 	}
-	// The status bar names the game, the compiler and the library from every
-	// section, so this is fetched here rather than left to Overview. Left to a
-	// section, the bar said "reading…" everywhere else.
+	// The status bar names the game, the compiler and the mod library from every
+	// section, so both are fetched here rather than left to Overview. Left to a
+	// section, the bar read "reading…" and "—" everywhere else.
 	u.loadStatus()
+	u.loadMods()
 	u.rebuild()
 }
 
@@ -402,16 +404,29 @@ func (u *ui) startBuild(deploy, recache, replaceSymlink bool) {
 	}()
 }
 
-// startLogPump redraws the log pane on a timer until the build ends. The
-// returned function stops it and draws once more, so the last lines of a build
-// are on screen even if it finished between ticks.
+/*
+startLogPump redraws the log pane on a timer until the build ends.
+
+The returned function stops the pump, waits for it, and draws once more, so the
+last lines of a build are on screen even if it finished between ticks.
+
+The quit channel is what makes that wait terminate. Stopping the ticker does not
+close its channel, so a pump woken only by the ticker and the build's context
+would sit in its select for ever and the caller would block on it -- which it
+did: the build finished, the goroutine waiting to report it never returned, and
+the window sat there with the progress bar still going.
+*/
 func (u *ui) startLogPump(ctx context.Context) func() {
 	ticker := time.NewTicker(logPumpInterval)
+	quit := make(chan struct{})
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
+		defer ticker.Stop()
 		for {
 			select {
+			case <-quit:
+				return
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
@@ -422,10 +437,14 @@ func (u *ui) startLogPump(ctx context.Context) func() {
 			}
 		}
 	}()
+
+	var once sync.Once
 	return func() {
-		ticker.Stop()
-		<-stopped
-		fyne.Do(u.drawLog)
+		once.Do(func() {
+			close(quit)
+			<-stopped
+			fyne.Do(u.drawLog)
+		})
 	}
 }
 

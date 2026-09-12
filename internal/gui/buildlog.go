@@ -254,10 +254,11 @@ type buildRun struct {
 	// Live widgets, non-nil only while the Build section is on screen. They are
 	// updated in place: rebuilding the section on every log line is exactly the
 	// reflow the project rule forbids.
-	list    *widget.List
-	rows    []stepRowWidgets
-	counter *widget.Label
-	totals  *widget.Label
+	list      *widget.List
+	rows      []stepRowWidgets
+	counter   *widget.Label
+	totals    *widget.Label
+	followBox *widget.Check
 	// controls are the buttons that start work, disabled while a run is in
 	// flight; cancelBtn is the one that is enabled only then, and viewBtn needs
 	// a report rather than an idle window.
@@ -283,8 +284,13 @@ func (r *buildRun) init() {
 // build streaming into widgets nothing is drawing wastes work, and holding the
 // old ones would keep a whole section tree alive for the life of the window.
 func (r *buildRun) detach() {
-	r.list, r.rows, r.counter, r.totals = nil, nil, nil, nil
+	r.list, r.rows, r.counter, r.totals, r.followBox = nil, nil, nil, nil, nil
 	r.controls, r.cancelBtn, r.viewBtn = nil, nil, nil
+	// The next list starts at the top, so the offset the last automatic scroll
+	// left behind describes a widget that no longer exists. Carried over, it
+	// makes the fresh pane look as though the user had scrolled up in it, and
+	// the pane stops following the tail on the first tick after a rebuild.
+	r.wantOffset = 0
 }
 
 // reset starts a new run's state. The log is emptied rather than appended to:
