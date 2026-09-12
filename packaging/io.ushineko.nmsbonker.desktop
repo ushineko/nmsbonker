@@ -6,7 +6,10 @@ Comment=Rebuild and deploy No Man's Sky mods, natively on Linux
 Exec=nmsbonker-gui
 Icon=nmsbonker
 Terminal=false
-Categories=Game;Utility;
+# One main category: desktop-file-validate warns that two of them can put the
+# entry in the menu twice, and this is a tool that builds mods rather than a
+# game. Keywords below are what a launcher search actually matches on.
+Categories=Utility;
 Keywords=No Man's Sky;NMS;mod;AMUMSS;MBIN;Proton;
 StartupNotify=true
 # The basename of this file must stay io.ushineko.nmsbonker.desktop. Fyne sets
