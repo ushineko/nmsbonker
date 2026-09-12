@@ -2,7 +2,7 @@
 Package build merges every enabled mod's edits into one collision-free set of
 MBINs (spec 002 R4).
 
-The shape of the pipeline is the legacy builder's and the reason for it is worth
+The shape of the pipeline is the reference builder's and the reason for it is worth
 stating: two mods that edit the same game file cannot each ship their own copy,
 because the game loads one of them and the other's edits vanish. So the unit of
 work is the *target* -- one game file -- and every mod's edits to it are applied
@@ -54,7 +54,7 @@ func (t *Target) Mods() []string {
 // Script is one configured mod and the definition that loaded for it.
 //
 // Err carries a load failure rather than being handled by the caller because
-// the legacy builder reported those failures in the build report, in build
+// the reference builder reported those failures in the build report, in build
 // order, ahead of everything else: a mod whose .lua has gone missing has to
 // appear in the same list as one whose edits did not apply.
 type Script struct {
@@ -142,7 +142,7 @@ func NewPlan(scripts []Script) *Plan {
 						target.Items = append(target.Items, Item{Mod: s.Name, Source: src, Block: blk})
 						// Key presence, not effect: a block with REMOVE = false
 						// still marks the mod complex, because that is what the
-						// legacy builder's `"REMOVE" in blk` test did and what
+						// reference builder's `"REMOVE" in blk` test did and what
 						// the retry set is chosen by.
 						if blk.Structural() && !complexSeen[s.Name] {
 							complexSeen[s.Name] = true

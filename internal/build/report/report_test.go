@@ -53,7 +53,7 @@ the "how to fix" prose and the missing-key list are the accumulated answer to
 "which of my mods do I need to re-download", and a refactor that quietly drops
 a paragraph has removed the point of the file.
 */
-func TestMarkdownRendersTheWholeLegacyStructure(t *testing.T) {
+func TestMarkdownRendersTheWholeReferenceStructure(t *testing.T) {
 	md := report.Markdown(sample())
 
 	for _, want := range []string{

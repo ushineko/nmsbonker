@@ -35,15 +35,14 @@ func builtOutput(t *testing.T, modName string, files map[string]string) string {
 /*
 R5.1: deploy refuses a symlinked GAMEDATA/MODS, with the reason.
 
-That is the legacy AMUMSS-on-Linux layout: the link points at a mod tree outside
-the game install. Installing "into the game" would silently write into the
-user's other tree, and removing the link without saying so would take their
-existing setup out of the loading path.
+A symlink here points at a mod tree outside the game install. Installing "into
+the game" would silently write into the user's other tree, and removing the link
+without saying so would take their existing setup out of the loading path.
 */
 func TestDeployRefusesASymlinkedModsDirectoryAndSaysWhy(t *testing.T) {
 	root := bare(t)
 	game := fakeGame(t, root)
-	target := filepath.Join(root, "legacy-mods")
+	target := filepath.Join(root, "external-mods")
 	require.NoError(t, os.MkdirAll(target, 0o750))
 	require.NoError(t, os.Symlink(target, filepath.Join(game, "GAMEDATA", "MODS")))
 	builtOutput(t, config.DefaultModName, map[string]string{"A.MBIN": "one"})
@@ -57,14 +56,14 @@ func TestDeployRefusesASymlinkedModsDirectoryAndSaysWhy(t *testing.T) {
 /*
 AC4/R5.1: --replace-symlink removes the link and never its target.
 
-The link is the thing in the way; what it points at is the user's mod library
-from the previous setup. Deleting that would be unrecoverable, so the test
-asserts the target's contents survive.
+The link is the thing in the way; what it points at is the user's own mod tree.
+Deleting that would be unrecoverable, so the test asserts the target's contents
+survive.
 */
 func TestReplaceSymlinkRemovesTheLinkButNotWhatItPointsAt(t *testing.T) {
 	root := bare(t)
 	game := fakeGame(t, root)
-	target := filepath.Join(root, "legacy-mods")
+	target := filepath.Join(root, "external-mods")
 	require.NoError(t, os.MkdirAll(target, 0o750))
 	keep := filepath.Join(target, "PRECIOUS.MBIN")
 	require.NoError(t, os.WriteFile(keep, []byte("do not delete"), 0o600))

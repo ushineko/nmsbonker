@@ -70,7 +70,7 @@ func TestAPakRoundTripsEveryFileInBothLayouts(t *testing.T) {
 	}
 }
 
-// Scripts, the legacy builder and the pak itself all spell paths differently
+// Scripts, the reference builder and the pak itself all spell paths differently
 // (backslashes, upper case, a "GLOBALS\" prefix the extractor invented). If
 // lookup were literal, a mod would silently stop applying because its author
 // typed a backslash. R4.2.

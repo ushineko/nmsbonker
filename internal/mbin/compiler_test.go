@@ -132,7 +132,7 @@ func TestAZeroExitWithNoOutputIsItsOwnError(t *testing.T) {
 
 // The useful half of a conversion failure -- the libMBIN stack trace naming the
 // field it choked on -- goes to <binary>.log, not to stderr. An error without
-// it says only "exit status 1", which is what the legacy pipeline gave and what
+// it says only "exit status 1", which is what the reference pipeline gave and what
 // made structural-edit failures so slow to diagnose. R5.4.
 func TestAFailedConversionCarriesStderrAndTheTailOfTheLog(t *testing.T) {
 	c := fakeCompiler(t, "fail")
@@ -154,7 +154,7 @@ func TestAFailedConversionCarriesStderrAndTheTailOfTheLog(t *testing.T) {
 	require.NotContains(t, err.Error(), "log line 19", "and no more than that")
 }
 
-// The legacy pipeline had to strip WINEDEBUG and CLAUDECODE by hand before every
+// The reference pipeline had to strip WINEDEBUG and CLAUDECODE by hand before every
 // subprocess, and forgetting one leaked an agent session's environment into a
 // child process. Passing an allow-list makes that impossible rather than
 // remembered. R5.4.

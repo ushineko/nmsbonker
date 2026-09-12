@@ -56,7 +56,7 @@ func compatStatus(v string) Status {
 	return StatusInfo
 }
 
-// verdictStatus colours a report row. The five verdicts are the legacy
+// verdictStatus colours a report row. The five verdicts are the reference
 // builder's and their meanings are in the report legend, which the Report
 // section reproduces rather than paraphrasing.
 func verdictStatus(v string) Status {
@@ -73,10 +73,10 @@ func verdictStatus(v string) Status {
 
 // modsStateStatus ranks what GAMEDATA/MODS currently is.
 //
-// A symlink is the legacy AMUMSS-on-Linux layout: the game reads mods through
-// the link, so a deploy would write into whatever the link points at rather
-// than into the game. That is a warning the Overview has to carry, because it
-// is the one state where the obvious action does the wrong thing.
+// A symlink means the game reads mods through the link, so a deploy would
+// write into whatever the link points at rather than into the game. That is a
+// warning the Overview has to carry, because it is the one state where the
+// obvious action does the wrong thing.
 func modsStateStatus(state string) Status {
 	switch state {
 	case "dir":

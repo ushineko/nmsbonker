@@ -25,5 +25,5 @@ count.out
 *.lua
 !/internal/tweaks/scripts/*.lua
 
-# Python bytecode from the legacy fixture generator.
+# Python bytecode from the reference fixture generator.
 __pycache__/

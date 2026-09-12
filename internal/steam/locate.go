@@ -11,7 +11,7 @@ import (
 
 // ModsState says what GAMEDATA/MODS currently is (R3.4).
 //
-// The distinction matters because the legacy setup symlinks it at a directory
+// The distinction matters because it is sometimes a symlink at a directory
 // outside the game install; deploy (spec 004) must not replace a symlink the
 // user put there on purpose without saying so.
 const (

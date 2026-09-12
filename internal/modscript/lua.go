@@ -3,12 +3,12 @@ Package modscript loads AMUMSS-format mod scripts (spec 002 R1).
 
 An AMUMSS mod is a Lua script whose only job is to assign one global table,
 NMS_MOD_DEFINITION_CONTAINER, describing which game files to edit and how. The
-legacy pipeline ran each script through the system `lua` binary with a dumper
+reference pipeline ran each script through the system `lua` binary with a dumper
 that serialised that table to JSON; this package embeds a Lua interpreter
 instead, so the tool has no interpreter dependency and third-party scripts run
 in a sandbox rather than with the full standard library.
 
-The behaviour reproduced here is the legacy dumper's, not AMUMSS's: backslashes
+The behaviour reproduced here is the reference dumper's, not AMUMSS's: backslashes
 are doubled before the script is compiled, numbers keep the integer/float split
 the dumper's JSON established, and an empty table is an empty array. Those are
 the inputs the edit engine's golden fixtures were generated from.
@@ -44,7 +44,7 @@ const maxMemoryKB = 256 * 1024
 // referential table is legal Lua and would otherwise recurse forever.
 const maxDepth = 64
 
-// Load stages, as reported by LoadError.Stage. They mirror the legacy dumper's
+// Load stages, as reported by LoadError.Stage. They mirror the reference dumper's
 // exit codes (3, 4, 5), which is what the build report's wording was written
 // against.
 const (
@@ -112,7 +112,7 @@ func run(ctx context.Context, path string, src []byte) (map[string]any, map[stri
 
 		Scripts spell game paths the Windows way ("METADATA\REALITY\X.MBIN"),
 		which is not a valid Lua string: \R is an invalid escape and Lua 5.4
-		refuses to compile it. The legacy dumper worked around this by doubling
+		refuses to compile it. The reference dumper worked around this by doubling
 		every backslash in the source, and the scripts have been written against
 		that ever since -- a script that wanted a real escape would already be
 		broken. Doing anything cleverer here (only doubling invalid escapes, say)
@@ -187,7 +187,7 @@ func sandbox(state *lua.LState) {
 }
 
 // cleanLuaError strips the interpreter's Go-side decoration so the message
-// reads like the legacy dumper's ("LOAD ERROR: ...").
+// reads like the reference dumper's ("LOAD ERROR: ...").
 func cleanLuaError(err error) string {
 	var apiErr *lua.ApiError
 	if errors.As(err, &apiErr) {
@@ -223,7 +223,7 @@ func numericGlobals(state *lua.LState) map[string]Value {
 }
 
 /*
-convert turns a Lua value into the tree the legacy dumper's JSON decoded to.
+convert turns a Lua value into the tree the reference dumper's JSON decoded to.
 
 The shapes are the dumper's, not Lua's: a table whose keys are all numbers is a
 list of t[1]..t[#t], any other table is a string-keyed map, and an empty table
@@ -284,7 +284,7 @@ func luaKey(k lua.LValue) string {
 }
 
 /*
-numberValue applies the legacy dumper's integer/float rule (R1.3).
+numberValue applies the reference dumper's integer/float rule (R1.3).
 
 The dumper wrote a number with "%d" when it was integral and below 1e15, and
 with tostring() otherwise; Python's json.loads then made the first an int and

@@ -1,7 +1,7 @@
 /*
 Package report is the build's result model and its two renderings (spec 002 R4.4).
 
-The Markdown is a port of the legacy BUILD_REPORT.md, prose included. That is
+The Markdown is a port of the reference BUILD_REPORT.md, prose included. That is
 deliberate: the file is what the user reads after every game update to decide
 which mods to re-download, and the wording of its "how to fix" sections is the
 accumulated answer to that question. The JSON beside it is what `nmsbonker
@@ -200,11 +200,11 @@ const maxNotedKeys = 6
 /*
 Markdown renders BUILD_REPORT.md (R4.4).
 
-The structure and most of the prose are the legacy report's. Three header lines
+The structure and most of the prose are the reference report's. Three header lines
 are new: the game build the report was produced against, the compiler
 compatibility verdict from the round-trip check (R3.4), and the script keys this
 engine ignored -- each of them a thing that silently changes what a build
-produces and that the legacy report gave the reader no way to see.
+produces and that the reference report gave the reader no way to see.
 */
 func Markdown(r *Result) string {
 	var b strings.Builder

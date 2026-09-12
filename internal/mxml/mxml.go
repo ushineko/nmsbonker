@@ -1,7 +1,7 @@
 /*
 Package mxml is the line-based MXML edit engine (spec 002 R2).
 
-It is a port of apply_block from the legacy Python builder, quirks included.
+It is a port of apply_block from the reference Python builder, quirks included.
 That is deliberate: the correctness oracle for this phase is a golden set
 captured from that builder against the installed game, and an engine that
 "improves" a rule is an engine whose output nobody has verified in game. Where a
@@ -26,7 +26,7 @@ import (
 )
 
 // Int32 bounds. A merged value outside them makes MBINCompiler overflow the
-// field rather than reject the file, so the legacy engine clamped and so does
+// field rather than reject the file, so the reference engine clamped and so does
 // this one.
 const (
 	maxInt32 = 2147483647
@@ -55,7 +55,7 @@ needs to be called on an opener. And when it is called on a *self-closing* line
 the depth never reaches zero and it returns the last line of the file -- which
 is what makes a SECTION_UP walk that lands on a self-closing line scope the
 whole remainder of the document. Both callers that can hit that case guard it;
-the ones that do not are reproducing the legacy behaviour on purpose.
+the ones that do not are reproducing the reference behaviour on purpose.
 */
 func CloseIndex(lines []string, i int) int {
 	depth := 0
@@ -134,7 +134,7 @@ func SetVal(line, newval string) string {
 var ErrNotFinite = errors.New("arithmetic result is not a finite number")
 
 /*
-FormatNum renders an arithmetic result the way the legacy fmt_num did (R2.2).
+FormatNum renders an arithmetic result the way the reference fmt_num did (R2.2).
 
 Three rules, all load-bearing:
 
@@ -153,7 +153,7 @@ Three rules, all load-bearing:
 */
 func FormatNum(result float64, old string, itof modscript.IntegerToFloat) (string, error) {
 	// ITOFPreserve and ITOFOff both keep the old value's kind; only ITOFForce
-	// changes the answer. The legacy code spelled all three branches because it
+	// changes the answer. The reference code spelled all three branches because it
 	// tested a raw string, and PRESERVE had to be recognised before the generic
 	// "any truthy value means float".
 	oldIsInt := !strings.Contains(old, ".")

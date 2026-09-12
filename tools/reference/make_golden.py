@@ -1,10 +1,21 @@
 #!/usr/bin/env python3
-"""Golden-fixture generator for spec 002 (run against the LEGACY Python builder).
-Produces ~/Games/nms-modding/golden/: per-target merged MXML + report lines + per-script dump JSON.
-Game-derived output; never commit it. Runs the legacy builder's merge stage (no compile) and
-and writes per-target merged MXML + report lines, plus per-script dumped JSON."""
+"""Golden-fixture generator for spec 002 (run against the reference Python builder).
+
+Usage: make_golden.py [SOURCE_TREE]
+
+SOURCE_TREE is the root of the reference Python/Lua pipeline whose behaviour the
+golden fixtures capture; it defaults to $NMSBONKER_REFERENCE_DIR. Writes
+<SOURCE_TREE>/golden/: per-target merged MXML + report lines + per-script dump
+JSON. Game-derived output; never commit it. Runs the reference builder's merge
+stage only (no compile)."""
 import sys, os, json, shutil, subprocess, importlib.util
-W=os.path.expanduser("~/Games/nms-modding")
+W=sys.argv[1] if len(sys.argv)>1 else os.environ.get("NMSBONKER_REFERENCE_DIR","")
+if not W:
+    sys.exit("usage: make_golden.py [SOURCE_TREE]\n"
+             "       or set NMSBONKER_REFERENCE_DIR to the reference pipeline's root")
+W=os.path.abspath(os.path.expanduser(W))
+if not os.path.isdir(W):
+    sys.exit(f"not a directory: {W}")
 G=f"{W}/golden"
 spec=importlib.util.spec_from_file_location("nb", f"{W}/builder/nms_build_mods.py")
 nb=importlib.util.module_from_spec(spec); spec.loader.exec_module(nb)

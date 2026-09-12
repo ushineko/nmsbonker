@@ -56,8 +56,8 @@ func (u *ui) installCard() fyne.CanvasObject {
 	if in.ModsTarget != "" {
 		// "->" rather than an arrow glyph: the font Fyne bundles has no U+2192
 		// and draws a replacement box for it, which in the one row that warns
-		// about the legacy symlink reads as a rendering fault. The CLI spells
-		// it the same way.
+		// about a symlinked GAMEDATA/MODS reads as a rendering fault. The CLI
+		// spells it the same way.
 		mods += " -> " + in.ModsTarget
 	}
 	rows := []fyne.CanvasObject{
@@ -70,10 +70,9 @@ func (u *ui) installCard() fyne.CanvasObject {
 	}
 	if in.ModsState == steam.ModsSymlink {
 		rows = append(rows, note(
-			"That is the layout the legacy AMUMSS-on-Linux setup used: the game reads mods "+
-				"through the link, so deploying here would write into the link's target rather "+
-				"than into the game. Deploy offers to replace the link — never its target — with "+
-				"a real directory.", StatusWarn))
+			"The game reads mods through the link, so deploying here would write into the "+
+				"link's target rather than into the game. Deploy offers to replace the link — "+
+				"never its target — with a real directory.", StatusWarn))
 	}
 	if in.ModSettingsOK {
 		rows = append(rows, factRow("DisableAllMods", fmt.Sprintf("%t", in.DisableAllMods),

@@ -88,7 +88,7 @@ func TestDisabledModsAreNotPlanned(t *testing.T) {
 /*
 R4.1: a script that will not load keeps its place in the build order.
 
-The legacy builder reported these as warnings in the same stream as the edits,
+The reference builder reported these as warnings in the same stream as the edits,
 which is what makes a report readable top to bottom: "this mod's file is gone"
 appears where the mod would have been, not in a separate list nobody reads.
 */

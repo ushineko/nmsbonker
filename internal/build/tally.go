@@ -73,7 +73,7 @@ func (t *tally) drop(mods []string) {
 /*
 rows derives each mod's verdict (R4.4).
 
-The order of the tests is the legacy order and it decides what a mod that is
+The order of the tests is the reference order and it decides what a mod that is
 both complex and degraded reports: PARTIAL wins over WORKING*, because "your
 structural edits were dropped" is the more actionable of the two. A mod with
 nothing applied is NOT BUILT whether or not it was also dropped, for the same

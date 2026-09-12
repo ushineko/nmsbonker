@@ -18,7 +18,7 @@ Index maps an internal pak path to the archive holding it (R4.5).
 
 Two lookups, not one. The exact map is the normalised full path, which is what
 the game and a correctly written script use. The basename map is a fallback,
-because the legacy Python builder resolved by basename when the full path
+because the reference Python builder resolved by basename when the full path
 missed, and the scripts in the wild rely on it: several write
 "GLOBALS\GCGAMEPLAYGLOBALS.GLOBAL.MBIN" for a file that actually lives at the
 pak root. Dropping the fallback would silently stop applying those mods, which

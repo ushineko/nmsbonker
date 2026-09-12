@@ -44,7 +44,7 @@ type DeployResult struct {
 // ErrNoBuild reports a deploy with nothing to install.
 var ErrNoBuild = errors.New("no build output to deploy; run `nmsbonker build` first")
 
-// ErrModsSymlink reports the legacy setup: GAMEDATA/MODS is a symlink.
+// ErrModsSymlink reports that GAMEDATA/MODS is a symlink rather than a directory.
 var ErrModsSymlink = errors.New("GAMEDATA/MODS is a symlink")
 
 // Deploy installs the last build into the game directory (R5).
@@ -60,8 +60,8 @@ func Deploy(ctx context.Context, req DeployRequest) (DeployResult, error) {
 deploy copies the built folder in, archiving whatever it replaces (R5.2).
 
 Three properties, in the order they matter. It never removes a symlink's target:
-the legacy pipeline points GAMEDATA/MODS at a directory outside the install, and
-deleting that would take the user's whole mod tree with it. It stages into a
+a symlinked GAMEDATA/MODS points at a directory outside the install, and deleting
+that would take the user's whole mod tree with it. It stages into a
 temp directory inside GAMEDATA/MODS and renames, so a deploy interrupted halfway
 leaves the previous mod intact rather than a half-copied one. And it archives
 what it replaces under a timestamp, because the undo for "the new build broke my
@@ -89,11 +89,9 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 	case steam.ModsSymlink:
 		if !req.ReplaceSymlink {
 			return out, fmt.Errorf(
-				"%w pointing at %s. That is the layout the legacy AMUMSS-on-Linux setup used: "+
-					"the game reads mods through the link, so installing here would write into that "+
-					"directory instead of the game. Pass --replace-symlink to remove the link "+
-					"(never its target) and create a real GAMEDATA/MODS, or wait for "+
-					"`nmsbonker migrate` in a later release",
+				"%w pointing at %s. The game reads mods through the link, so installing here "+
+					"would write into that directory instead of the game. Pass --replace-symlink "+
+					"to remove the link (never its target) and create a real GAMEDATA/MODS",
 				ErrModsSymlink, s.install.ModsTarget)
 		}
 		// Remove removes the link itself, not what it points at.

@@ -102,8 +102,8 @@ func TestAnExplicitGameDirIsValidatedAndSaysWhatIsMissing(t *testing.T) {
 	require.Contains(t, err.Error(), empty)
 }
 
-// GAMEDATA/MODS being a symlink is the legacy setup on this machine, and spec
-// 004's deploy must not replace a symlink the user put there on purpose. Stat
+// GAMEDATA/MODS is sometimes a symlink at a mod tree outside the install, and
+// spec 004's deploy must not replace one the user put there on purpose. Stat
 // follows symlinks; only Lstat can tell the difference. R3.4.
 func TestModsStateDistinguishesASymlinkFromADirectory(t *testing.T) {
 	lib := t.TempDir()

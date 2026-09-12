@@ -60,7 +60,7 @@ func vct(pairs ...string) []modscript.ValueChange {
 }
 
 // R2.1: the plainest block -- no anchor, no maths -- edits the first matching
-// property in the file and reports it in the legacy wording.
+// property in the file and reports it in the reference wording.
 func TestABlockWithNoAnchorEditsTheFirstMatchingProperty(t *testing.T) {
 	got, report := apply(t, sample, &modscript.Block{ValueChanges: vct("AmountMin", "99"), HasVCT: true})
 
@@ -114,7 +114,7 @@ the file.
 
 close_index counts openers, and a self-closing line is not one, so its depth
 never returns to zero and it falls through to the last line. That is a bug in
-the legacy engine, it is reachable from a badly indented MXML, and reproducing
+the reference engine, it is reachable from a badly indented MXML, and reproducing
 it is the point: a merge that "fixes" it edits different lines than the golden
 set records.
 */
@@ -203,7 +203,7 @@ func TestAKeywordGroupThatMatchesNothingWarnsAndContinues(t *testing.T) {
 /*
 R2.1: a partly matching keyword group still anchors, on its last hit.
 
-The legacy loop breaks out on the first keyword it cannot find without clearing
+The reference loop breaks out on the first keyword it cannot find without clearing
 the anchor it had already set, so ["GcEntry.xml", "NOPE"] behaves as
 ["GcEntry.xml"]. Mods in the golden set apply edits through this path; treating
 it as "not found" would turn those into warnings and change the merge.
@@ -298,7 +298,7 @@ R2.1: CURRENCY_MULT multiplies the amounts in every GcRewardMoney block whose
 currency matches, once each.
 
 The count in the report is blocks visited, not lines edited, and the multiplier
-prints as a Python float ("x5.0") because the legacy code called float() on it.
+prints as a Python float ("x5.0") because the reference code called float() on it.
 */
 func TestCurrencyMultScalesOnlyTheMatchingCurrencyBlocks(t *testing.T) {
 	src := `<Data>
@@ -349,7 +349,7 @@ func TestWrapperMultScalesTheNamedKeysInsideEveryWrapper(t *testing.T) {
 }
 
 // A MULT the script wrote as a word is Python's ValueError, reported as the
-// exception the legacy builder printed rather than silently multiplying by
+// exception the reference builder printed rather than silently multiplying by
 // zero. R2.1.
 func TestANonNumericMultiplierIsReportedAsAnException(t *testing.T) {
 	_, report := apply(t, sample, &modscript.Block{
@@ -543,7 +543,7 @@ func TestTheSearchHelpersClampTheirBounds(t *testing.T) {
 
 // R2.1: the three report line shapes, which the golden set compares byte for
 // byte.
-func TestEventLinesUseTheLegacyColumns(t *testing.T) {
+func TestEventLinesUseTheReferenceColumns(t *testing.T) {
 	require.Equal(t, "   OK  M: d", mxml.Event{Kind: mxml.OK, Mod: "M", Detail: "d"}.Line())
 	require.Equal(t, "  WARN M: d", mxml.Event{Kind: mxml.WARN, Mod: "M", Detail: "d"}.Line())
 	require.Equal(t, "       d", mxml.Info("d").Line())

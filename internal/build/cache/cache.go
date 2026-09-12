@@ -38,7 +38,7 @@ const manifestVersion = 1
 const ManifestName = "manifest.json"
 
 /*
-Key normalises a MBIN_FILE_SOURCE the way the legacy builder did.
+Key normalises a MBIN_FILE_SOURCE the way the reference builder did.
 
 Backslashes to forward slashes, then upper case. Scripts spell the same file
 half a dozen ways -- "METADATA\REALITY\TABLES\REWARDTABLE.MBIN",
@@ -205,7 +205,7 @@ type pakInfo struct {
 Ensure produces a cached MXML for every source, in parallel (R3.2).
 
 A source that is in no pak, or that MBINCompiler will not decompile, is recorded
-as a miss and does not stop the others: the legacy builder reported "no cached
+as a miss and does not stop the others: the reference builder reported "no cached
 MXML for X" against the mod that wanted it and built everything else, and a
 build that refuses to run because one mod names a file the game no longer ships
 is a worse tool.

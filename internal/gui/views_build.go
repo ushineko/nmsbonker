@@ -249,9 +249,9 @@ game directory.
 
 It states three things, in this order: where the files go, what happens to
 whatever is already there, and what is not touched. The last is not politeness —
-the legacy setup points GAMEDATA/MODS at a directory holding the user's whole
-mod tree, and "will this delete my mods" is the question a reasonable person
-asks before pressing this button.
+a symlinked GAMEDATA/MODS points at a directory holding the user's whole mod
+tree, and "will this delete my mods" is the question a reasonable person asks
+before pressing this button.
 */
 func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 	in := u.status.Install
@@ -276,10 +276,10 @@ func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 		nil)
 	if in.ModsState == steam.ModsSymlink {
 		body.Add(widget.NewSeparator())
-		body.Add(note("GAMEDATA/MODS is a symlink to "+in.ModsTarget+", which is the legacy "+
-			"AMUMSS-on-Linux layout. Installing through it would write into that directory "+
-			"instead of into the game. Ticking this removes the link and creates a real "+
-			"directory; what the link pointed at is left exactly as it is.", StatusWarn))
+		body.Add(note("GAMEDATA/MODS is a symlink to "+in.ModsTarget+". Installing through it "+
+			"would write into that directory instead of into the game. Ticking this removes "+
+			"the link and creates a real directory; what the link pointed at is left exactly "+
+			"as it is.", StatusWarn))
 		body.Add(replace)
 	}
 	if in.ModSettingsOK && in.DisableAllMods {

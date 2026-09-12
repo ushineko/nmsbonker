@@ -32,7 +32,7 @@ func twoPaks(t *testing.T) (dir string, paks []string) {
 
 // The exact path is what a correct script uses; the basename fallback exists
 // because real scripts write "GLOBALS\GCGAMEPLAYGLOBALS.GLOBAL.MBIN" for a file
-// that lives at the pak root, and the legacy builder resolved those. Losing the
+// that lives at the pak root, and the reference builder resolved those. Losing the
 // fallback would silently stop applying those mods. R4.5.
 func TestTheIndexResolvesExactPathsAndFallsBackToTheBasename(t *testing.T) {
 	dir, paks := twoPaks(t)

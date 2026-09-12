@@ -294,7 +294,7 @@ because a reward table that adds one new entry is worth less than the twenty
 value edits that would be lost by dropping the file.
 
 The retry's events are appended to the first attempt's, not replacing them,
-which is what the legacy builder did and why its totals exceed the merge-only
+which is what the reference builder did and why its totals exceed the merge-only
 counts in the golden index.
 */
 func (r *runner) target(ctx context.Context, t *Target) outcome {
@@ -399,7 +399,7 @@ func merge(pristine []string, items []Item) ([]string, []mxml.Event) {
 /*
 applyOne runs one block and turns a panic into a warning.
 
-The legacy builder wrapped each block in `try/except` and reported "exception on
+The reference builder wrapped each block in `try/except` and reported "exception on
 X" rather than aborting the build; a Go panic from an index calculation on an
 unexpectedly shaped MXML has to do the same, or one malformed game file takes
 the other ninety-nine down with it.

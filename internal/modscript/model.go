@@ -11,7 +11,7 @@ import (
 // an arithmetic result (R1.3).
 type IntegerToFloat uint8
 
-// The three states the legacy engine's `if itof=="PRESERVE" / elif itof:` test
+// The three states the reference engine's `if itof=="PRESERVE" / elif itof:` test
 // collapses to.
 const (
 	// ITOFOff keeps whatever kind the old value had. This is also what an
@@ -20,7 +20,7 @@ const (
 	// ITOFForce writes a float even where the old value was an integer.
 	ITOFForce
 	// ITOFPreserve keeps the old value's kind. It is spelled separately from
-	// ITOFOff because the legacy engine tests for the literal "PRESERVE" first
+	// ITOFOff because the reference engine tests for the literal "PRESERVE" first
 	// and treats every other truthy value as ITOFForce.
 	ITOFPreserve
 )
@@ -49,7 +49,7 @@ type CurrencyMult struct {
 	Currency string
 	Mult     float64
 	// MultErr carries Python's message for a MULT that float() would refuse, so
-	// the engine can report the same failure the legacy builder did instead of
+	// the engine can report the same failure the reference builder did instead of
 	// silently multiplying by zero.
 	MultErr string
 }
@@ -66,7 +66,7 @@ type WrapperMult struct {
 /*
 Block is one EXML_CHANGE_TABLE entry: a single edit to make to one MXML.
 
-The field set is exactly what the legacy engine read. Keys the scripts carry but
+The field set is exactly what the reference engine read. Keys the scripts carry but
 the engine never looked at -- LINE_OFFSET, VALUE_MATCH, SECTION_ACTIVE and
 friends -- are not decoded into behaviour; they are listed in Unsupported so the
 build report can say which mods are relying on something this engine ignores,
@@ -111,7 +111,7 @@ type Block struct {
 /*
 Structural reports whether the block carries an ADD or REMOVE key.
 
-Key presence, not effect: this is the test the legacy builder used both to flag
+Key presence, not effect: this is the test the reference builder used both to flag
 a mod as complex (verdict WORKING*) and to decide which blocks to leave out when
 a merged file failed to recompile.
 */
@@ -253,7 +253,7 @@ func joinAuthors(mod, lua string) string {
 
 func decodeChange(change map[string]any) MBINChange {
 	out := MBINChange{}
-	// MBIN_FILE_SOURCE is a string or a list of strings; the legacy loader
+	// MBIN_FILE_SOURCE is a string or a list of strings; the reference loader
 	// silently dropped non-string list entries, which this keeps so a script
 	// with a stray nil in the list behaves the same.
 	switch src := change["MBIN_FILE_SOURCE"].(type) {
@@ -375,11 +375,11 @@ func multOf(v any) (float64, string) {
 /*
 keywordList normalises a keyword setting to a list of strings.
 
-A setting is a string or a list, and the legacy engine handled both by wrapping
+A setting is a string or a list, and the reference engine handled both by wrapping
 the string. An empty string produces no keywords, matching `if pkw:`, which is
 what makes ItemValueBoost's PRECEDING_KEY_WORDS="" mean "start at the top".
 
-One deliberate divergence: the legacy code would iterate a *string*
+One deliberate divergence: the reference code would iterate a *string*
 SPECIAL_KEY_WORDS character by character, because Python strings are iterable.
 No script does that, the golden set contains no instance of it, and reproducing
 it would mean matching one letter at a time against the MXML. A string is

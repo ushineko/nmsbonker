@@ -81,7 +81,7 @@ AC5: the reader replaces hgpaktool.exe under Wine, so the bytes it produces must
 be the bytes hgpaktool produced. A one-chunk-late read, or a mishandled final
 partial chunk, would still look like a plausible MBIN.
 
-The oracle is the legacy build cache (cache/raw/fN/.../<name>.mbin), which
+The oracle is the reference build cache (cache/raw/fN/.../<name>.mbin), which
 build_cache.py fills by running hgpaktool directly. Spec 001 AC5 names
 extract/GLOBALS/gcgameplayglobals.global.MBIN instead; that file is not an
 hgpaktool extraction. It differs from the pak's bytes in the MBIN header
@@ -90,16 +90,18 @@ MaxNumSameGroupTech is 25 rather than the game's 3 -- it is a *modded recompile*
 produced by MBINCompiler, so byte-comparing against it would assert that this
 reader reproduces someone's mod. See the spec's Status notes.
 */
-func TestExtractedGlobalsAreByteIdenticalToTheLegacyExtraction(t *testing.T) {
-	legacy := os.Getenv("NMSBONKER_LEGACY_DIR")
-	if legacy == "" {
-		t.Skip("NMSBONKER_LEGACY_DIR is unset; skipping the byte-for-byte comparison with hgpaktool")
+func TestExtractedGlobalsAreByteIdenticalToTheReferenceExtraction(t *testing.T) {
+	reference := os.Getenv("NMSBONKER_REFERENCE_DIR")
+	if reference == "" {
+		t.Skip("NMSBONKER_REFERENCE_DIR is unset; skipping the byte-for-byte comparison with hgpaktool")
 	}
-	matches, err := filepath.Glob(filepath.Join(legacy, "cache", "raw", "*", "*", "gcgameplayglobals.global.mbin"))
+	matches, err := filepath.Glob(
+		filepath.Join(reference, "cache", "raw", "*", "*", "gcgameplayglobals.global.mbin"))
 	require.NoError(t, err)
 	if len(matches) == 0 {
-		t.Skipf("no hgpaktool extraction under %s/cache/raw; run the legacy build_cache.py to produce one",
-			legacy)
+		t.Skipf("no hgpaktool extraction under %s/cache/raw; run the reference "+
+			"build_cache.py to produce one",
+			reference)
 	}
 	want, err := os.ReadFile(matches[0])
 	require.NoError(t, err)

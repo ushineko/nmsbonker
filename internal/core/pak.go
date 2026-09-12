@@ -201,7 +201,7 @@ type PakExtractResult struct {
 PakExtract writes one file out of the archives (R7.2).
 
 The internal directory structure is preserved under OutDir rather than the file
-being dropped in flat. The legacy pipeline learned this the hard way in the
+being dropped in flat. The reference pipeline learned this the hard way in the
 other direction: hgpaktool invents a "GLOBALS/" prefix for root-level globals,
 and build_cache.py had to ignore where hgpaktool put the file and re-derive the
 path from the index. Writing the index's own path means an extraction tree can

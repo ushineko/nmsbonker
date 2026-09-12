@@ -8,7 +8,7 @@ import (
 
 /*
 Kind names what a decoded Lua scalar turned into once it had been through the
-legacy dumper's JSON and Python's json.loads (spec 002 R1.3).
+reference dumper's JSON and Python's json.loads (spec 002 R1.3).
 
 The distinction between KindInt and KindFloat is not cosmetic. It decides what
 Python's str() printed into the build report and, more importantly, what
@@ -30,11 +30,11 @@ const (
 /*
 Value is one scalar out of a mod script: a string, a number or a boolean.
 
-Numbers carry the integer/float split the legacy pipeline established. The
+Numbers carry the integer/float split the reference pipeline established. The
 dumper wrote an integral number below 1e15 with "%d" and everything else with
 tostring(); Python's json.loads then produced an int for the first and a float
 for the second. Reproducing that split here, rather than storing float64 and
-guessing later, is what makes String() able to print exactly what the legacy
+guessing later, is what makes String() able to print exactly what the reference
 builder printed.
 */
 type Value struct {
@@ -71,7 +71,7 @@ func (v Value) IsNumber() bool { return v.kind == KindInt || v.kind == KindFloat
 
 /*
 Truthy is Python's truth test on the decoded value, which is what every
-`if blk.get(...)` in the legacy engine actually asked.
+`if blk.get(...)` in the reference engine actually asked.
 
 It matters in two places that look like they could not care: ADD is applied only
 when the string is non-empty, and INTEGER_TO_FLOAT is "force float" for any
@@ -99,7 +99,7 @@ func (v Value) Truthy() bool {
 /*
 String reproduces Python's str() of this value (R1.3).
 
-The legacy engine wrote str(val) into the MXML whenever a change had no
+The reference engine wrote str(val) into the MXML whenever a change had no
 MATH_OPERATION, and printed it into the report either way, so every quirk of
 Python's rendering is load-bearing: True/False capitalised, integers bare,
 floats through repr() -- shortest round-trip, ".0" forced onto whole numbers,
@@ -152,7 +152,7 @@ ParseFloat is Python's float(str): surrounding whitespace is allowed, hex float
 literals and digit separators are not.
 
 Go's strconv.ParseFloat accepts "0x1p-2" and "1_000_000", which Python rejects
-outright. Letting them through would turn a value the legacy builder wrote
+outright. Letting them through would turn a value the reference builder wrote
 verbatim into an arithmetic result, so they are refused here instead.
 */
 func ParseFloat(s string) (float64, bool) {

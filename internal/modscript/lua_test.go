@@ -39,7 +39,7 @@ R1.1: every backslash in the source is doubled before compiling.
 
 Scripts spell game paths the Windows way, and "METADATA\REALITY\X.MBIN" is not
 compilable Lua -- \R is an invalid escape. Without the doubling the whole
-third-party library fails to load, which is exactly the failure the legacy
+third-party library fails to load, which is exactly the failure the reference
 dumper was written to avoid.
 */
 func TestWindowsPathsInScriptsCompileBecauseBackslashesAreDoubled(t *testing.T) {
@@ -55,7 +55,7 @@ NMS_MOD_DEFINITION_CONTAINER = {
 		def.Modifications[0].Changes[0].Sources)
 }
 
-// A source list is as common as a single source, and the legacy loader accepted
+// A source list is as common as a single source, and the reference loader accepted
 // both shapes for the same key. R1.3.
 func TestOneChangeTableCanNameSeveralSourceFiles(t *testing.T) {
 	def, err := modscript.Load(t.Context(), script(t, "multi.lua", `
@@ -95,7 +95,7 @@ func TestAScriptThatRaisesIsReportedAsAnExecFailure(t *testing.T) {
 }
 
 // A .lua that runs cleanly but never assigns the container is not a mod. The
-// legacy dumper exited 5 for it; saying "no container" rather than "0 edits"
+// reference dumper exited 5 for it; saying "no container" rather than "0 edits"
 // is what tells the user they downloaded the wrong file. R1.2.
 func TestAScriptThatNeverAssignsTheContainerIsRejected(t *testing.T) {
 	_, err := modscript.Load(t.Context(), script(t, "empty.lua", `local x = 1`))
@@ -193,11 +193,11 @@ repr.
 
 This is the difference between writing value="5" and value="5.0" into an MXML
 that MBINCompiler then has to accept, and between a report line reading
-"x5" and "x5.0". The legacy pipeline settled it by writing "%d" for integral
+"x5" and "x5.0". The reference pipeline settled it by writing "%d" for integral
 numbers under 1e15 and tostring() otherwise, then letting Python's json decide
 int or float; the same split is reproduced here.
 */
-func TestNumbersKeepTheIntegerFloatSplitTheLegacyPipelineEstablished(t *testing.T) {
+func TestNumbersKeepTheIntegerFloatSplitTheReferencePipelineEstablished(t *testing.T) {
 	def, err := modscript.Load(t.Context(), script(t, "nums.lua", container(
 		`{ ["VALUE_CHANGE_TABLE"] = { {"Int", 5}, {"Whole", 10/2}, {"Frac", 0.5}, {"Tiny", 0.00001}, {"Str", "7"} } }`)))
 	require.NoError(t, err)
@@ -260,7 +260,7 @@ func TestKeysTheEngineIgnoresAreRecordedAsUnsupported(t *testing.T) {
 /*
 R1.3: REMOVE = false removes nothing but still marks the block structural.
 
-The legacy builder tested truthiness to decide what to do and key presence to
+The reference builder tested truthiness to decide what to do and key presence to
 decide what to retry without, and the two answers differ for exactly this block.
 Collapsing them would change which mods a failed recompile drops.
 */
@@ -292,7 +292,7 @@ func TestDumpJSONReproducesTheContainer(t *testing.T) {
 }
 
 // An empty Lua table dumped as {} rather than [] would make the golden
-// comparison fail on every script that carries one; the legacy dumper wrote [].
+// comparison fail on every script that carries one; the reference dumper wrote [].
 func TestAnEmptyTableDumpsAsAnEmptyArray(t *testing.T) {
 	def, err := modscript.Load(t.Context(), script(t, "et.lua", container(
 		`{ ["PRECEDING_KEY_WORDS"] = {}, ["VALUE_CHANGE_TABLE"] = { {"A", 1} } }`)))

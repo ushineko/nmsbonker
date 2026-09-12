@@ -85,7 +85,7 @@ type Entry struct {
 // Normalise puts a path into the form the manifest and the hash use: forward
 // slashes, lower case.
 //
-// Scripts and the legacy tooling write these paths every possible way --
+// Scripts and the reference tooling write these paths every possible way --
 // "METADATA\REALITY\X.MBIN", "metadata/reality/x.mbin", sometimes with a
 // "GLOBALS\" prefix invented by hgpaktool's extractor -- and the pak itself
 // stores one canonical spelling. Every lookup goes through here so that the

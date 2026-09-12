@@ -7,7 +7,7 @@ import (
 )
 
 // sectionUpToLookback is how far back the SECTION_UP_TO scan looks for its
-// marker before giving up on a match. Twelve lines is the legacy limit.
+// marker before giving up on a match. Twelve lines is the reference limit.
 const sectionUpToLookback = 12
 
 /*
@@ -15,7 +15,7 @@ Apply runs one EXML_CHANGE_TABLE block over an MXML's lines (R2.1).
 
 It returns the edited lines -- ADD and REMOVE change the length, so the slice
 identity is not stable -- and the report events the edit produced. The order of
-the branches below is the legacy order and it is significant: CURRENCY_MULT and
+the branches below is the reference order and it is significant: CURRENCY_MULT and
 WRAPPER_MULT return before anything else is consulted, and the REPLACE_TYPE=ALL
 multi-section path is only taken when a very specific combination of keys is
 present.
@@ -58,7 +58,7 @@ func Apply(lines []string, blk *modscript.Block, actx ApplyContext) ([]string, [
 		}
 	}
 
-	// The guard is deliberately this specific: the legacy engine took this path
+	// The guard is deliberately this specific: the reference engine took this path
 	// only for REPLACE_TYPE=ALL with a bare SPECIAL_KEY_WORDS, a value table,
 	// and neither a truthy ADD nor a truthy REMOVE. Loosening any clause sends
 	// blocks down a branch that edits different lines.
@@ -128,7 +128,7 @@ func applyWrapperMult(lines []string, wm *modscript.WrapperMult, actx ApplyConte
 		}
 		last := CloseIndex(lines, i)
 		// From i+1, not i: the wrapper's own line carries no amount, and the
-		// legacy op skipped it.
+		// reference op skipped it.
 		for j := i + 1; j <= last && j < len(lines); j++ {
 			lines[j] = scaleLine(lines[j], wm.Keys, wm.Mult)
 		}
@@ -140,7 +140,7 @@ func applyWrapperMult(lines []string, wm *modscript.WrapperMult, actx ApplyConte
 }
 
 // scaleLine multiplies the line's value when it names one of the keys. A value
-// that will not parse as a number is left alone, which is the legacy
+// that will not parse as a number is left alone, which is the reference
 // `except: nv = ov`.
 func scaleLine(line string, keys []string, mult float64) string {
 	for _, key := range keys {
@@ -275,7 +275,7 @@ func applyGroups(lines []string, blk *modscript.Block, actx ApplyContext,
 					j = FindKW(lines, kw, cursor, end)
 				}
 				if j < 0 {
-					// The legacy loop breaks here without clearing the anchor,
+					// The reference loop breaks here without clearing the anchor,
 					// so a group whose first keywords matched and whose last
 					// did not still anchors -- on the last keyword that hit.
 					// Several mods in the golden set depend on that: clearing
@@ -344,7 +344,7 @@ func applyValueChanges(lines []string, blk *modscript.Block, actx ApplyContext, 
 			nv = newValue(blk, lines[j], vc)
 			lines[j] = SetVal(lines[j], nv)
 		}
-		// The reported value is the last one written, which is what the legacy
+		// The reported value is the last one written, which is what the reference
 		// f-string picked up from the loop variable.
 		events = append(events, actx.ok("%s -> %s (%dx) in %s", vc.Key, nv, len(idxs), actx.File()))
 	}
@@ -358,7 +358,7 @@ With no MATH_OPERATION the script's value is written verbatim, as Python's
 str() rendered it. With one, both sides are parsed as floats and the result is
 formatted against the old value's spelling; anything that Python's float() or
 round() would have refused falls back to writing the script's value verbatim,
-which is the legacy `except Exception: nv = str(val)`.
+which is the reference `except Exception: nv = str(val)`.
 */
 func newValue(blk *modscript.Block, line string, vc modscript.ValueChange) string {
 	if blk.MathOperation == "" {
@@ -386,7 +386,7 @@ func newValue(blk *modscript.Block, line string, vc modscript.ValueChange) strin
 		r = o - v
 	case "/":
 		// Division by zero leaves the value alone rather than producing an
-		// infinity; the legacy dict spelled it `o/v if v else o`.
+		// infinity; the reference dict spelled it `o/v if v else o`.
 		r = o
 		if v != 0 {
 			r = o / v

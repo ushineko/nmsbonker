@@ -23,29 +23,30 @@ import (
 )
 
 /*
-Golden parity against the legacy Python builder (spec 002 R8).
+Golden parity against the reference Python builder (spec 002 R8).
 
 The fixtures are game-derived and are never committed: they are generated on the
-user's machine by tools/legacy/make_golden.py running the legacy builder against
-the installed game, and these tests skip unless they are pointed at them.
+user's machine by tools/reference/make_golden.py running the reference builder
+against the installed game, and these tests skip unless they are pointed at them.
 
 Three stages, each answering a different question. A: does the embedded Lua
-interpreter decode the same change tables the legacy dumper did. B: does the
+interpreter decode the same change tables the reference dumper did. B: does the
 edit engine produce byte-identical merged documents and the same 504 report
 lines. C: does the whole pipeline, against the real game and the real compiler,
 reach the same per-mod verdicts.
 */
-func goldenDirs(t *testing.T) (golden, legacy string) {
+func goldenDirs(t *testing.T) (golden, reference string) {
 	t.Helper()
 	golden = os.Getenv("NMSBONKER_GOLDEN_DIR")
-	legacy = os.Getenv("NMSBONKER_LEGACY_DIR")
-	if golden == "" || legacy == "" {
-		t.Skip("NMSBONKER_GOLDEN_DIR and NMSBONKER_LEGACY_DIR are unset; skipping the golden parity tests")
+	reference = os.Getenv("NMSBONKER_REFERENCE_DIR")
+	if golden == "" || reference == "" {
+		t.Skip("NMSBONKER_GOLDEN_DIR and NMSBONKER_REFERENCE_DIR are unset; " +
+			"skipping the golden parity tests")
 	}
-	return golden, legacy
+	return golden, reference
 }
 
-// goldenOrder reads the build order out of the legacy mods.conf.
+// goldenOrder reads the build order out of the reference mods.conf.
 func goldenOrder(t *testing.T, golden string) []config.ModEntry {
 	t.Helper()
 	f, err := os.Open(filepath.Join(golden, "mods.conf"))
@@ -77,17 +78,17 @@ func goldenOrder(t *testing.T, golden string) []config.ModEntry {
 /*
 R8.2 -- Stage A: the Lua stage.
 
-Semantic, not textual: Lua's pairs() has no defined order, so the legacy dumper's
+Semantic, not textual: Lua's pairs() has no defined order, so the reference dumper's
 key order is whatever that run produced. Numbers compare as float64 through the
 JSON decoder, which is exactly the comparison the engine's inputs need to
 survive.
 */
-func TestGoldenStageAEveryScriptDecodesToTheLegacyDump(t *testing.T) {
-	golden, legacy := goldenDirs(t)
+func TestGoldenStageAEveryScriptDecodesToTheReferenceDump(t *testing.T) {
+	golden, reference := goldenDirs(t)
 
 	for _, entry := range goldenOrder(t, golden) {
 		t.Run(entry.Name, func(t *testing.T) {
-			def, err := modscript.Load(t.Context(), filepath.Join(legacy, "lua-src", entry.Name+".lua"))
+			def, err := modscript.Load(t.Context(), filepath.Join(reference, "lua-src", entry.Name+".lua"))
 			require.NoError(t, err)
 
 			var got, want any
@@ -121,7 +122,7 @@ type manifestEntry struct {
 /*
 R8.3 -- Stage B: the edit engine.
 
-Every target's merged text is compared byte for byte against what the legacy
+Every target's merged text is compared byte for byte against what the reference
 builder produced from the same pristine input, and every report line against the
 504 it printed. This is the acceptance oracle for the whole engine: a single
 differing byte means a mod behaves differently in game than it did before the
@@ -129,10 +130,10 @@ port, and the report lines catch the cases where the bytes happen to agree but
 the engine took a different path to them.
 
 No compiler and no game install are needed: the pristine MXMLs come from the
-legacy cache the fixtures were generated against.
+reference cache the fixtures were generated against.
 */
 func TestGoldenStageBTheMergeIsByteIdenticalAndSoIsTheReport(t *testing.T) {
-	golden, legacy := goldenDirs(t)
+	golden, reference := goldenDirs(t)
 
 	var index goldenIndex
 	raw, err := os.ReadFile(filepath.Join(golden, "index.json"))
@@ -147,7 +148,7 @@ func TestGoldenStageBTheMergeIsByteIdenticalAndSoIsTheReport(t *testing.T) {
 	order := goldenOrder(t, golden)
 	scripts := make([]build.Script, 0, len(order))
 	for _, entry := range order {
-		def, err := modscript.Load(t.Context(), filepath.Join(legacy, "lua-src", entry.Name+".lua"))
+		def, err := modscript.Load(t.Context(), filepath.Join(reference, "lua-src", entry.Name+".lua"))
 		require.NoError(t, err)
 		scripts = append(scripts, build.Script{Name: entry.Name, Enabled: entry.Enabled, Def: def})
 	}
@@ -160,9 +161,9 @@ func TestGoldenStageBTheMergeIsByteIdenticalAndSoIsTheReport(t *testing.T) {
 		require.Len(t, target.Items, index.Targets[i].Blocks)
 
 		entry, ok := manifest[cache.Key(target.Source)]
-		require.True(t, ok, "the legacy manifest has %s", target.Key)
+		require.True(t, ok, "the reference manifest has %s", target.Key)
 
-		pristine, err := os.ReadFile(filepath.Join(legacy, entry.MXML))
+		pristine, err := os.ReadFile(filepath.Join(reference, entry.MXML))
 		require.NoError(t, err)
 		merged := strings.Split(string(pristine), "\n")
 		for _, item := range target.Items {
@@ -177,7 +178,7 @@ func TestGoldenStageBTheMergeIsByteIdenticalAndSoIsTheReport(t *testing.T) {
 		want, err := os.ReadFile(filepath.Join(golden, filepath.FromSlash(index.Targets[i].Merged)))
 		require.NoError(t, err)
 		require.Equal(t, string(want), strings.Join(merged, "\n"),
-			"merged %s differs from the legacy builder's output", index.Targets[i].Internal)
+			"merged %s differs from the reference builder's output", index.Targets[i].Internal)
 	}
 
 	raw, err = os.ReadFile(filepath.Join(golden, "report_lines.txt"))
@@ -189,11 +190,11 @@ func TestGoldenStageBTheMergeIsByteIdenticalAndSoIsTheReport(t *testing.T) {
 	}
 }
 
-// verdictRow matches a row of the legacy BUILD_REPORT.md table.
+// verdictRow matches a row of the reference BUILD_REPORT.md table.
 var verdictRow = regexp.MustCompile(`^\| (.+?) \| (WORKING\*|WORKING~|WORKING|PARTIAL|NOT BUILT) \| (\d+) \| (\d+) \|`)
 
-// legacyVerdicts parses the verdict table out of the legacy report.
-func legacyVerdicts(t *testing.T, golden string) map[string]string {
+// referenceVerdicts parses the verdict table out of the reference report.
+func referenceVerdicts(t *testing.T, golden string) map[string]string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(golden, "BUILD_REPORT.md"))
 	require.NoError(t, err)
@@ -214,14 +215,14 @@ R8.4 -- Stage C: the whole pipeline against the real game.
 Everything Stage B cannot cover: the pak index, extraction, decompilation with
 the installed compiler, the recompile gate, the degrade-and-drop fallback, and
 the verdict each mod ends up with. The comparison is against the verdict table
-the legacy builder wrote, because the merged bytes here come from *this*
+the reference builder wrote, because the merged bytes here come from *this*
 compiler's decompilation and need not equal the fixture's.
 
 It needs the game and an installed compiler, and it takes a few seconds per run
 because it decompiles a hundred files into a scratch cache.
 */
-func TestGoldenStageCTheWholePipelineReachesTheLegacyVerdicts(t *testing.T) {
-	golden, legacy := goldenDirs(t)
+func TestGoldenStageCTheWholePipelineReachesTheReferenceVerdicts(t *testing.T) {
+	golden, reference := goldenDirs(t)
 	if os.Getenv("NMSBONKER_GAME_DIR") == "" {
 		t.Skip("NMSBONKER_GAME_DIR is unset; skipping the end-to-end stage")
 	}
@@ -232,7 +233,8 @@ func TestGoldenStageCTheWholePipelineReachesTheLegacyVerdicts(t *testing.T) {
 
 	root := t.TempDir()
 	cfgPath := filepath.Join(root, "config.json")
-	writeGoldenConfig(t, cfgPath, root, filepath.Join(legacy, "lua-src"), tools, goldenOrder(t, golden))
+	writeGoldenConfig(t, cfgPath, root, filepath.Join(reference, "lua-src"), tools,
+		goldenOrder(t, golden))
 
 	started := time.Now()
 	res, err := core.Build(t.Context(), core.BuildRequest{Request: core.Request{ConfigPath: cfgPath}})
@@ -243,7 +245,7 @@ func TestGoldenStageCTheWholePipelineReachesTheLegacyVerdicts(t *testing.T) {
 	require.Equal(t, core.CompatOK, res.Compatibility.Status, res.Compatibility.Detail)
 	require.Equal(t, 0, res.Report.Dropped, "AC2: nothing may be dropped")
 
-	want := legacyVerdicts(t, golden)
+	want := referenceVerdicts(t, golden)
 	require.Len(t, res.Report.Mods, len(want))
 	got := map[string]string{}
 	for _, m := range res.Report.Mods {
@@ -269,7 +271,7 @@ func TestGoldenStageCTheWholePipelineReachesTheLegacyVerdicts(t *testing.T) {
 	require.Equal(t, res.Report.Built, loaded.Built)
 }
 
-// writeGoldenConfig points a scratch config at the legacy library and the
+// writeGoldenConfig points a scratch config at the reference library and the
 // installed tools, keeping the cache and the workspace inside the test's own
 // directory so a run cannot disturb the user's.
 func writeGoldenConfig(t *testing.T, path, root, library, tools string, order []config.ModEntry) {

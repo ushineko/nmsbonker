@@ -2,7 +2,7 @@ package mxml
 
 import "fmt"
 
-// Kind ranks an engine event the way the legacy report did (R2.1).
+// Kind ranks an engine event the way the reference report did (R2.1).
 type Kind uint8
 
 // The three event kinds. INFO exists for the build's own "built X from N
@@ -46,7 +46,7 @@ type Event struct {
 	NotFound string
 }
 
-// Line renders the event exactly as the legacy Report did (R2.1).
+// Line renders the event exactly as the reference Report did (R2.1).
 func (e Event) Line() string {
 	switch e.Kind {
 	case OK:

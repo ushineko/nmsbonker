@@ -76,7 +76,7 @@ func acquire(ctx context.Context) (release func(), err error) {
 /*
 minimalEnv is the environment every MBINCompiler process gets (R5.4).
 
-The legacy pipeline ran hgpaktool under Wine and had to strip WINEDEBUG and
+The reference pipeline ran hgpaktool under Wine and had to strip WINEDEBUG and
 CLAUDECODE by hand, and forgetting one produced either a wall of Wine chatter
 mixed into the tool's output or a child process that thought it was inside an
 agent session. Passing a small allow-list instead of the parent's environment

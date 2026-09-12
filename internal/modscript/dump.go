@@ -9,7 +9,7 @@ import (
 )
 
 /*
-DumpJSON serialises a definition in the legacy dumper's JSON shape (R1.4).
+DumpJSON serialises a definition in the reference dumper's JSON shape (R1.4).
 
 This exists for one reason: the golden Lua stage compares what this package
 decoded against dump_mod.lua's output for the same script, and a comparison
@@ -17,7 +17,7 @@ needs both sides in the same notation. It is also what `mods check --json`
 prints, so a user debugging a script sees the same view the parity test does.
 
 The comparison is semantic, not textual. Lua's pairs() has no defined order, so
-the legacy dumper's object key order is whatever that run happened to produce;
+the reference dumper's object key order is whatever that run happened to produce;
 keys are sorted here to make this side reproducible, not to match it.
 */
 func DumpJSON(def *Definition) []byte {
@@ -96,7 +96,7 @@ func encodeScalar(b *strings.Builder, v Value) {
 }
 
 /*
-encodeString escapes exactly what the legacy dumper escaped.
+encodeString escapes exactly what the reference dumper escaped.
 
 Its table covers the quote, the backslash, newline, carriage return and tab, and
 sends every other control character through \u00xx. Anything above U+007F went
