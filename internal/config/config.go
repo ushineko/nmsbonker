@@ -264,6 +264,10 @@ type Paths struct {
 	PakIndex string
 	// Releases is the ETag-cached GitHub release listing (R5.1).
 	Releases string
+	// Archive is where deploy puts the mod folder it replaced (spec 002 R5.2).
+	// It is deliberately not configurable: it is the undo button, and a user
+	// who has pointed it at a directory they later clean out has lost it.
+	Archive string
 }
 
 // Paths resolves every directory to an absolute path.
@@ -281,6 +285,7 @@ func (c *Config) Paths() Paths {
 	}
 	cache := abs(c.CacheDir)
 	return Paths{
+		Archive:   filepath.Join(dataHome(), "nmsbonker", "archive"),
 		Config:    abs(c.path),
 		Library:   abs(c.LibraryDir),
 		Tools:     abs(c.ToolsDir),

@@ -8,7 +8,8 @@ import (
 
 func newToolsCmd() *cobra.Command {
 	cmd := group("tools", "Acquire and inspect MBINCompiler")
-	cmd.AddCommand(newToolsEnsureCmd(), newToolsListCmd(), newToolsPinCmd(), newToolsUnpinCmd())
+	cmd.AddCommand(newToolsEnsureCmd(), newToolsListCmd(), newToolsCheckCmd(),
+		newToolsPinCmd(), newToolsUnpinCmd())
 	return cmd
 }
 
@@ -114,4 +115,52 @@ func newToolsUnpinCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+/*
+newToolsCheckCmd is the compatibility check (spec 002 R3.4).
+
+It answers the question a version string could not: whether the installed
+MBINCompiler can read this game install's files and write them back unchanged.
+A mismatch is reported with the file that proved it, and does not stop a build
+-- but it does mean the build's output is worth doubting.
+*/
+func newToolsCheckCmd() *cobra.Command {
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "check",
+		Short: "Round-trip game files through the installed compiler to prove it matches",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, err := core.ToolCheck(cmd.Context(), core.ToolCheckRequest{Request: request()})
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return writeJSON(cmd.OutOrStdout(), res)
+			}
+			w := cmd.OutOrStdout()
+			fact(w, "compiler", res.CompilerVersion)
+			fact(w, "result", res.Status)
+			for _, f := range res.Files {
+				state := "round-trips"
+				if !f.OK {
+					state = f.Reason
+				}
+				fact(w, "  "+f.Name, state)
+			}
+			for name, why := range res.Skipped {
+				fact(w, "  "+name, "skipped: "+why)
+			}
+			if res.Detail != "" {
+				fact(w, "detail", res.Detail)
+			}
+			if res.Advice != "" {
+				fact(w, "advice", res.Advice)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
+	return cmd
 }
