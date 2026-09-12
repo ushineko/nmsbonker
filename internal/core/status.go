@@ -47,6 +47,10 @@ type CompilerSummary struct {
 	Version string
 	// Others are installed releases that are not the active one.
 	Others []string
+	// Dotnet10 reports whether a .NET 10 runtime is on PATH. The dotnet10
+	// flavor of MBINCompiler is framework-dependent and will not start without
+	// one; the self-contained flavor carries its own and does not care.
+	Dotnet10 bool
 }
 
 // IndexSummary reports the pak index's freshness without rebuilding it (R7.2).
@@ -61,10 +65,13 @@ type IndexSummary struct {
 
 // StatusResult is everything `status` reports.
 type StatusResult struct {
-	Version         string
-	Commit          string
-	ConfigPath      string
-	Paths           config.Paths
+	Version    string
+	Commit     string
+	ConfigPath string
+	Paths      config.Paths
+	// ModName is the folder a build produces and deploy installs, which both
+	// front ends put in front of the user before they press the button.
+	ModName         string
 	Install         InstallSummary
 	Compiler        CompilerSummary
 	GameDataVersion string
@@ -92,6 +99,7 @@ func Status(ctx context.Context, req StatusRequest) (StatusResult, error) {
 		Commit:        buildinfo.Commit,
 		ConfigPath:    s.cfg.Path(),
 		Paths:         s.paths,
+		ModName:       s.cfg.ModName,
 		LibraryMods:   countLuaScripts(s.paths.Library),
 		Compatibility: mbin.CompatUnknown,
 	}
@@ -132,6 +140,7 @@ func Status(ctx context.Context, req StatusRequest) (StatusResult, error) {
 		out.PakIndex = IndexSummary(fresh)
 	}
 
+	out.Compiler.Dotnet10 = mbin.HasDotnet10(ctx)
 	tags := mbin.Installed(s.paths.Tools)
 	if compiler, err := mbin.Locate(s.paths.Tools, s.cfg.MBINCompiler.Pin); err == nil {
 		out.Compiler.Installed = true

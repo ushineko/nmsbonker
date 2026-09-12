@@ -50,6 +50,7 @@ func printStatus(w io.Writer, res core.StatusResult) {
 	fact(w, "tools dir", res.Paths.Tools)
 	fact(w, "cache dir", res.Paths.Cache)
 	fact(w, "workspace dir", res.Paths.Workspace)
+	fact(w, "output folder", res.ModName)
 	say(w, "")
 
 	in := res.Install
@@ -91,6 +92,7 @@ func printStatus(w io.Writer, res core.StatusResult) {
 	} else {
 		fact(w, "MBINCompiler", "not installed (run `nmsbonker tools ensure`)")
 	}
+	fact(w, "dotnet 10 runtime", yesNo(c.Dotnet10))
 	if len(c.Others) > 0 {
 		fact(w, "  also installed", fmt.Sprint(c.Others))
 	}

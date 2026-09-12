@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -10,7 +12,7 @@ import (
 
 func newPakCmd() *cobra.Command {
 	cmd := group("pak", "Read the game's .pak archives")
-	cmd.AddCommand(newPakListCmd(), newPakFindCmd(), newPakExtractCmd())
+	cmd.AddCommand(newPakListCmd(), newPakFindCmd(), newPakExtractCmd(), newPakReindexCmd())
 	return cmd
 }
 
@@ -109,4 +111,32 @@ func newPakExtractCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVarP(&outDir, "out", "o", ".", "directory to write into")
 	return cmd
+}
+
+/*
+newPakReindexCmd forces the index to be rebuilt (spec 003 R2.5).
+
+The index maintains itself by size and mtime, which is right almost always. This
+is for when it is not: an archive replaced with one the same size, or an index
+left half-written by an interrupted run. It is the answer to "why does it say
+that file is not in any pak".
+*/
+func newPakReindexCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "reindex",
+		Short: "Discard the pak index and read every archive again",
+		Args:  noArgs(),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, err := core.RebuildIndex(cmd.Context(), core.RebuildIndexRequest{Request: request()})
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			fact(w, "index", res.Path)
+			fact(w, "indexed", fmt.Sprintf("%d pak(s), %d file(s)", res.Paks, res.Files))
+			fact(w, "bytes", res.Bytes)
+			fact(w, "took", res.Duration.Round(time.Millisecond))
+			return nil
+		},
+	}
 }

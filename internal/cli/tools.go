@@ -1,6 +1,9 @@
 package cli
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/spf13/cobra"
 
 	"github.com/ushineko/nmsbonker/internal/core"
@@ -9,7 +12,7 @@ import (
 func newToolsCmd() *cobra.Command {
 	cmd := group("tools", "Acquire and inspect MBINCompiler")
 	cmd.AddCommand(newToolsEnsureCmd(), newToolsListCmd(), newToolsCheckCmd(),
-		newToolsPinCmd(), newToolsUnpinCmd())
+		newToolsPinCmd(), newToolsUnpinCmd(), newToolsReleasesCmd(), newToolsRemoveCmd())
 	return cmd
 }
 
@@ -163,4 +166,90 @@ func newToolsCheckCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
 	return cmd
+}
+
+/*
+newToolsReleasesCmd is "what is available upstream" (spec 003 R2.5).
+
+Separate from `ensure` because deciding is a step of its own: before a game
+update, or when a pin is holding an old release back, the question is what
+exists rather than what to install. Offline-tolerant, and it says which listing
+it answered from.
+*/
+func newToolsReleasesCmd() *cobra.Command {
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "releases",
+		Short: "List the MBINCompiler releases GitHub offers, and which one would be installed",
+		Args:  noArgs(),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			res, err := core.ListReleases(cmd.Context(), core.ListReleasesRequest{Request: request()})
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return writeJSON(cmd.OutOrStdout(), res)
+			}
+			w := cmd.OutOrStdout()
+			fact(w, "release listing", res.Source)
+			if res.Warning != "" {
+				fact(w, "warning", res.Warning)
+			}
+			if res.Pin != "" {
+				fact(w, "pinned", res.Pin)
+			}
+			fact(w, "game data version", res.GameDataVersion)
+			if res.Selected != "" {
+				fact(w, "would install", res.Selected+" ("+res.Reason+")")
+			}
+			var t table
+			t.header("", "TAG", "STATE", "ASSETS")
+			for _, r := range res.Releases {
+				marker := ""
+				if r.Active {
+					marker = "*"
+				}
+				t.row(marker, r.Tag, releaseState(r), strconv.Itoa(r.Assets))
+			}
+			t.write(w)
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
+	return cmd
+}
+
+// releaseState describes one row of the release listing in one word.
+func releaseState(r core.ReleaseInfo) string {
+	switch {
+	case r.Active:
+		return "in use"
+	case r.Installed:
+		return "installed"
+	case r.Selected:
+		return "would install"
+	case r.Prerelease:
+		return "prerelease"
+	}
+	return ""
+}
+
+func newToolsRemoveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove TAG",
+		Short: "Delete an installed MBINCompiler release that is not in use",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := core.RemoveTool(cmd.Context(), core.RemoveToolRequest{
+				Request: request(), Tag: args[0],
+			})
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			fact(w, "removed", res.Dir)
+			fact(w, "freed", fmt.Sprintf("%d file(s), %d bytes", res.Files, res.Bytes))
+			return nil
+		},
+	}
 }

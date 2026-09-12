@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/mbin"
@@ -199,4 +200,153 @@ func PinTool(_ context.Context, req PinToolRequest) (PinToolResult, error) {
 	}
 	_, err = mbin.Locate(s.paths.Tools, req.Tag)
 	return PinToolResult{Pin: req.Tag, Installed: err == nil}, nil
+}
+
+// ListReleasesRequest asks what MBINCompiler releases exist upstream.
+type ListReleasesRequest struct {
+	Request
+}
+
+// ReleaseInfo is one release, as the "check for updates" listing shows it.
+type ReleaseInfo struct {
+	Tag        string `json:"tag"`
+	Prerelease bool   `json:"prerelease"`
+	Installed  bool   `json:"installed"`
+	Active     bool   `json:"active"`
+	// Selected marks the release automatic selection would install.
+	Selected bool `json:"selected"`
+	Assets   int  `json:"assets"`
+}
+
+// ListReleasesResult is the release listing and how it was chosen from (R2.5).
+type ListReleasesResult struct {
+	// Source says where the listing came from: the network, or the cache when
+	// GitHub was unreachable or answered "not modified".
+	Source string `json:"source"`
+	// Warning is a non-fatal problem, typically "GitHub was unreachable, this
+	// came from the cache". A stale answer is still an answer, but the user
+	// should be able to see that it is stale.
+	Warning         string        `json:"warning,omitempty"`
+	Pin             string        `json:"pin,omitempty"`
+	GameDataVersion string        `json:"gameDataVersion"`
+	Selected        string        `json:"selected,omitempty"`
+	Reason          string        `json:"reason,omitempty"`
+	Releases        []ReleaseInfo `json:"releases"`
+}
+
+/*
+ListReleases reports the upstream releases without installing anything (R2.5).
+
+`tools ensure` also lists them, but it installs as well, and "what is available"
+is a question worth being able to ask on its own -- before a game update, or
+when deciding whether a pin is holding an old release back. Offline-tolerant for
+the same reason `ensure` is: the cached listing with a warning beats a dialog
+saying the network is down.
+*/
+func ListReleases(ctx context.Context, req ListReleasesRequest) (ListReleasesResult, error) {
+	s, err := open(req.Request)
+	if err != nil {
+		return ListReleasesResult{}, err
+	}
+	out := ListReleasesResult{Pin: s.cfg.MBINCompiler.Pin, GameDataVersion: mbin.VersionUnknown}
+
+	gdv, err := gameDataVersion(ctx, s, req.Events)
+	if err != nil {
+		return out, err
+	}
+	if gdv.Known {
+		out.GameDataVersion = gdv.Version.Numeric()
+	}
+
+	releases, source, warning := s.releaseClient(req.Request).Releases(ctx)
+	out.Source = source
+	if warning != nil {
+		out.Warning = warning.Error()
+		req.Events.logf(LevelWarn, "%v; using the cached release listing", warning)
+	}
+	if len(releases) == 0 {
+		if warning != nil {
+			return out, fmt.Errorf("list MBINCompiler releases: %w", warning)
+		}
+		return out, mbin.ErrNoReleases
+	}
+
+	if selection, err := mbin.Select(releases, s.cfg.MBINCompiler.Pin, gdv.Version, gdv.Known); err == nil {
+		out.Selected, out.Reason = selection.Release.Tag, selection.Reason
+	}
+
+	installed := map[string]bool{}
+	for _, tag := range mbin.Installed(s.paths.Tools) {
+		installed[tag] = true
+	}
+	active, _ := mbin.Locate(s.paths.Tools, s.cfg.MBINCompiler.Pin)
+	for _, r := range releases {
+		out.Releases = append(out.Releases, ReleaseInfo{
+			Tag:        r.Tag,
+			Prerelease: r.Prerelease,
+			Installed:  installed[r.Tag],
+			Active:     active != nil && active.Tag == r.Tag,
+			Selected:   r.Tag == out.Selected,
+			Assets:     len(r.Assets),
+		})
+	}
+	return out, nil
+}
+
+// RemoveToolRequest deletes one installed MBINCompiler release.
+type RemoveToolRequest struct {
+	Request
+	Tag string
+}
+
+// RemoveToolResult says what was removed and how much disk it returned.
+type RemoveToolResult struct {
+	Tag   string `json:"tag"`
+	Dir   string `json:"dir"`
+	Files int    `json:"files"`
+	Bytes int64  `json:"bytes"`
+}
+
+/*
+RemoveTool deletes an installed release (R2.5).
+
+It refuses the release that is currently in use. Removing it would leave the
+next build reaching for a compiler that is not there, and the fix -- pin
+something else first, or install a newer one -- is a decision the user should
+make deliberately rather than discover from a failed build. Nothing else is
+touched: the cache built with that compiler stays, because it is keyed by the
+game build and is still correct.
+*/
+func RemoveTool(_ context.Context, req RemoveToolRequest) (RemoveToolResult, error) {
+	s, err := open(req.Request)
+	if err != nil {
+		return RemoveToolResult{}, err
+	}
+	out := RemoveToolResult{Tag: req.Tag}
+	if !mbin.ValidTag(req.Tag) {
+		return out, fmt.Errorf(
+			"%q does not look like an MBINCompiler release tag (expected vM.m.p, optionally -suffix)", req.Tag)
+	}
+	dir, err := mbin.Dir(s.paths.Tools, req.Tag)
+	if err != nil {
+		return out, err
+	}
+	out.Dir = dir
+	if _, err := os.Stat(dir); err != nil {
+		return out, fmt.Errorf("%s is not installed under %s", req.Tag, s.paths.Tools)
+	}
+	if active, err := mbin.Locate(s.paths.Tools, s.cfg.MBINCompiler.Pin); err == nil && active.Tag == req.Tag {
+		return out, fmt.Errorf(
+			"%s is the release builds are using; pin or install another one first "+
+				"(`nmsbonker tools pin TAG`, `nmsbonker tools ensure`)", req.Tag)
+	}
+	files, bytes, err := treeSize(dir)
+	if err != nil {
+		return out, err
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return out, fmt.Errorf("remove %s: %w", dir, err)
+	}
+	out.Files, out.Bytes = files, bytes
+	return out, nil
 }

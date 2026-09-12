@@ -117,6 +117,7 @@ func Root() *cobra.Command {
 		newBuildCmd(),
 		newDeployCmd(),
 		newReportCmd(),
+		newCacheCmd(),
 		newConfigCmd(),
 		newVersionCmd(),
 	)
