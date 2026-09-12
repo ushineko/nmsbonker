@@ -3,6 +3,7 @@ package core_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -109,7 +110,9 @@ func TestDeployArchivesTheFolderItReplaces(t *testing.T) {
 	res, err := core.Deploy(t.Context(), core.DeployRequest{Request: core.Request{GameDir: game}})
 	require.NoError(t, err)
 	require.NotEmpty(t, res.Archived)
-	require.FileExists(t, filepath.Join(res.Archived, "OLD.MBIN"))
+	// An archive entry holds the mod folder under mod/ so that the settings
+	// backup can sit beside it (spec 004 R4.1).
+	require.FileExists(t, filepath.Join(res.Archived, "mod", "OLD.MBIN"))
 	require.FileExists(t, filepath.Join(previous, "NEW.MBIN"))
 	require.NoFileExists(t, filepath.Join(previous, "OLD.MBIN"), "the new folder replaced it, it was not merged into")
 }
@@ -124,9 +127,14 @@ func TestDeployWithNoBuildRefuses(t *testing.T) {
 	require.ErrorIs(t, err, core.ErrNoBuild)
 }
 
-// R5.2: the game's own mod switch is reported, never written. Turning mods on
-// behind the user's back is not this tool's decision.
-func TestDeployReportsTheGamesDisableAllModsSwitch(t *testing.T) {
+/*
+Spec 004 R3.2: a settings file with no mod list is a warning, not a failure.
+
+By the time the settings are written the mod folder is already installed, so
+refusing here would leave the game holding a new mod and the user holding an
+error about an XML document. The game rewrites this file when it next starts.
+*/
+func TestDeploySurvivesASettingsFileItCannotAddAnEntryTo(t *testing.T) {
 	root := bare(t)
 	game := fakeGame(t, root)
 	settings := filepath.Join(game, "Binaries", "SETTINGS", "GCMODSETTINGS.MXML")
@@ -137,12 +145,8 @@ func TestDeployReportsTheGamesDisableAllModsSwitch(t *testing.T) {
 
 	res, err := core.Deploy(t.Context(), core.DeployRequest{Request: core.Request{GameDir: game}})
 	require.NoError(t, err)
-	require.True(t, res.DisableAllMods)
-	require.Contains(t, res.Warnings[0], "DisableAllMods=true")
-
-	after, err := os.ReadFile(settings)
-	require.NoError(t, err)
-	require.Contains(t, string(after), `value="True"`, "reported, not written")
+	require.False(t, res.DisableAllMods, "the switch this tool can reach was still turned off")
+	require.Contains(t, strings.Join(res.Warnings, "\n"), "has no mod list")
 }
 
 // R6.3: asking for a report before anything has been built says so.

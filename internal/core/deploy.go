@@ -7,9 +7,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"time"
 
-	"github.com/ushineko/nmsbonker/internal/config"
+	"github.com/ushineko/nmsbonker/internal/modsettings"
 	"github.com/ushineko/nmsbonker/internal/steam"
 )
 
@@ -36,9 +35,21 @@ type DeployResult struct {
 	// ReplacedSymlink records that GAMEDATA/MODS was a symlink and is now a
 	// real directory, and what the link used to point at.
 	ReplacedSymlink string `json:"replacedSymlink,omitempty"`
-	// DisableAllMods is the game's own switch, reported not written (R5.2).
-	DisableAllMods bool     `json:"disableAllMods"`
-	Warnings       []string `json:"warnings,omitempty"`
+	// DisableAllMods is the game's own switch as it stands after the deploy
+	// (spec 004 R3.2). Deploy turns it off when it was on, and warns.
+	DisableAllMods bool `json:"disableAllMods"`
+	// SettingsPath is the game's mod settings file, "" when it does not exist.
+	SettingsPath string `json:"settingsPath,omitempty"`
+	// SettingsChanged reports that the file was written.
+	SettingsChanged bool `json:"settingsChanged,omitempty"`
+	// SettingsAdded reports that this mod had no entry and one was created.
+	SettingsAdded bool `json:"settingsAdded,omitempty"`
+	// Pruned lists the archive entries retention deleted (R4.1).
+	Pruned []string `json:"pruned,omitempty"`
+	// SaveBackup is the automatic pre-deploy save backup, when one was taken
+	// (R5.2).
+	SaveBackup *BackupSavesResult `json:"saveBackup,omitempty"`
+	Warnings   []string           `json:"warnings,omitempty"`
 }
 
 // ErrNoBuild reports a deploy with nothing to install.
@@ -117,36 +128,102 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 		return out, err
 	}
 
-	if _, err := os.Lstat(dest); err == nil {
-		archive := filepath.Join(s.paths.Archive,
-			fmt.Sprintf("%s-%s", modName, time.Now().UTC().Format("20060102-150405Z")))
-		if err := config.MkdirAll(filepath.Dir(archive)); err != nil {
-			_ = os.RemoveAll(staging)
-			return out, err
+	// The saves are copied before anything in the game changes, and only after
+	// the staging copy has proved it can be done (R5.2).
+	if backup := s.autoBackupSaves(req.Events); backup != nil {
+		out.SaveBackup = backup
+		if backup.Error != "" {
+			out.Warnings = append(out.Warnings, "the save backup did not run: "+backup.Error)
 		}
-		if err := moveTree(dest, archive); err != nil {
-			_ = os.RemoveAll(staging)
-			return out, err
-		}
-		out.Archived = archive
+	}
+
+	// Archived before the rename, so a deploy that cannot install has not
+	// already moved the working mod out of the game.
+	entry, err := s.archiveDeploy(modName, dest, s.install.ModSettingsPath)
+	if err != nil {
+		_ = os.RemoveAll(staging)
+		return out, err
+	}
+	if entry.HasMod {
+		out.Archived = entry.Dir
 	}
 	if err := os.Rename(staging, dest); err != nil {
 		return out, fmt.Errorf("install %s: %w", dest, err)
 	}
 	out.Dest = dest
 
-	// The game's own mod switch is reported, never written: turning mods on
-	// behind the user's back is not this tool's decision, and spec 004 owns
-	// writing that file.
-	if settings, err := steam.ReadModSettings(s.install.ModSettingsPath); err == nil && settings != nil {
-		out.DisableAllMods = settings.DisableAllMods
-		if settings.DisableAllMods {
-			out.Warnings = append(out.Warnings,
-				"the game has DisableAllMods=true in GCMODSETTINGS.MXML; nothing will load until "+
-					"you enable mods at the title-screen warning")
-		}
+	if err := s.writeModSettings(modName, &out); err != nil {
+		return out, err
 	}
+
+	pruned, err := s.pruneArchive()
+	if err != nil {
+		return out, err
+	}
+	out.Pruned = pruned
 	return out, nil
+}
+
+/*
+writeModSettings makes the game load what was just installed (R3.2).
+
+Three facts, in the order they cost the user time. A loose-file mod with no
+entry in GCMODSETTINGS.MXML does not load, so an entry is created if there is
+none. An entry that exists but is switched off does not load either, so it is
+switched on. And the game sets DisableAllMods=true after a crash, which silently
+turns every mod off; that is turned back off, with a warning, because a user who
+has just deployed a mod did not mean to leave mods disabled -- but they should
+be told the game had disabled them, since the usual reason is a crash.
+
+If the file does not exist there is nothing to do and the result says so: the
+game writes it the first time it sees a mod folder.
+*/
+func (s *session) writeModSettings(modName string, out *DeployResult) error {
+	file, err := modsettings.Read(s.install.ModSettingsPath)
+	if errors.Is(err, modsettings.ErrNoFile) {
+		out.Warnings = append(out.Warnings,
+			"the game has not written GCMODSETTINGS.MXML yet, so there is nothing to enable in "+
+				"it; the game creates it the first time it sees a mod folder and will prompt at "+
+				"the title screen")
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	out.SettingsPath = s.install.ModSettingsPath
+
+	wasDisabled := file.DisableAllMods()
+	changed := file.SetDisableAllMods(false)
+	enabled, added, err := file.EnableMod(modName)
+	switch {
+	case errors.Is(err, modsettings.ErrNoModList):
+		// The mod folder is already installed at this point, so a settings file
+		// this package cannot find a mod list in is a warning rather than a
+		// failed deploy. The game rewrites the file when it next starts.
+		out.Warnings = append(out.Warnings,
+			"GCMODSETTINGS.MXML has no mod list to add an entry to, so "+modName+
+				" could not be enabled there; the game adds an entry the first time it sees "+
+				"the folder and prompts at the title screen")
+	case err != nil:
+		return err
+	}
+	changed = changed || enabled
+	out.SettingsAdded = added
+
+	if changed {
+		if err := file.Write(s.install.ModSettingsPath); err != nil {
+			return err
+		}
+		out.SettingsChanged = true
+	}
+	out.DisableAllMods = file.DisableAllMods()
+	if wasDisabled {
+		out.Warnings = append(out.Warnings,
+			"the game had DisableAllMods=true in GCMODSETTINGS.MXML, which turns every mod off; "+
+				"the game sets that after a crash. It has been set back to false, and the "+
+				"previous file is in the archive alongside this deploy")
+	}
+	return nil
 }
 
 // treeSize counts the files and bytes under a directory.

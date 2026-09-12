@@ -287,6 +287,9 @@ type Paths struct {
 	// It is deliberately not configurable: it is the undo button, and a user
 	// who has pointed it at a directory they later clean out has lost it.
 	Archive string
+	// SaveBackup is where the game's save folders are copied before a deploy
+	// (spec 004 R5.1). Not configurable, for the same reason as Archive.
+	SaveBackup string
 }
 
 // Paths resolves every directory to an absolute path.
@@ -304,14 +307,15 @@ func (c *Config) Paths() Paths {
 	}
 	cache := abs(c.CacheDir)
 	return Paths{
-		Archive:   filepath.Join(dataHome(), "nmsbonker", "archive"),
-		Config:    abs(c.path),
-		Library:   abs(c.LibraryDir),
-		Tools:     abs(c.ToolsDir),
-		Cache:     cache,
-		Workspace: abs(c.WorkspaceDir),
-		PakIndex:  filepath.Join(cache, "pak-index.json"),
-		Releases:  filepath.Join(cache, "mbincompiler-releases.json"),
+		Archive:    filepath.Join(dataHome(), "nmsbonker", "archive"),
+		SaveBackup: filepath.Join(dataHome(), "nmsbonker", "save-backup"),
+		Config:     abs(c.path),
+		Library:    abs(c.LibraryDir),
+		Tools:      abs(c.ToolsDir),
+		Cache:      cache,
+		Workspace:  abs(c.WorkspaceDir),
+		PakIndex:   filepath.Join(cache, "pak-index.json"),
+		Releases:   filepath.Join(cache, "mbincompiler-releases.json"),
 	}
 }
 
