@@ -29,9 +29,9 @@ const (
 	FlavorSelfContained = "self-contained"
 )
 
-// Mod is one entry in the build order. Consumed by spec 002; carried here so
+// ModEntry is one entry in the build order. Consumed by spec 002; carried here so
 // that a config written by a phase-2 build survives a phase-1 binary's Save.
-type Mod struct {
+type ModEntry struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
 }
@@ -57,7 +57,7 @@ type Config struct {
 	WorkspaceDir string       `json:"workspace_dir"`
 	ModName      string       `json:"mod_name"`
 	MBINCompiler MBINCompiler `json:"mbincompiler"`
-	Mods         []Mod        `json:"mods"`
+	Mods         []ModEntry   `json:"mods"`
 	Parallel     int          `json:"parallel"`
 
 	// path is the file this was loaded from and will be saved to.
@@ -85,7 +85,7 @@ func Defaults() *Config {
 		WorkspaceDir: filepath.Join(data, "nmsbonker", "build"),
 		ModName:      DefaultModName,
 		MBINCompiler: MBINCompiler{Flavor: FlavorAuto},
-		Mods:         []Mod{},
+		Mods:         []ModEntry{},
 		path:         FilePath(),
 	}
 }
@@ -174,7 +174,7 @@ func (c *Config) fillDefaults() {
 		}
 	}
 	if c.Mods == nil {
-		c.Mods = []Mod{}
+		c.Mods = []ModEntry{}
 	}
 }
 
@@ -203,7 +203,7 @@ func (c *Config) Save() error {
 		WorkspaceDir string       `json:"workspace_dir"`
 		ModName      string       `json:"mod_name"`
 		MBINCompiler MBINCompiler `json:"mbincompiler"`
-		Mods         []Mod        `json:"mods"`
+		Mods         []ModEntry   `json:"mods"`
 		Parallel     int          `json:"parallel"`
 	}{c.GameDir, c.LibraryDir, c.ToolsDir, c.CacheDir, c.WorkspaceDir,
 		c.ModName, c.MBINCompiler, c.Mods, c.Parallel})
