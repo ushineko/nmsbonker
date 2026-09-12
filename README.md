@@ -1,5 +1,12 @@
 # nmsbonker
 
+**For No Man's Sky on Linux (Steam + Proton).** The community mod builder,
+AMUMSS, is Windows batch tooling and does not run on Linux, under Wine or
+otherwise; the usual advice is to keep a Windows VM around just to rebuild
+mods after each game update. nmsbonker exists so you do not have to: it does
+the same job natively against the Steam/Proton install on the machine you
+play on.
+
 Rebuilds AMUMSS-format `.lua` mod scripts against the No Man's Sky files you
 actually have installed, merges every enabled mod into one collision-free mod
 folder, and deploys it. Native Go: no Wine, no Windows VM, no Python, no

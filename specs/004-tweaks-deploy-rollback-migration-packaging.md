@@ -200,7 +200,10 @@ and are Steam-Cloud synced.
   --section X --scheme "Breeze Dark"`, captures each section into
   `assets/<section>.png`, checks focus and aspect ratio. Screenshots of
   Overview, Mods, Tweaks, Build (mid-run), Report are committed to `assets/`.
-- R7.4 README completed in angou's style: what it is, how the game loads mods
+- R7.4 README completed in angou's style. **The opening paragraph must state
+  the use case: No Man's Sky installed through Steam and run under Proton on
+  Linux, where the community builder AMUMSS cannot run (Windows batch tooling,
+  fails under Wine; the community answer is a Windows VM).** Then: what it is, how the game loads mods
   (loose files, one merged folder, why), prerequisites, install, first run
   (detect → install compiler → import scripts or enable tweaks → build →
   deploy), CLI reference, where files live (a table of XDG paths), limitations
