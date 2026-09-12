@@ -1,6 +1,6 @@
 # Spec 004 — Tweaks (parameterised built-in mods), mod settings, deploy/rollback, save backup, packaging
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 ## Context
 
@@ -215,30 +215,30 @@ and are Steam-Cloud synced.
 
 ## Acceptance Criteria
 
-- [ ] AC1 Built-ins at default values reproduce the reference dump JSON (R1.5) and
+- [x] AC1 Built-ins at default values reproduce the reference dump JSON (R1.5) and
   the spec 002 golden suite still passes.
-- [ ] AC2 Setting `MATERIAL_MULTIPLIER` to 20 via the Tweaks slider (and via
+- [x] AC2 Setting `MATERIAL_MULTIPLIER` to 20 via the Tweaks slider (and via
   `tweaks set`) changes the merged MXML for the affected entity files by exactly
   the expected factor and the on-disk embedded script is unchanged.
-- [ ] AC3 On a fake game dir whose `GAMEDATA/MODS` is a symlink, the Overview
+- [x] AC3 On a fake game dir whose `GAMEDATA/MODS` is a symlink, the Overview
   `Replace symlink and deploy…` action (and `deploy --replace-symlink`) leaves
   `GAMEDATA/MODS/<MOD_NAME>` as a real directory with the built files, the
   settings entry enabled, and the symlink's former target untouched; the
   message text contains no reference to any previous setup.
-- [ ] AC4 `deploy` twice in a row archives the first deployment; `rollback`
+- [x] AC4 `deploy` twice in a row archives the first deployment; `rollback`
   restores it; `archive list` shows both; retention prunes to 5 in a test on
   fakes.
-- [ ] AC5 `DisableAllMods=true` in a fake settings file is flipped to false by
+- [x] AC5 `DisableAllMods=true` in a fake settings file is flipped to false by
   deploy with a warning; `mods-off` sets it true; both preserve the BOM, tabs
   and unknown properties byte-for-byte outside the changed values.
-- [ ] AC6 `saves backup` creates a timestamped copy of the `st_*` folders and
+- [x] AC6 `saves backup` creates a timestamped copy of the `st_*` folders and
   never writes into the prefix.
-- [ ] AC7 `install.sh` places both binaries, the desktop file and the icon; the
+- [x] AC7 `install.sh` places both binaries, the desktop file and the icon; the
   app appears in the KDE launcher with its icon on Wayland; `uninstall.sh`
   removes exactly those files.
-- [ ] AC8 README, architecture doc, screenshots and the validation report
+- [x] AC8 README, architecture doc, screenshots and the validation report
   exist; `make lint`, `make test`, parity and golden suites pass.
-- [ ] AC9 The parity oracle is called the *reference* implementation
+- [x] AC9 The parity oracle is called the *reference* implementation
   everywhere: a case-insensitive grep over the repository (excluding `.git`) for
   the superseded term this project used for it returns nothing, and no committed
   file contains a personal absolute path.
@@ -262,3 +262,141 @@ and are Steam-Cloud synced.
   simple and visible in `check --json`.
 - Writing built-ins as Go-native ops instead of Lua: rejected — keeping them as
   AMUMSS scripts keeps them portable to AMUMSS users and keeps one engine.
+
+## Status notes
+
+Verified 2026-09-11 against Steam buildid `25233815` (97 paks, 194,531 internal
+paths), MBINCompiler **v7.02.0-pre1** (`dotnet10`, .NET runtime present), Fyne
+**v2.8.1**, Go 1.27.1, golangci-lint v2.12.2, on KDE/Wayland. The full evidence
+is in [`validation-reports/2026-09-11-v0.1.0.md`](../validation-reports/2026-09-11-v0.1.0.md);
+what follows is what the spec text got wrong and what was decided instead.
+
+**Nothing was deployed to the real install.** Deploy, rollback, undeploy,
+`mods-off` and `mods-on` were exercised against temporary fake game directories,
+in tests and by hand on the command line. The one operation run against the real
+game is `saves backup`, which reads the Proton prefix and writes into a scratch
+data directory; the prefix held 45 files before it and 45 after.
+
+### The built-in set is ten scripts, not eleven
+
+The table in the Context section lists ten rows and calls them eleven. Ten is
+right: `StackingTechnologyModules`, which is in the reference library alongside
+them, is a third-party script and is not this project's to embed. It stays where
+every other third-party script stays — the user's library — and the count is
+asserted by `TestEveryEmbeddedScriptIsListedAndEveryListedScriptIsEmbedded`.
+
+### The parameter names, read out of the scripts
+
+| Script | Group | Parameters (declared range) |
+| --- | --- | --- |
+| MaterialYield10x | Mining | `MATERIAL_MULTIPLIER` 1–100, default 10 |
+| ChestAndLootMaterials10x | Loot | `LOOT_MULTIPLIER` 1–100, default 10 |
+| MoneyAndNanites5x | Currency | `CUR_MULT` 1–100, default 5 |
+| BigStacks | Inventory | `SUBSTANCE` 1–9999999 default 999999; `PRODUCT` 1–9999999 default 99999 |
+| ScanValue50x | Exploration | `SCAN_MULTIPLIER` 1–200 default 50; `SHIP_FLAT` 0–1000000 default 25000 |
+| SpaceMiningBoost | Mining | `AST_MULT` 1–100 default 20; `VOXEL_CHANCE` 0–1 step 0.05 default 1.0, `kind=float` |
+| ItemValueBoost | Economy | `VALUE_MULT` 1–50 default 3, `kind=float` |
+| LearnMoreWords | Language | `WORD_MULT` 1–50, default 5 |
+| NaniteRewardBuff | Currency | `NANITE_MULT` 1–100, default 10 |
+| MissionStandingBuff | Standing | `STANDING_MULT` 1–50, default 5 |
+
+The spec guessed `SCAN_MULT`, `WORDS_MULT` and "substance/product caps"; the real
+names are above. `kind=float` is on exactly the two parameters where a fraction
+is meaningful, and the distinction is not cosmetic: a value written into a
+`VALUE_CHANGE_TABLE` with no `MATH_OPERATION` goes into the MXML verbatim, so
+`VOXEL_CHANCE` must stay `1.0` and `SUBSTANCE` must stay `999999`. Where there
+*is* a `MATH_OPERATION`, the engine takes the old value's kind and the script's
+kind does not matter, which is why `VALUE_MULT` can be a float safely.
+
+### R1.5 compares MODIFICATIONS, not the whole container
+
+One field was changed on purpose: `MOD_AUTHOR`, which named whoever assembled
+the reference copies and now says `nmsbonker`, since these are the project's own
+scripts. It is metadata — the build report is the only thing that reads it — so
+`TestBuiltInsDecodeAsTheReferenceCopiesDo` compares the `MODIFICATIONS` subtree
+in full and asserts `MOD_AUTHOR == "nmsbonker"` separately. Everything the edit
+engine acts on is under `MODIFICATIONS`. No other line of any script differs;
+the header block is `--` comments prepended to the file.
+
+### Deviations from the spec text, and why
+
+- **An archive entry is a directory, not the mod folder.** R4.1 asks one entry
+  to hold both the replaced folder and the settings backup, so the layout is
+  `archive/<MOD_NAME>-<UTC>/{mod/, GCMODSETTINGS.MXML, archive.json}` rather
+  than spec 002's "the folder, renamed". `readArchiveEntry` still reads a
+  spec-002-shaped directory rather than hiding it: it may be the only copy
+  somebody has of what a deploy displaced.
+- **An entry is written on every deploy, including the first.** The settings
+  file is edited on every deploy, and "undo" has to include undoing that. An
+  entry with no `mod/` records "nothing was installed at this point"; rolling
+  back to it removes what is installed now, and both the CLI and the dialog say
+  so. It is also why `archive list` shows two entries after two deploys rather
+  than one.
+- **The build report gained a `params` field.** It records the overrides the
+  build was produced with, which is what makes R2.1's "unbuilt changes" a fact a
+  front end can read back across restarts and across front ends rather than a
+  flag the window has to remember. It also answers "what was this built with"
+  three weeks later, so it is in the Markdown header too.
+- **A settings file with no mod list is a warning, not a failure.** By the time
+  the settings are written the mod folder is already installed; refusing there
+  would leave the user with a new mod in the game and an error about an XML
+  document. The game rewrites the file when it next starts.
+- **Out-of-range parameter values are clamped, not refused.** A slider cannot
+  produce one; typing can, and so can a hand-edited settings file. The nearest
+  legal value with a banner saying so beats an error, and the CLI says the same
+  thing. A library script has no declared bounds and is not clamped.
+- **`tweaks set` and `tweaks reset` take any mod, not only a built-in.** R2.2
+  asks the Mods detail dialog to offer the same controls for a library script's
+  detected parameters; one operation serving both is what keeps them behaving
+  the same way, and it is why the CLI can tune a library script too.
+- **A built-in cannot be removed, and `mods remove` on one deletes its shadow.**
+  R1.4's "shadowed by built-in" row needs a Remove that means something:
+  `RemoveMod` on a built-in name deletes the library script of that name and
+  leaves the built-in in the build order, and refuses with `ErrBuiltInMod` when
+  there is no shadow to delete.
+- **`save_backup` is a `config set` key.** R5.2 names the setting but not how to
+  change it; `nmsbonker config set save_backup false` is the answer, which keeps
+  it reachable from the window's Settings form for free.
+- **The Mods table gained a Source column** (`builtin` / `library`, and
+  `built-in *` for a shadowed one), and a `Details…` row action, which is where
+  R2.2's parameter block lives.
+- **`Reset all to defaults` on the Tweaks section** is not in R2.1. It exists
+  because R2.1's per-parameter Reset makes undoing an afternoon of fiddling ten
+  clicks; it is behind a confirmation naming the count.
+- **The desktop entry declares one main category.** `Categories=Game;Utility;`
+  makes `desktop-file-validate` warn that the entry can appear twice in a menu.
+  `Utility` alone, with `Keywords` carrying "No Man's Sky", "NMS", "AMUMSS" and
+  "Proton", is what a launcher search actually matches on.
+
+### From the phase-3 review, folded in here
+
+- **The Overview's "Game data version" row is gone.** Spec 002 R3.4 retired the
+  concept: the game's own MBINs carry no libMBIN version, so the row was
+  reporting a parse of a filename as though it were a fact about the install.
+  `core.Status` still carries the field and the CLI still prints it, because
+  `tools releases` uses the same parse to decide which release to install and
+  removing it there is a spec-001 question rather than a spec-004 one.
+- **The Compatibility row is the round-trip check.** `core.ToolCheck` runs in the
+  background on the first Overview load, once per process, behind the busy strip;
+  the row reads "checking…" until it lands, and pressing `tools check` in the
+  Tools section fills the same field so there is one verdict rather than two.
+- **`Replace symlink and deploy…`** is an action on the install card, with the
+  three facts of R6.1 in its confirmation and no reference to anything that might
+  have created the link.
+
+### Not done
+
+- **No mid-run Build screenshot** (R7.3 asks for one). The window is a native
+  Wayland client, `kdotool` can raise a window but cannot inject a click into
+  one, and `nmsbonker-gui` has no flag that starts a build — adding one would be
+  an operation with no CLI counterpart, which the parity rule forbids. Overview,
+  Mods, Tweaks and Report were captured instead, the last against a finished
+  build. The capture harness builds a Steam-shaped fake install under
+  `/tmp/nmsbonker-demo` whose `PCBANKS` is a symlink to the real archives, so the
+  images show real numbers and no path belonging to anybody.
+- **Two readers for `GCMODSETTINGS.MXML`.** `steam.ReadModSettings` (spec 001,
+  read-only, used by `status`) and `internal/modsettings` (this phase, read and
+  write) both parse it. They agree; one of them should go, and doing it in the
+  milestone commit was not worth the churn.
+- **No version bump and no tag.** `VERSION` stays `0.1.0`, which is what the
+  validation report describes.
