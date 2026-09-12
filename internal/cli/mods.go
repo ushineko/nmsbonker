@@ -111,13 +111,13 @@ func newModsRemoveCmd() *cobra.Command {
 }
 
 func newModsEnableCmd(enable bool) *cobra.Command {
-	verb, past := "enable", "enabled"
+	verb, past, short := "enable", "enabled", "Include mods in the next build"
 	if !enable {
-		verb, past = "disable", "disabled"
+		verb, past, short = "disable", "disabled", "Leave mods out of the next build"
 	}
 	return &cobra.Command{
 		Use:   verb + " NAME...",
-		Short: "Include mods in the next build",
+		Short: short,
 		Args:  minArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			res, err := core.SetModEnabled(cmd.Context(), core.SetModEnabledRequest{
