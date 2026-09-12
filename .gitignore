@@ -1,0 +1,20 @@
+# Build artifacts
+/nmsbonker
+/nmsbonker-gui
+/dist/
+*.exe
+
+# Coverage
+coverage.out
+count.out
+
+# Game-derived data must never enter the repository (Hello Games assets).
+# Caches, extracted MBIN/MXML, golden fixtures and third-party mod scripts
+# live under XDG dirs or in a local, ignored tree.
+*.MBIN
+*.MXML
+*.mbin
+*.mxml
+*.pak
+/golden/
+/library/
