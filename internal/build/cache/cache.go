@@ -87,6 +87,27 @@ type Result struct {
 // MXMLPath resolves an entry's MXML to an absolute path.
 func (c *Cache) MXMLPath(e Entry) string { return filepath.Join(c.dir, filepath.FromSlash(e.MXML)) }
 
+// Path is MXMLPath for a caller that has a directory rather than an open cache.
+func Path(dir string, e Entry) string { return filepath.Join(dir, filepath.FromSlash(e.MXML)) }
+
+/*
+Read opens a cache directory read-only and returns what its manifest holds
+(spec 005 R1.5).
+
+`nmsbonker audit` re-checks a merge that already happened, so it needs the
+pristine files that merge started from and must not be able to produce one:
+extracting and decompiling needs the game and the compiler, and a command whose
+whole point is "answer in a second without rebuilding" cannot wait for either. A
+manifest that is missing or from another version reads as an empty cache, which
+the caller reports as "nothing to compare against" rather than treating as a
+failure.
+*/
+func Read(dir string) map[string]Entry {
+	c := &Cache{dir: dir, entries: map[string]Entry{}}
+	c.load()
+	return c.entries
+}
+
 /*
 Cache is the decompiled-file store for one game build.
 

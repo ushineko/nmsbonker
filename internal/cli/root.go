@@ -116,6 +116,7 @@ func Root() *cobra.Command {
 		newModsCmd(),
 		newTweaksCmd(),
 		newBuildCmd(),
+		newAuditCmd(),
 		newDeployCmd(),
 		newUndeployCmd(),
 		newRollbackCmd(),
