@@ -87,11 +87,25 @@ entries, it is retried with only the value edits and ships "degraded", with the
 report naming what was left out. If that fails too, the file is dropped and
 every contributing mod is told.
 
+**Audits the reward amounts it produced.** Counting edits is not enough: reward
+amounts *compound*. Two mods that each multiply the same `AmountMax` by a
+reasonable number produce an unreasonable one, and every edit is individually
+correct, so a report that counts edits calls it a clean build. It happened here
+— salvaged data at 2,500,000 a stack from a ×250 library script and a ×10
+built-in in the same build order — so the build now parses the merged reward
+tables, compares every amount against configurable limits, and names the mods
+that moved each flagged one, in build order, with the value after each of them.
+`nmsbonker audit` re-runs the check against different limits in about a second,
+without rebuilding.
+
 **Comes with ten mods of its own,** each with declared parameters: material
 yield, chest and loot amounts, units and nanites, nanites again on top, mission
 standing, inventory stack limits, scan payouts, asteroid yield, item value, and
 words learned per interaction. They are ordinary AMUMSS scripts, MIT-licensed
-with the rest of this repository, and every number in them is a slider.
+with the rest of this repository, and every number in them is a slider. Eight of
+them also carry a **cap**: a ceiling on the amount the tweak produces, applied
+after the arithmetic and after whatever ran before it, so a compounding script
+in your library cannot push a reward past a value the game can hold.
 
 ![The Tweaks section. A Mining card holding two tweaks: "Material yield" with
 its checkbox ticked and "#1" beside it, described as multiplying the substance
@@ -275,6 +289,7 @@ nmsbonker build                      # merge, recompile, write the report
 nmsbonker build --recache            # re-extract the game files first
 nmsbonker build --deploy             # and install it when it succeeds
 nmsbonker report                     # the last build's verdicts
+nmsbonker audit                      # re-check the last build's reward amounts
 
 nmsbonker deploy                     # install the last build
 nmsbonker undeploy                   # take it back out, keeping a copy
@@ -294,8 +309,8 @@ nmsbonker config set save_backup false
 
 Global flags: `--config PATH`, `--game-dir PATH`, `-v/--verbose`,
 `--no-network`. `status`, `detect`, `pak find`, `tools check`, `mods list`,
-`mods check`, `tweaks list`, `archive list`, `saves list` and `report` also take
-`--json`.
+`mods check`, `tweaks list`, `archive list`, `saves list`, `report` and `audit`
+also take `--json`.
 
 `build` exits 1 if any game file had to be dropped, and 0 otherwise — a mod that
 applied nothing is a warning in the report, not a build failure.
@@ -313,6 +328,68 @@ constants, unbounded, since nothing declares a range for those.
 `cache clear` deletes only derived data — the game files a build has already
 extracted and decompiled. Your mod library, the build output and the game itself
 are not touched.
+
+### The amount audit, and the caps
+
+Every build parses `REWARDTABLE` and `EXPEDITIONREWARDTABLE` — both the game's
+own copy and the merged one — and compares each reward's `AmountMin` and
+`AmountMax`. An amount is flagged when it is over the limit for its kind, when
+it is more than `audit.max_ratio` times the game's own value, or when it has hit
+the int32 ceiling of 2,147,483,647, which is never a number a script asked for.
+
+The point is the last column. A flagged amount is attributed by re-running the
+merge one edit block at a time and watching that reward, so the report names
+every mod that moved it and what it became after each:
+
+```
+| Table       | Entry      | Item       | Stock | Built           | x       | Contributors                                   |
+| REWARDTABLE | BP_SALVAGE | BP_SALVAGE | 2-4   | 1250000-2500000 | x625000 | BetterRewards x250 -> 1000, BetterRewards      |
+|             |            |            |       |                 |         | x250 -> 250000, ChestAndLootMaterials10x       |
+|             |            |            |       |                 |         | x10 -> 2500000                                 |
+```
+
+Every one of those edits applied correctly. The amount is wrong because they
+compound, which is exactly what a per-mod verdict table cannot show you.
+
+Two ways out, and they combine. Disable or re-tune the script named most often
+in Contributors — it is doing most of the multiplying. Or set a **cap** on the
+built-in that finishes the job: a cap is applied after the arithmetic, so it
+bounds the result whatever ran before it.
+
+```
+nmsbonker tweaks set ChestAndLootMaterials10x LOOT_CAP 50000
+nmsbonker tweaks set MoneyAndNanites5x UNITS_CAP 50000000
+```
+
+| Tweak | Cap | Default |
+| --- | --- | --- |
+| ChestAndLootMaterials10x | `LOOT_CAP` | 50,000 |
+| MaterialYield10x | `YIELD_CAP` | 50,000 |
+| MoneyAndNanites5x | `UNITS_CAP`, `NANITES_CAP` | 50,000,000 / 250,000 |
+| NaniteRewardBuff | `NANITES_CAP` | 250,000 |
+| SpaceMiningBoost | `AST_CAP` | 5,000 |
+| ScanValue50x | `SCAN_CAP` | 5,000,000 |
+| MissionStandingBuff | `STANDING_CAP` | 500 |
+| LearnMoreWords | `WORDS_CAP` | 25 |
+| BigStacks | `ANTIMATTER_HARVESTER_CAP` | 20 |
+
+Setting a cap to `0` removes the ceiling. `ANTIMATTER_HARVESTER_CAP` is the odd
+one: it is not a ceiling on a multiplier but an absolute figure for how much
+antimatter one harvester may hoard, because the game's own value means "a full
+stack" and `BigStacks` raises what a full stack is to 99,999. Zero leaves the
+game's own value alone.
+
+The limits themselves are settings, and the audit re-runs over the merge a build
+already left in the workspace, so trying a different one costs a second rather
+than a build:
+
+```
+nmsbonker config set audit.max_ratio 5
+nmsbonker audit
+```
+
+A flagged amount never fails a build. It is a warning about a value, the mod
+folder is installable either way, and `audit` exits 0 whatever it finds.
 
 ![The Report section. A table of the last build's verdicts: ChestAndLootMaterials10x,
 ExampleAsteroidYield, ExampleRicherChests, ItemValueBoost, LearnMoreWords,
@@ -366,6 +443,15 @@ a newer build are preserved when an older one saves.
 | `params` | `{}` | Tweak parameters you have changed: `{"<mod>": {"<GLOBAL>": <number>}}`, managed by `nmsbonker tweaks` |
 | `save_backup` | `true` | Copy the game's saves before the first deploy of each run |
 | `parallel` | `0` | Concurrent MBINCompiler processes; 0 means half the CPUs |
+| `audit.max_product` | `99999` | A product reward above this is flagged |
+| `audit.max_substance` | `999999` | A substance reward above this is flagged |
+| `audit.max_units` | `100000000` | A Units reward above this is flagged |
+| `audit.max_nanites` | `1000000` | A Nanites reward above this is flagged |
+| `audit.max_specials` | `100000` | A quicksilver reward above this is flagged |
+| `audit.max_ratio` | `100` | A reward more than this many times the game's own value is flagged |
+
+Setting one of the `audit.*` keys to `0` restores its default rather than
+turning the limit off: a limit of zero would flag every reward in the game.
 
 ## Limitations
 
@@ -472,6 +558,7 @@ are never committed.
 | `internal/modsettings` | The game's `GCMODSETTINGS.MXML`, read and written line by line |
 | `internal/mxml` | The line-based MXML edit engine |
 | `internal/build` | The target plan, the merge and recompile gate, the report |
+| `internal/build/audit` | The reward-amount audit: reward blocks parsed, limits applied, contributors attributed |
 | `internal/tweaks` | The ten built-in mod scripts, embedded |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
@@ -488,7 +575,9 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/002`](specs/002-mod-pipeline-engine-build-report.md) for the mod
 > pipeline; [`specs/003`](specs/003-fyne-gui.md) for the window;
 > [`specs/004`](specs/004-tweaks-deploy-rollback-packaging.md) for the tweaks,
-> the deploy story and the packaging.
+> the deploy story and the packaging;
+> [`specs/005`](specs/005-amount-audit-and-caps.md) for the reward-amount audit
+> and the caps on the multiplier tweaks.
 
 ## Changelog
 

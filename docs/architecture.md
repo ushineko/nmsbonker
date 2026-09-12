@@ -58,6 +58,7 @@ Two consequences that are easy to lose:
 | `internal/modscript` | The sandboxed Lua loader, the decoded change-table model, and the `@param` parser |
 | `internal/mxml` | The line-based MXML edit engine: the thing that actually changes values |
 | `internal/build` | The target plan, the per-file merge, the recompile gate, and the report |
+| `internal/build/audit` | The reward-amount audit: reward blocks parsed out of an MXML, judged against limits, and attributed to the mods that moved them |
 | `internal/build/cache` | The pristine cache: game files extracted and decompiled once per game buildid |
 | `internal/build/report` | The result model and its two renderings, `BUILD_REPORT.md` and `report.json` |
 | `internal/modsettings` | The game's `GCMODSETTINGS.MXML`, read and written line by line |
@@ -98,6 +99,10 @@ Two consequences that are easy to lose:
                        │
                        ├─ mxml.Apply     every mod's blocks, in build order,
                        │                 into one merged document
+                       ├─ audit          REWARDTABLE / EXPEDITIONREWARDTABLE only:
+                       │                 pristine vs merged reward amounts, and one
+                       │                 more merge with a look after each edit block
+                       │                 to name who moved each flagged one
                        ├─ recompile      MBINCompiler MXML → MBIN
                        │   ├─ clean      → ship
                        │   ├─ failed     → retry without the ADD/REMOVE blocks
@@ -129,6 +134,13 @@ Three properties of that path are load-bearing and easy to break:
 - **Nothing ships that the compiler rejected.** The recompile gate is the last
   word, and a file that fails twice is dropped and reported rather than shipped
   broken.
+- **The audit looks at values, not at edits.** Every edit in a build can apply
+  correctly and the result still be wrong, because reward amounts compound; the
+  audit is the only part of the pipeline that reads what the merged document
+  came out at rather than what each mod asked for. It reports and never edits:
+  the ceiling that stops the compounding is the engine's `CAP` block key, which
+  a script has to opt into, and `nmsbonker audit` re-runs the same comparison
+  over the kept merge so a limit can be re-tried without a build.
 
 ---
 
@@ -161,7 +173,17 @@ A fourth check lives in `internal/tweaks/golden_test.go`: the ten built-in
 scripts, which were copied out of the reference pipeline and given `@tweak` and
 `@param` header comments, must still decode to exactly the same `MODIFICATIONS`
 as their reference copies. `MOD_AUTHOR` is compared separately because it was
-changed deliberately.
+changed deliberately, and two later differences are removed before the
+comparison rather than being allowed to weaken it: every `CAP` key is stripped
+from both sides, since the reference dump predates the key, and BigStacks's
+antimatter-harvester edit is switched off by setting its parameter to 0 (which
+also exercises that branch). Both are spec 005 R2.4.
+
+The caps themselves are covered where a golden failure could not localise them:
+`internal/mxml/cap_test.go` asserts that a block *without* `CAP` produces
+byte-identical output and a byte-identical report line, on a synthetic snippet,
+so "the golden suite still passes" has a companion that says which behaviour
+would have changed.
 
 **The fixtures are game-derived and are never committed.** They are generated
 locally, and the suite skips when it cannot find them.
