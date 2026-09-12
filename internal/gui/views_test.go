@@ -12,6 +12,7 @@ import (
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
+	"github.com/ushineko/nmsbonker/internal/steam"
 )
 
 // --- the mod table ---------------------------------------------------------
@@ -230,6 +231,75 @@ func TestASymlinkedModsDirectoryIsAWarning(t *testing.T) {
 	require.Equal(t, StatusGood, modsStateStatus("dir"))
 	require.Equal(t, StatusWarn, modsStateStatus("symlink"))
 	require.Equal(t, StatusInfo, modsStateStatus("absent"))
+}
+
+// --- the way in to GAMEDATA/MODS --------------------------------------------
+
+/*
+The way in to the mod directory must be dead when there is no directory.
+
+`absent` is the ordinary state of a game that has never had a mod installed. A
+live button there hands a path that does not exist to the desktop, and what
+comes back is a file manager's own "no such directory" with nothing to connect
+it to the row it came from. It also has to switch itself back on once a deploy
+has made the directory, which is why both states are asserted rather than only
+the dead one.
+*/
+func TestTheOverviewOnlyOffersToOpenTheModsFolderWhenThereIsOne(t *testing.T) {
+	u := testUI(t)
+	u.statusOK = true
+	u.status.Install = core.InstallSummary{
+		Found:     true,
+		Dir:       "/games/No Man's Sky",
+		ModsDir:   "/games/No Man's Sky/GAMEDATA/MODS",
+		ModsState: steam.ModsAbsent,
+	}
+
+	require.True(t, buttonNamed(t, u.installCard(), "Open").Disabled(),
+		"an absent GAMEDATA/MODS is nothing to open")
+	require.True(t, buttonNamed(t, u.gameActions(), "Open mods folder").Disabled())
+
+	u.status.Install.ModsState = steam.ModsDir
+	require.False(t, buttonNamed(t, u.installCard(), "Open").Disabled())
+	require.False(t, buttonNamed(t, u.gameActions(), "Open mods folder").Disabled())
+
+	// A symlinked MODS is still what the game reads its mods through, so the
+	// way in stays open; the row beside it is what says it is a link.
+	u.status.Install.ModsState = steam.ModsSymlink
+	u.status.Install.ModsTarget = "/elsewhere/mods"
+	require.False(t, buttonNamed(t, u.installCard(), "Open").Disabled())
+	require.False(t, buttonNamed(t, u.gameActions(), "Open mods folder").Disabled())
+}
+
+/*
+Report reaches the game's mod directory as well as the build's.
+
+Report is where somebody stands when a mod did not load: the table says what the
+build made of it, and the only way to tell whether that reached the game is to
+look in GAMEDATA/MODS. The two folders are a deploy apart and the strip has to
+offer both, so this pins the new button beside the existing one rather than in
+place of it — and pins that it is disabled, not missing, when there is no
+directory, because a strip that grows a button after the first deploy moves
+every button beside it.
+*/
+func TestTheReportReachesTheGamesModsFolderAndDisablesItWhenAbsent(t *testing.T) {
+	u := testUI(t)
+	u.lastReport = core.ReportResult{Report: &report.Result{
+		OutputDir: "/workspace/COSMOS COMBINE",
+	}}
+	u.status.Install = core.InstallSummary{
+		Found:     true,
+		ModsDir:   "/games/No Man's Sky/GAMEDATA/MODS",
+		ModsState: steam.ModsAbsent,
+	}
+
+	actions := u.reportActions()
+	require.False(t, buttonNamed(t, actions, "Open output folder").Disabled(),
+		"the build's own output is there whatever the game looks like")
+	require.True(t, buttonNamed(t, actions, "Open game mods folder").Disabled())
+
+	u.status.Install.ModsState = steam.ModsDir
+	require.False(t, buttonNamed(t, u.reportActions(), "Open game mods folder").Disabled())
 }
 
 // A build that dropped a target is a bad outcome, not a mixed one: a dropped

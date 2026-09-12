@@ -65,12 +65,23 @@ func (u *ui) installCard() fyne.CanvasObject {
 		// spells it the same way.
 		mods += " -> " + in.ModsTarget
 	}
+	// The row that reports the deploy target carries the way in to it. Low
+	// importance because it is a convenience beside a fact, not one of the
+	// operations the strip at the bottom of the section is for.
+	openMods := widget.NewButtonWithIcon("Open", theme.FolderOpenIcon(),
+		func() { u.openModsDir() })
+	openMods.Importance = widget.LowImportance
+	u.gate(openMods)
+	if !modsDirOpenable(in) {
+		openMods.Disable()
+	}
+
 	rows := []fyne.CanvasObject{
 		plainRow("Directory", in.Dir),
 		plainRow("Found by", in.Source),
 		factRow("Steam buildid", orNone(in.BuildID, "no appmanifest"), buildIDStatus(in.BuildID)),
 		plainRow("Archives", fmt.Sprintf("%d .pak in %s", in.PakCount, in.PCBanksDir)),
-		factRow("GAMEDATA/MODS", mods, modsStateStatus(in.ModsState)),
+		rowWithAction(factRow("GAMEDATA/MODS", mods, modsStateStatus(in.ModsState)), openMods),
 	}
 	if in.ModsState == steam.ModsSymlink {
 		// R6.2: the fact, the consequence, and the action, in that order. The

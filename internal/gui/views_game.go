@@ -133,6 +133,35 @@ func (u *ui) showSaveBackups() {
 	u.showDetail("Save backups", body, 820, 560)
 }
 
+// --- the game's mod directory -----------------------------------------------
+
+/*
+openModsDir hands GAMEDATA/MODS to the desktop.
+
+The one place a deploy writes into, and the one directory a user goes looking
+for by hand when the game does not load a mod — which is why it is reachable
+from Overview, from the game strip and from Report rather than only from the
+row that reports its state.
+
+A symlinked MODS is opened through the link, deliberately: the link is what the
+game reads, so it is also what a person checking the game's mods wants to see.
+The row above the button still says it is a symlink and where it points.
+*/
+func (u *ui) openModsDir() {
+	u.openPath(u.status.Install.ModsDir)
+}
+
+// modsDirOpenable says whether there is a directory there to open. Absent is
+// the ordinary state of a game that has never had a mod installed, and asking
+// the desktop to open a path that does not exist gets a file manager's own
+// error rather than this window's.
+func modsDirOpenable(in core.InstallSummary) bool {
+	if !in.Found || in.ModsDir == "" {
+		return false
+	}
+	return in.ModsState == steam.ModsDir || in.ModsState == steam.ModsSymlink
+}
+
 // --- the game's own mod switch (R3.3) ---------------------------------------
 
 /*
@@ -396,15 +425,20 @@ func (u *ui) gameActions() fyne.CanvasObject {
 
 	saves := widget.NewButtonWithIcon("Back up saves", theme.ContentCopyIcon(),
 		func() { u.showSaveBackups() })
+	openMods := widget.NewButtonWithIcon("Open mods folder", theme.FolderIcon(),
+		func() { u.openModsDir() })
 	remove := widget.NewButtonWithIcon("Remove deployed mod…", theme.DeleteIcon(),
 		func() { u.confirmUndeploy() })
 	remove.Importance = widget.DangerImportance
 
-	u.gate(switchMods, saves, remove)
+	u.gate(switchMods, saves, openMods, remove)
 	if !in.Found {
 		switchMods.Disable()
 		saves.Disable()
 		remove.Disable()
+	}
+	if !modsDirOpenable(in) {
+		openMods.Disable()
 	}
 	if !in.ModSettingsOK {
 		switchMods.Disable()
@@ -415,5 +449,5 @@ func (u *ui) gameActions() fyne.CanvasObject {
 		// keeps its shape once the state is fixed.
 		remove.Disable()
 	}
-	return container.NewHBox(switchMods, saves, remove)
+	return container.NewHBox(switchMods, saves, openMods, remove)
 }

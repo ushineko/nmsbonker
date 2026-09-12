@@ -78,8 +78,10 @@ to not spraying stderr from the GUI.
 ### R2 — Sections (navigation order)
 
 1. **Overview** — install card (game dir, buildid, data version, PCBANKS pak
-   count, `GAMEDATA/MODS` state incl. the symlink warning,
-   `DisableAllMods` state with a warning marker when true); tools card
+   count, `GAMEDATA/MODS` state incl. the symlink warning, with an `Open`
+   button on that row that hands the directory to the desktop and is disabled
+   when the state is `absent`; `DisableAllMods` state with a warning marker
+   when true); tools card
    (compiler version + compatibility marker, dotnet runtime, pak index age);
    library card (enabled/total mods, last build time and verdict counts from
    `core.Report`); primary actions `Build`, `Build and deploy…` (the latter
@@ -108,8 +110,9 @@ to not spraying stderr from the GUI.
 4. **Report** — the latest `report.json` as a table (Mod, Status, Edits,
    Skipped, Notes) with verdict colouring, header facts above it (generated
    time, compiler, output dir, totals), a `Degraded files` block when present,
-   and buttons `Open report folder`, `Open output folder`, `Deploy…`. Empty
-   state: "No build yet."
+   and buttons `Open report folder`, `Open output folder`,
+   `Open game mods folder` (the deploy target, disabled when it is absent),
+   `Deploy…`. Empty state: "No build yet."
 5. **Tools** — installed MBINCompiler versions (table: tag, flavor, path,
    in-use), `Check for updates` (release list via core, offline-tolerant),
    `Install <newest matching>`, `Pin`/`Unpin` on a selected row, `Remove`
@@ -351,3 +354,13 @@ for `→`, which the bundled font lacks.
   version parsing (spec 001 R6.2) while the build uses the round-trip check
   (spec 002 R3.4). Both are truthful; reconciling them is a core question, not
   a GUI one.
+
+### Added after the acceptance run
+
+- **2026-09-12** — `GAMEDATA/MODS` is reachable from the window: an `Open`
+  button on the Overview row, `Open mods folder` on the game strip beside
+  `Back up saves`, and `Open game mods folder` on Report beside
+  `Open output folder`. All three call one helper (`ui.openModsDir`, the
+  `xdg-open` path in `dialogs.go`) and are disabled when the state is `absent`;
+  a symlinked MODS is opened through the link, which is what the game reads.
+  Not a CLI operation and not in `Actions()`, so the parity guard is unchanged.

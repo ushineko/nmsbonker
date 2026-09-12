@@ -123,7 +123,7 @@ func (u *ui) buildReport() fyne.CanvasObject {
 	return container.NewBorder(nil, u.reportActions(), nil, nil, container.NewVScroll(body))
 }
 
-// reportActions is the bottom strip: two ways out to a file manager, and the
+// reportActions is the bottom strip: three ways out to a file manager, and the
 // deploy that installs exactly what this report describes.
 func (u *ui) reportActions() fyne.CanvasObject {
 	r := u.lastReport.Report
@@ -136,6 +136,11 @@ func (u *ui) reportActions() fyne.CanvasObject {
 		}
 		u.openPath(r.OutputDir)
 	})
+	// The other end of a deploy. This report describes what would be installed;
+	// the game's own mod directory is what is installed, and comparing the two
+	// is the first thing anybody does when a mod does not load.
+	openMods := widget.NewButtonWithIcon("Open game mods folder", theme.FolderIcon(),
+		func() { u.openModsDir() })
 	deploy := widget.NewButtonWithIcon("Deploy…", theme.DownloadIcon(), func() { u.deployLast() })
 	deploy.Importance = widget.DangerImportance
 
@@ -155,12 +160,15 @@ func (u *ui) reportActions() fyne.CanvasObject {
 		deploy.Disable()
 		rollBack.Disable()
 	}
+	if !modsDirOpenable(u.status.Install) {
+		openMods.Disable()
+	}
 	if !u.archiveOK || len(u.archive.Entries) == 0 {
 		rollBack.Disable()
 	}
-	u.gate(openReport, openOutput, deploy, rollBack)
+	u.gate(openReport, openOutput, openMods, deploy, rollBack)
 	return container.NewVBox(widget.NewSeparator(),
-		container.NewHBox(openReport, openOutput, deploy, rollBack))
+		container.NewHBox(openReport, openOutput, openMods, deploy, rollBack))
 }
 
 /*

@@ -829,6 +829,15 @@ func factRow(label, value string, st Status) fyne.CanvasObject {
 		container.NewHBox(marker(st), statusText(value, st)))
 }
 
+// rowWithAction puts one button on a fact row's trailing edge, for a fact that
+// names a place the desktop can open. The button is always drawn and disables
+// with the fact behind it rather than appearing and disappearing, so the card
+// keeps its shape when the state changes.
+func rowWithAction(row fyne.CanvasObject, btn *widget.Button) fyne.CanvasObject {
+	return container.NewBorder(nil, nil, nil,
+		container.NewPadded(container.NewVBox(btn)), row)
+}
+
 // plainRow is factRow without the marker, for facts that carry no verdict. The
 // marker column is still reserved so the values line up with the ranked rows
 // above and below them.
