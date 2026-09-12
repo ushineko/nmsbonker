@@ -2,6 +2,9 @@ package gui
 
 import (
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -125,18 +128,62 @@ func TestALibraryScriptsParametersHaveNoSlider(t *testing.T) {
 	require.NotNil(t, findEntry(t, row))
 }
 
-// The section builds headless, with a card per group and no group empty.
-func TestTheTweaksSectionBuildsEveryGroup(t *testing.T) {
-	u, _ := tweaksUI(t)
-	require.NotEmpty(t, u.tweaks.Groups)
-	require.NotPanics(t, func() { u.buildTweaks() })
+/*
+The number beside a tweak's name says what it is: its place in the build order.
 
-	seen := map[string]int{}
-	for _, tw := range u.tweaks.Tweaks {
-		seen[tw.Group]++
+The bug this prevents: the badge was an unexplained number. The card carried a
+bare "#13", which reads as an identifier, a version, a count of anything --
+while it is in fact the position that decides which of two tweaks editing the
+same value wins. The group it used to be filed under is still on the card, as
+the other half of the same dim tag.
+*/
+func TestTheOrderBadgeSaysBuildOrderRatherThanAnUnexplainedNumber(t *testing.T) {
+	u, _ := tweaksUI(t)
+	tw := findTweak(t, u, "MaterialYield10x")
+	require.Positive(t, tw.Order)
+
+	text := cardText(u.tweakCard(tw))
+	require.Contains(t, text, "build order "+strconv.Itoa(tw.Order))
+	require.Contains(t, text, tw.Group+" · build order "+strconv.Itoa(tw.Order),
+		"the group stays visible as a dim tag after the name")
+	require.NotContains(t, text, "#"+strconv.Itoa(tw.Order),
+		"the bare number is what this test exists to keep out")
+}
+
+/*
+The section is one list of cards, ascending by build order, disabled ones in place.
+
+Cards filed under Mining / Loot / … hid the ordering that decides the outcome
+of two tweaks touching the same value. The list is fed in the wrong order on
+purpose: sorting it is the section's promise, not something inherited from
+whoever loaded the model. A switched-off tweak keeps its slot, because sinking
+it would move a card the instant its switch was used.
+*/
+func TestTheTweaksSectionListsEveryTweakInBuildOrder(t *testing.T) {
+	u, _ := tweaksUI(t)
+	require.NotEmpty(t, u.tweaks.Tweaks)
+	require.NotEmpty(t, u.tweaks.Groups)
+
+	var want []string
+	for i, tw := range u.tweaks.Tweaks {
+		if i > 0 {
+			require.Lessf(t, u.tweaks.Tweaks[i-1].Order, tw.Order,
+				"core hands the tweaks over in build order")
+		}
+		want = append(want, tw.Group+" · build order "+strconv.Itoa(tw.Order))
 	}
+
+	// One tweak off, and not the first or the last: it must not move.
+	u.tweaks.Tweaks[len(u.tweaks.Tweaks)/2].Enabled = false
+	slices.Reverse(u.tweaks.Tweaks)
+
+	got := orderTags(cardText(u.buildTweaks()))
+	require.Equal(t, want, got)
+
 	for _, g := range u.tweaks.Groups {
-		require.Positivef(t, seen[g], "the section lists group %q with nothing in it", g)
+		require.Truef(t, slices.ContainsFunc(got, func(tag string) bool {
+			return strings.HasPrefix(tag, g+" · ")
+		}), "group %q is on no card", g)
 	}
 }
 
@@ -180,6 +227,18 @@ func TestTheOverviewDoesNotReportAGameDataVersion(t *testing.T) {
 }
 
 // --- helpers ---------------------------------------------------------------
+
+// orderTags is the "<group> · build order <n>" line off every card in the
+// section, top to bottom, which is the order the section renders them in.
+func orderTags(text string) []string {
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		if strings.Contains(line, "build order ") {
+			out = append(out, line)
+		}
+	}
+	return out
+}
 
 func findTweak(t *testing.T, u *ui, name string) core.TweakInfo {
 	t.Helper()

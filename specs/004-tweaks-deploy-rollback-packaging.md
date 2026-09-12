@@ -113,13 +113,17 @@ and are Steam-Cloud synced.
 
 ### R2 — Tweaks section (GUI) and CLI
 
-- R2.1 New section **Tweaks** between Mods and Build: grouped cards; each
-  built-in shows an On/Off `Check`, its description (from a `-- @desc` header or
-  the first comment block), and one row per parameter: label, `widget.Slider`
-  bound to the parameter's bounds/step, a numeric `Entry` kept in sync, the
-  default in dim text, and `Reset`. Changing a value marks the section
-  "unbuilt changes" (a warn-coloured line in the card header, not a banner) until
-  the next successful build; `Apply and build` button at the top.
+- R2.1 New section **Tweaks** between Mods and Build: one flat list of cards in
+  ascending build order, a switched-off tweak keeping its slot rather than
+  sinking; each built-in shows an On/Off `Check`, a dim `<group> · build order
+  <n>` tag after its name (the subject it belongs to, and the position that
+  decides which of two tweaks editing the same value wins), its description
+  (from a `-- @desc` header or the first comment block), and one row per
+  parameter: label, `widget.Slider` bound to the parameter's bounds/step, a
+  numeric `Entry` kept in sync, the default in dim text, and `Reset`. Changing a
+  value marks the section "unbuilt changes" (a warn-coloured line in the card
+  header, not a banner) until the next successful build; `Apply and build`
+  button at the top.
 - R2.2 Library scripts with detected parameters show the same row UI in an
   expandable "Parameters" block in the Mods section's detail dialog (`Details…`
   row action), unbounded numeric entry only.
@@ -276,6 +280,11 @@ what follows is what the spec text got wrong and what was decided instead.
 in tests and by hand on the command line. The one operation run against the real
 game is `saves backup`, which reads the Proton prefix and writes into a scratch
 data directory; the prefix held 45 files before it and 45 after.
+
+**2026-09-12 — the Tweaks section is one build-order list.** The per-group cards
+(Mining / Loot / …) became a single list ordered by build position and the `#13`
+badge became `<group> · build order 13`; presentation only, no operation or
+stored value changed.
 
 ### The built-in set is ten scripts, not eleven
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -32,6 +33,11 @@ func walk(o fyne.CanvasObject, visit func(fyne.CanvasObject) bool) bool {
 				return true
 			}
 		}
+	}
+	// A scrolled section is a widget, not a container, so its content would
+	// otherwise be invisible to every test that walks a whole section.
+	if s, ok := o.(*container.Scroll); ok {
+		return walk(s.Content, visit)
 	}
 	return false
 }

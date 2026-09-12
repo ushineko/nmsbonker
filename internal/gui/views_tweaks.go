@@ -1,8 +1,10 @@
 package gui
 
 import (
+	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,9 +24,16 @@ buildTweaks is the section this project's own mods live in.
 
 A tweak is a mod with declared parameters, which is the whole difference: the
 Mods section can only offer a mod's name and its place in the order, and here
-there is a slider with a range and a label saying what the number means. Grouped
-by subject rather than listed in build order, because someone arriving at this
-section is looking for "make mining better", not for position seven.
+there is a slider with a range and a label saying what the number means. One
+flat list in build order rather than a card per subject: build order is what
+decides which of two tweaks editing the same value wins, and a layout that hid
+it asked the reader to hold ten positions in their head to work out what the
+next build would do. The subject is still on every card as a dim tag after the
+name, so "make mining better" is still findable by reading down the list.
+
+A tweak that is switched off keeps its slot. Sinking the disabled ones would
+move a card the instant its switch was used, and the position is a fact about
+the build order whether the tweak is on or not.
 
 Nothing here reflows while it is being used. A parameter that has moved since
 the last build shows a warn-coloured line in its card header, and that line's
@@ -42,23 +51,32 @@ func (u *ui) buildTweaks() fyne.CanvasObject {
 	body := container.NewVBox(heading("Tweaks",
 		"The mods that come with nmsbonker. Turn one on, set what it does, and build."))
 
-	byGroup := map[string][]core.TweakInfo{}
-	for _, tw := range u.tweaks.Tweaks {
-		byGroup[tw.Group] = append(byGroup[tw.Group], tw)
-	}
-	for _, group := range u.tweaks.Groups {
-		rows := []fyne.CanvasObject{}
-		for i, tw := range byGroup[group] {
-			if i > 0 {
-				rows = append(rows, widget.NewSeparator())
-			}
-			rows = append(rows, u.tweakCard(tw))
+	for i, tw := range u.tweaksInBuildOrder() {
+		if i > 0 {
+			body.Add(widget.NewSeparator())
 		}
-		body.Add(card(group, rows...))
-		body.Add(widget.NewSeparator())
+		body.Add(u.tweakCard(tw))
 	}
 
 	return container.NewBorder(nil, u.tweaksActions(), nil, nil, container.NewVScroll(body))
+}
+
+// tweaksInBuildOrder is the loaded built-ins, ascending by build position.
+//
+// core.ListTweaks already returns them that way; sorting a copy here makes the
+// order the list claims to have a property of the list itself rather than of
+// whoever filled it in, and leaves the loaded model alone.
+func (u *ui) tweaksInBuildOrder() []core.TweakInfo {
+	out := slices.Clone(u.tweaks.Tweaks)
+	slices.SortStableFunc(out, func(a, b core.TweakInfo) int { return cmp.Compare(a.Order, b.Order) })
+	return out
+}
+
+// tweakTag is the dim line after a tweak's name: what it is about, and where it
+// sits in the build order. It used to be "#13", and a bare number beside a name
+// says nothing about what it counts.
+func tweakTag(tw core.TweakInfo) string {
+	return tw.Group + " · build order " + strconv.Itoa(tw.Order)
 }
 
 /*
@@ -82,7 +100,7 @@ func (u *ui) tweakCard(tw core.TweakInfo) fyne.CanvasObject {
 	}
 
 	head := container.NewBorder(nil, nil,
-		container.NewHBox(on, dim("#"+strconv.Itoa(tw.Order))), nil, unbuilt)
+		container.NewHBox(on, dim(tweakTag(tw))), nil, unbuilt)
 
 	desc := widget.NewLabel(tw.Desc)
 	desc.Wrapping = fyne.TextWrapWord
