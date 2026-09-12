@@ -9,6 +9,8 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 )
 
 // FileEnv names the environment variable that overrides the config file path.
@@ -49,6 +51,41 @@ type MBINCompiler struct {
 	Flavor string `json:"flavor"`
 }
 
+/*
+AuditLimits are the reward-amount thresholds the build audit judges against
+(spec 005 R1.2).
+
+A separate type from audit.Thresholds only because the settings file spells its
+keys with underscores and the report spells them the way JavaScript would; the
+numbers and their meanings are the audit package's, and Defaults comes straight
+from it so the two cannot drift.
+*/
+type AuditLimits struct {
+	MaxProduct   float64 `json:"max_product"`
+	MaxSubstance float64 `json:"max_substance"`
+	MaxUnits     float64 `json:"max_units"`
+	MaxNanites   float64 `json:"max_nanites"`
+	MaxSpecials  float64 `json:"max_specials"`
+	MaxRatio     float64 `json:"max_ratio"`
+}
+
+// DefaultAudit is the audit package's own defaults, in settings-file shape.
+func DefaultAudit() AuditLimits {
+	d := audit.Defaults()
+	return AuditLimits{
+		MaxProduct: d.MaxProduct, MaxSubstance: d.MaxSubstance, MaxUnits: d.MaxUnits,
+		MaxNanites: d.MaxNanites, MaxSpecials: d.MaxSpecials, MaxRatio: d.MaxRatio,
+	}
+}
+
+// Thresholds is what the build takes.
+func (a AuditLimits) Thresholds() audit.Thresholds {
+	return audit.Thresholds{
+		MaxProduct: a.MaxProduct, MaxSubstance: a.MaxSubstance, MaxUnits: a.MaxUnits,
+		MaxNanites: a.MaxNanites, MaxSpecials: a.MaxSpecials, MaxRatio: a.MaxRatio,
+	}
+}
+
 // Config is the settings document.
 //
 // Unknown keys read from the file are kept in `extra` and written back on Save
@@ -71,6 +108,15 @@ type Config struct {
 	// SaveBackup is whether the first deploy of a process copies the game's
 	// saves first (R5.2).
 	SaveBackup bool `json:"save_backup"`
+	/*
+		Audit holds the reward-amount limits (spec 005 R1.2).
+
+		A zero in any of them means "use the default" rather than "no limit": a
+		threshold of zero would flag every reward in the game, which is nobody's
+		intent, and a settings file that names only the one limit somebody cared
+		about is a reasonable thing to hand-write.
+	*/
+	Audit AuditLimits `json:"audit"`
 
 	// path is the file this was loaded from and will be saved to.
 	path string
@@ -100,6 +146,7 @@ func Defaults() *Config {
 		Mods:         []ModEntry{},
 		Params:       map[string]map[string]float64{},
 		SaveBackup:   DefaultSaveBackup,
+		Audit:        DefaultAudit(),
 		path:         FilePath(),
 	}
 }
@@ -156,6 +203,7 @@ func knownKeys() []string {
 	return []string{
 		"game_dir", "library_dir", "tools_dir", "cache_dir", "workspace_dir",
 		"mod_name", "mbincompiler", "mods", "parallel", "params", "save_backup",
+		"audit",
 	}
 }
 
@@ -193,6 +241,21 @@ func (c *Config) fillDefaults() {
 	if c.Params == nil {
 		c.Params = map[string]map[string]float64{}
 	}
+	for _, f := range []struct {
+		dst *float64
+		def float64
+	}{
+		{&c.Audit.MaxProduct, d.Audit.MaxProduct},
+		{&c.Audit.MaxSubstance, d.Audit.MaxSubstance},
+		{&c.Audit.MaxUnits, d.Audit.MaxUnits},
+		{&c.Audit.MaxNanites, d.Audit.MaxNanites},
+		{&c.Audit.MaxSpecials, d.Audit.MaxSpecials},
+		{&c.Audit.MaxRatio, d.Audit.MaxRatio},
+	} {
+		if *f.dst == 0 {
+			*f.dst = f.def
+		}
+	}
 }
 
 // Path is the file this config was loaded from.
@@ -224,8 +287,9 @@ func (c *Config) Save() error {
 		Parallel     int                           `json:"parallel"`
 		Params       map[string]map[string]float64 `json:"params"`
 		SaveBackup   bool                          `json:"save_backup"`
+		Audit        AuditLimits                   `json:"audit"`
 	}{c.GameDir, c.LibraryDir, c.ToolsDir, c.CacheDir, c.WorkspaceDir,
-		c.ModName, c.MBINCompiler, c.Mods, c.Parallel, c.Params, c.SaveBackup})
+		c.ModName, c.MBINCompiler, c.Mods, c.Parallel, c.Params, c.SaveBackup, c.Audit})
 	if err != nil {
 		return fmt.Errorf("encode config: %w", err)
 	}
@@ -355,6 +419,8 @@ func Keys() []string {
 		"game_dir", "library_dir", "tools_dir", "cache_dir", "workspace_dir",
 		"mod_name", "mbincompiler.pin", "mbincompiler.flavor", "parallel",
 		"save_backup",
+		"audit.max_product", "audit.max_substance", "audit.max_units",
+		"audit.max_nanites", "audit.max_specials", "audit.max_ratio",
 	}
 }
 
@@ -382,7 +448,36 @@ func (c *Config) Get(key string) (string, error) {
 	case "save_backup":
 		return strconv.FormatBool(c.SaveBackup), nil
 	default:
+		if p := c.auditField(key); p != nil {
+			return strconv.FormatFloat(*p, 'f', -1, 64), nil
+		}
 		return "", fmt.Errorf("%w: %s", ErrUnknownKey, key)
+	}
+}
+
+/*
+auditField resolves an "audit.*" key to the field it names, or nil.
+
+A table rather than two more switch arms in Get and Set, because the six limits
+differ only in their name and their default and a per-key branch in each of them
+is six chances to write the wrong one.
+*/
+func (c *Config) auditField(key string) *float64 {
+	switch key {
+	case "audit.max_product":
+		return &c.Audit.MaxProduct
+	case "audit.max_substance":
+		return &c.Audit.MaxSubstance
+	case "audit.max_units":
+		return &c.Audit.MaxUnits
+	case "audit.max_nanites":
+		return &c.Audit.MaxNanites
+	case "audit.max_specials":
+		return &c.Audit.MaxSpecials
+	case "audit.max_ratio":
+		return &c.Audit.MaxRatio
+	default:
+		return nil
 	}
 }
 
@@ -430,7 +525,30 @@ func (c *Config) Set(key, value string) error {
 		}
 		c.SaveBackup = b
 	default:
-		return fmt.Errorf("%w: %s (known keys: %s)", ErrUnknownKey, key, strings.Join(Keys(), ", "))
+		p := c.auditField(key)
+		if p == nil {
+			return fmt.Errorf("%w: %s (known keys: %s)", ErrUnknownKey, key, strings.Join(Keys(), ", "))
+		}
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil || v < 0 {
+			return fmt.Errorf("%s must be a non-negative number (got %q)", key, value)
+		}
+		// Zero restores the default rather than meaning "no limit". A limit of
+		// zero would flag every reward in the game, which nobody wants and
+		// which would make `config set audit.max_ratio 0` look like a way to
+		// turn the audit off.
+		if v == 0 {
+			def := DefaultAudit()
+			v = *def.field(key)
+		}
+		*p = v
 	}
 	return nil
+}
+
+// field is DefaultAudit()'s counterpart to Config.auditField, so the default
+// for a key is looked up by the same name the setter used.
+func (a *AuditLimits) field(key string) *float64 {
+	c := Config{Audit: *a}
+	return c.auditField(key)
 }

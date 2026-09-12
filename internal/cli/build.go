@@ -119,9 +119,26 @@ func printReport(w io.Writer, r *report.Result) {
 	for _, m := range r.CacheMisses {
 		fact(w, "missing game file", m)
 	}
-	fact(w, "timings", fmt.Sprintf("%s wall clock (cache %s; merge %s and compile %s summed over %d workers)",
-		r.Timings.Total.Round(1e6), r.Timings.Cache.Round(1e6),
-		r.Timings.Merge.Round(1e6), r.Timings.Compile.Round(1e6), r.Workers))
+	fact(w, "timings", fmt.Sprintf(
+		"%s wall clock (cache %s; merge %s, audit %s and compile %s summed over %d workers)",
+		r.Timings.Total.Round(1e6), r.Timings.Cache.Round(1e6), r.Timings.Merge.Round(1e6),
+		r.Timings.Audit.Round(1e6), r.Timings.Compile.Round(1e6), r.Workers))
+	// R1.5: one line, always, and never a non-zero exit. A flagged amount is a
+	// warning about a value; the build itself succeeded.
+	fact(w, "amount audit", auditSummary(r))
+	if r.Capped > 0 {
+		fact(w, "capped values", r.Capped)
+	}
+}
+
+// auditSummary is the `amount audit:` line (spec 005 R1.5). "not run" is a real
+// answer: a build whose mods touch neither reward table has nothing to audit,
+// and reporting that as "clean" would be a claim nobody checked.
+func auditSummary(r *report.Result) string {
+	if r.Audit == nil {
+		return "not run (no audited table in this build)"
+	}
+	return r.Audit.Summary()
 }
 
 func modNote(m report.ModResult) string {

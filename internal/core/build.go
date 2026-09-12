@@ -140,7 +140,7 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 		CompilerVersion: compilerVersion, GameBuildID: s.install.BuildID,
 		Compatibility: compat.Status, CompatibilityDetail: compat.Detail,
 		CacheTime: cached.Duration, CacheReused: cached.Reused, CacheBuilt: cached.Extracted,
-		CacheMisses: misses, Params: s.cfg.Params,
+		CacheMisses: misses, Params: s.cfg.Params, Audit: s.cfg.Audit.Thresholds(),
 	})
 	if err != nil {
 		return BuildResult{}, err

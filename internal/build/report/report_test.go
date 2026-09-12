@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
 )
 
@@ -86,8 +88,8 @@ func TestMarkdownRendersTheWholeReferenceStructure(t *testing.T) {
 // numbers are wrong. R4.4.
 func TestTheTimingsLineDistinguishesWallClockFromSummedWork(t *testing.T) {
 	md := report.Markdown(sample())
-	require.Contains(t, md, "- Timings: 5.959s wall clock; cache 1.2s, merge 990ms and compile 22.551s "+
-		"summed across 8 worker(s)")
+	require.Contains(t, md, "- Timings: 5.959s wall clock; cache 1.2s, merge 990ms, audit 0s and "+
+		"compile 22.551s summed across 8 worker(s)")
 }
 
 // A compatibility mismatch has to reach the header of the report, because it is
@@ -169,4 +171,82 @@ func TestStoredLinesRenderLikeTheConsoleDid(t *testing.T) {
 		"       built X.MBIN from 1 edit-block(s)",
 	}, got)
 	require.True(t, strings.HasPrefix(got[0], "   OK  "))
+}
+
+/*
+The `## Amount audit` section (spec 005 R1.4).
+
+Three states, and the difference between them is the whole value of the
+section: no audited table in the build, an audit that found nothing, and an
+audit that found something. The third has to carry enough to act on -- what the
+stock value was, what it became, and who moved it -- without the reader opening
+report.json.
+*/
+func TestTheAuditSectionSaysWhichOfThreeThingsHappened(t *testing.T) {
+	r := sample()
+	require.NotContains(t, report.Markdown(r), "## Amount audit",
+		"a build with no audited table claims nothing about amounts")
+
+	r.Audit = &audit.Result{
+		Blocks: 2431, Tables: []string{"REWARDTABLE"}, Thresholds: audit.Defaults(),
+	}
+	clean := report.Markdown(r)
+	require.Contains(t, clean, "## Amount audit")
+	require.Contains(t, clean, "No reward amount exceeds the configured limits (2431 block(s) "+
+		"checked in REWARDTABLE).")
+
+	r.Audit.Flags = []audit.Flag{{
+		Table: "REWARDTABLE", EntryID: "R_CHEST", Item: "BP_SALVAGE",
+		Category: audit.CategoryProduct, PristineMin: 2, PristineMax: 4,
+		MergedMin: 1250000, MergedMax: 2500000, Ratio: 625000,
+		Reasons: []string{"product amount 2500000 over the 99999 limit"},
+		Contributors: []audit.Contribution{
+			{Mod: "BetterRewards", Factor: 250, Max: 1000},
+			{Mod: "ChestAndLootMaterials10x", Factor: 10, Max: 2500000},
+		},
+	}}
+	flagged := report.Markdown(r)
+	require.Contains(t, flagged, "1 of 2431 reward amount(s) in REWARDTABLE are above the "+
+		"configured limits")
+	require.Contains(t, flagged,
+		"| REWARDTABLE | R_CHEST | BP_SALVAGE | 2-4 | 1250000-2500000 | x625000 | "+
+			"product amount 2500000 over the 99999 limit | "+
+			"BetterRewards x250 -> 1000, ChestAndLootMaterials10x x10 -> 2500000 |")
+	require.Contains(t, flagged, "the amounts are large because they compound",
+		"the section says what to do about it, not only what happened")
+	require.Contains(t, flagged, "nmsbonker config set audit.max_ratio 5")
+}
+
+// A table longer than a page is cut off with a count of the rest, so the file
+// stays readable when a compounding script flags four hundred rewards.
+func TestALongAuditTableIsCutOffWithACount(t *testing.T) {
+	r := sample()
+	r.Audit = &audit.Result{Thresholds: audit.Defaults(), Blocks: 100}
+	for i := range 60 {
+		r.Audit.Flags = append(r.Audit.Flags, audit.Flag{
+			Table: "REWARDTABLE", EntryID: "E" + strconv.Itoa(i), Item: "ITEM",
+			PristineMax: 1, MergedMax: float64(1000 + i), Ratio: float64(1000 + i),
+		})
+	}
+	md := report.Markdown(r)
+	require.Contains(t, md, "| REWARDTABLE | E0 | ITEM |")
+	require.NotContains(t, md, "| REWARDTABLE | E59 | ITEM |")
+	require.Contains(t, md, "10 further flagged amount(s) are not listed")
+}
+
+// The capped count reaches the header, because a cap that bit is the reason a
+// value the audit would otherwise have flagged is not in the table.
+func TestTheHeaderSaysHowManyValuesWereCapped(t *testing.T) {
+	r := sample()
+	require.NotContains(t, report.Markdown(r), "Capped")
+	r.Capped = 206
+	require.Contains(t, report.Markdown(r), "- Capped 206 value(s) at a tweak's CAP")
+}
+
+// The timings line names the audit, so the cost of the cumulative re-merge is
+// visible rather than hidden inside the merge figure.
+func TestTheTimingsLineNamesTheAudit(t *testing.T) {
+	r := sample()
+	r.Timings.Audit = 1200 * time.Millisecond
+	require.Contains(t, report.Markdown(r), "audit 1.2s")
 }

@@ -19,6 +19,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/mxml"
 )
 
@@ -111,7 +112,10 @@ type Timings struct {
 	Cache   time.Duration `json:"cache"`
 	Merge   time.Duration `json:"merge"`
 	Compile time.Duration `json:"compile"`
-	Total   time.Duration `json:"total"`
+	// Audit is the reward-amount audit, including the cumulative re-merge the
+	// attribution needs (spec 005 R1.3). Summed across workers like the rest.
+	Audit time.Duration `json:"audit"`
+	Total time.Duration `json:"total"`
 }
 
 // Line is one report line, kept in both renderings so the JSON carries the same
@@ -169,6 +173,20 @@ type Result struct {
 		weeks later, which is why it is in the Markdown as well.
 	*/
 	Params map[string]map[string]float64 `json:"params,omitempty"`
+
+	/*
+		Audit is what the merged reward amounts came out at (spec 005 R1.4).
+
+		Nil when no audited table was part of the build, which is not the same
+		as clean and is why the field is a pointer: "nothing to audit" and
+		"audited and found nothing" are different answers to "is my reward table
+		sane", and a front end that showed a green marker for the first would be
+		making a claim nobody checked.
+	*/
+	Audit *audit.Result `json:"audit,omitempty"`
+	// Capped is how many values a block's CAP held back across the whole build
+	// (spec 005 R2.2). Zero when no cap bit, which is the ordinary state.
+	Capped int `json:"capped"`
 }
 
 // Events converts engine events into the stored line form.
@@ -276,10 +294,14 @@ func Markdown(r *Result) string {
 	// Merge and compile are sums over the targets, which run concurrently, so
 	// they are routinely larger than the wall clock. Saying so beats a reader
 	// concluding the numbers are wrong.
-	w("- Timings: %s wall clock; cache %s, merge %s and compile %s summed across %d worker(s)",
+	w("- Timings: %s wall clock; cache %s, merge %s, audit %s and compile %s summed across %d worker(s)",
 		round(r.Timings.Total), round(r.Timings.Cache), round(r.Timings.Merge),
-		round(r.Timings.Compile), r.Workers)
+		round(r.Timings.Audit), round(r.Timings.Compile), r.Workers)
+	if r.Capped > 0 {
+		w("- Capped %d value(s) at a tweak's CAP", r.Capped)
+	}
 	w("")
+	writeAudit(w, r)
 	w("Legend: **WORKING** all edits applied; **WORKING~** applied, some keys not " +
 		"found (renamed/removed by a game update — verify); **WORKING(star)** applies " +
 		"structural add/remove that recompiled — verify in-game; **PARTIAL** value edits " +
@@ -316,6 +338,95 @@ func Markdown(r *Result) string {
 	w("- For any of these, the reliable fix is an updated Nexus download dropped into the " +
 		"combine folder, or a Windows AMUMSS build of that one script.")
 	return b.String()
+}
+
+// maxAuditRows is how many flagged amounts the Markdown table lists before it
+// says how many more there are. Fifty is a page; a build with a compounding
+// script in it produces hundreds, and the hundredth is not read.
+const maxAuditRows = 50
+
+/*
+writeAudit renders the `## Amount audit` section (R1.4).
+
+It sits directly under the totals because it is a fact about the build as a
+whole, ahead of the per-mod table: the mod table says every edit applied, and
+this section is the one that can say the result is nevertheless wrong.
+
+The advice paragraph is the point of the section. A flagged amount is not a
+failure of any one mod -- each edit was correct -- so "which mod do I remove" has
+no answer without it, and the two real answers (stop the compounding, or put a
+ceiling on it) are the ones spelled out.
+*/
+func writeAudit(w func(string, ...any), r *Result) {
+	a := r.Audit
+	if a == nil {
+		return
+	}
+	w("## Amount audit")
+	w("")
+	if len(a.Flags) == 0 {
+		w("No reward amount exceeds the configured limits (%d block(s) checked in %s).",
+			a.Blocks, orUnknown(strings.Join(a.Tables, ", ")))
+		if a.Unauditable > 0 {
+			w("")
+			w("%d block(s) could not be checked because an ADD or REMOVE changed the "+
+				"table's structure.", a.Unauditable)
+		}
+		w("")
+		return
+	}
+
+	w("%d of %d reward amount(s) in %s are above the configured limits "+
+		"(product %s, substance %s, units %s, nanites %s, quicksilver %s, ratio x%s).",
+		len(a.Flags), a.Blocks, orUnknown(strings.Join(a.Tables, ", ")),
+		audit.Amount(a.Thresholds.MaxProduct), audit.Amount(a.Thresholds.MaxSubstance),
+		audit.Amount(a.Thresholds.MaxUnits), audit.Amount(a.Thresholds.MaxNanites),
+		audit.Amount(a.Thresholds.MaxSpecials), audit.Amount(a.Thresholds.MaxRatio))
+	w("")
+	w("| Table | Entry | Item | Stock | Built | x | Why | Contributors |")
+	w("|-------|-------|------|------:|------:|--:|-----|--------------|")
+	shown := a.Flags
+	if len(shown) > maxAuditRows {
+		shown = shown[:maxAuditRows]
+	}
+	for _, f := range shown {
+		w("| %s | %s | %s | %s | %s | %s | %s | %s |",
+			f.Table, orUnknown(f.EntryID), orUnknown(f.Item),
+			audit.Range(f.PristineMin, f.PristineMax),
+			audit.Range(f.MergedMin, f.MergedMax),
+			ratioText(f.Ratio), strings.Join(f.Reasons, "; "), f.ContributorText())
+	}
+	if len(a.Flags) > len(shown) {
+		w("")
+		w("%d further flagged amount(s) are not listed; `report.json` carries all of them.",
+			len(a.Flags)-len(shown))
+	}
+	if a.Unauditable > 0 {
+		w("")
+		w("%d block(s) could not be checked because an ADD or REMOVE changed the table's "+
+			"structure.", a.Unauditable)
+	}
+	w("")
+	w("Every edit above applied correctly; the amounts are large because they " +
+		"compound. Each mod multiplies what the mod before it left, so two reasonable " +
+		"multipliers make an unreasonable amount and nothing in the per-mod table can " +
+		"see it. Two ways out, and they can be combined: disable or re-tune the script " +
+		"named most often in the Contributors column, which is the one doing most of " +
+		"the multiplying; or put a ceiling on it with the built-in tweaks' cap " +
+		"parameters (Tweaks, or `nmsbonker tweaks set NAME LOOT_CAP 50000`), which " +
+		"clamps the result whatever ran before it. The limits themselves are settings: " +
+		"`nmsbonker config set audit.max_ratio 5` and re-run `nmsbonker audit` to " +
+		"re-check without rebuilding.")
+	w("")
+}
+
+// ratioText renders the x column, and a dash where the stock value was zero and
+// there is no ratio to state.
+func ratioText(ratio float64) string {
+	if ratio <= 0 {
+		return "-"
+	}
+	return "x" + audit.Amount(ratio)
 }
 
 func note(m ModResult) string {

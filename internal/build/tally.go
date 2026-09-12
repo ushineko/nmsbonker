@@ -17,8 +17,10 @@ type modStats struct {
 
 // tally accumulates the per-mod counters from the event stream, in plan order.
 type tally struct {
-	applied  int
-	skipped  int
+	applied int
+	skipped int
+	// capped is how many values a block's CAP held back (spec 005 R2.2).
+	capped   int
 	mods     map[string]*modStats
 	degraded map[string]bool
 	dropped  map[string]bool
@@ -41,6 +43,11 @@ func (t *tally) of(name string) *modStats {
 
 // record folds one event into the tallies.
 func (t *tally) record(e mxml.Event) {
+	t.capped += e.Capped
+	if e.Audit {
+		// An audit warning is about a value, not about an edit (spec 005 R1.6).
+		return
+	}
 	switch e.Kind {
 	case mxml.OK:
 		t.applied++

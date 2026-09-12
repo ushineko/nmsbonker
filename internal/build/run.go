@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/mbin"
 	"github.com/ushineko/nmsbonker/internal/mxml"
@@ -57,6 +58,10 @@ type Options struct {
 	// in the report so a front end can tell whether the output on disk was
 	// built from the settings currently in force (spec 004 R2.1).
 	Params map[string]map[string]float64
+	// Audit are the reward-amount limits the merged tables are judged against
+	// (spec 005 R1.2). The zero value is treated as the defaults, so a caller
+	// that does not care still gets an audit.
+	Audit audit.Thresholds
 }
 
 // outcome is one target's finished work, held until its turn to be reported.
@@ -65,6 +70,10 @@ type outcome struct {
 	target  report.TargetResult
 	merge   time.Duration
 	compile time.Duration
+	audit   time.Duration
+	// amounts is the reward-amount audit of this target, when it is one of the
+	// audited tables (spec 005 R1.1).
+	amounts *audit.Result
 }
 
 // runner carries the per-run state the target workers share.
@@ -88,6 +97,9 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 	started := time.Now()
 	if opts.Workers < 1 {
 		opts.Workers = 1
+	}
+	if opts.Audit == (audit.Thresholds{}) {
+		opts.Audit = audit.Defaults()
 	}
 	r := &runner{
 		opts:    opts,
@@ -120,6 +132,13 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 	for _, o := range outcomes {
 		res.Timings.Merge += o.merge
 		res.Timings.Compile += o.compile
+		res.Timings.Audit += o.audit
+		if o.amounts != nil {
+			if res.Audit == nil {
+				res.Audit = &audit.Result{Thresholds: opts.Audit}
+			}
+			res.Audit.Add(*o.amounts)
+		}
 		for _, e := range o.events {
 			events = append(events, e)
 			stats.record(e)
@@ -146,7 +165,10 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 		}
 	}
 
-	res.Applied, res.Skipped = stats.applied, stats.skipped
+	if res.Audit != nil {
+		res.Audit.Sort()
+	}
+	res.Applied, res.Skipped, res.Capped = stats.applied, stats.skipped, stats.capped
 	res.Mods = stats.rows(plan)
 	res.Lines = report.Events(events)
 	res.Timings.Cache = opts.CacheTime
@@ -329,6 +351,15 @@ func (r *runner) target(ctx context.Context, t *Target) outcome {
 	lines, events := merge(pristine, t.Items)
 	merged := time.Since(mergeStart)
 
+	// The audit runs on the merge, before the compiler is asked whether the
+	// document is valid (R1.1): a file that will not recompile is exactly the
+	// one whose amounts nobody will otherwise look at, and the audit costs the
+	// same either way.
+	auditStart := time.Now()
+	amounts, auditEvents := r.audit(t, pristine, lines, res.Internal)
+	events = append(events, auditEvents...)
+	audited := time.Since(auditStart)
+
 	compileStart := time.Now()
 	built, cerr := r.compile(ctx, res.Internal, lines)
 	if cerr != nil {
@@ -361,19 +392,22 @@ func (r *runner) target(ctx context.Context, t *Target) outcome {
 				Detail: fmt.Sprintf("RECOMPILE FAILED for %s -> DROPPED", src.Internal),
 			})
 		}
-		return outcome{events: events, target: res, merge: merged, compile: compiled}
+		return outcome{events: events, target: res, merge: merged, compile: compiled,
+			audit: audited, amounts: amounts}
 	}
 
 	dest := filepath.Join(r.modRoot, filepath.FromSlash(res.Internal))
 	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
 		res.Outcome = report.OutcomeDropped
 		res.Error = err.Error()
-		return outcome{events: events, target: res, merge: merged, compile: compiled}
+		return outcome{events: events, target: res, merge: merged, compile: compiled,
+			audit: audited, amounts: amounts}
 	}
 	if err := moveFile(built, dest); err != nil {
 		res.Outcome = report.OutcomeDropped
 		res.Error = err.Error()
-		return outcome{events: events, target: res, merge: merged, compile: compiled}
+		return outcome{events: events, target: res, merge: merged, compile: compiled,
+			audit: audited, amounts: amounts}
 	}
 	res.Output = dest
 	if res.Outcome == "" {
@@ -385,7 +419,8 @@ func (r *runner) target(ctx context.Context, t *Target) outcome {
 		note = " (structural add/remove skipped for: " + strings.Join(res.SkippedMods, ", ") + ")"
 	}
 	events = append(events, mxml.Info("built %s from %d edit-block(s)%s", res.Internal, len(t.Items), note))
-	return outcome{events: events, target: res, merge: merged, compile: compiled}
+	return outcome{events: events, target: res, merge: merged, compile: compiled,
+		audit: audited, amounts: amounts}
 }
 
 // merge applies every item to a fresh copy of the pristine lines.
