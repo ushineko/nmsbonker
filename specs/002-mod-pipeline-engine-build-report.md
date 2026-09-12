@@ -358,11 +358,15 @@ flavor, .NET runtime 10.0.11), Go 1.27.1, golangci-lint v2.12.2, gopher-lua
 v1.1.1. The mod library used for the acceptance run is the 27 scripts in
 `~/Games/nms-modding/lua-src`, in the `golden/mods.conf` order.
 
-The user's own `~/.config/nmsbonker/config.json` was **not** touched: every
-command below ran with `--config` pointing at a scratch file, and the user's
-config still carries an empty `mods` list. Nothing was deployed to the real
-game directory (its `GAMEDATA/MODS` is still the legacy symlink); deploy was
-exercised only against temporary fake game directories.
+Nothing under the user's own directories was written: every command below ran
+with `--config` pointing at a scratch file, so `~/.config/nmsbonker/` still does
+not exist (spec 001 never needed to save one), `~/.local/share/nmsbonker/` still
+holds only `tools/`, and the mod library, the pristine cache and the build
+output all live in the scratch tree. Nothing was deployed to the real game
+directory -- its `GAMEDATA/MODS` is still the legacy symlink to
+`~/Games/nms-modding/MODS` -- and deploy was exercised only against temporary
+fake game directories. The golden Stage C test reads the user's installed
+MBINCompiler and writes nothing there.
 
 ### R3.4 on this machine
 
