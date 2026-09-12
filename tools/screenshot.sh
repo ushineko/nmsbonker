@@ -84,50 +84,111 @@ done
 python3 -c "import PIL" 2>/dev/null || { echo "python3 Pillow is not installed" >&2; exit 1; }
 [ -x "$BIN" ] || { echo "nmsbonker-gui not found (set NMSBONKER_GUI, or run make build-gui)" >&2; exit 1; }
 
-# demo builds the settings document the captures are taken against.
-#
-# Everything it points at is inside one temporary directory, including the mod library, so
-# the window has nothing of the developer's to draw. The library is seeded with a couple of
-# obviously invented scripts so the Mods table is not empty; the built-in tweaks need no
-# seeding, since they are in the binary.
-demo() {
-    DEMO=$(mktemp -d)
-    mkdir -p "$DEMO/library" "$DEMO/build" "$DEMO/cache" "$DEMO/home"
+# DEMO is a fixed path rather than a mktemp one, and deliberately: it appears in
+# the screenshots, and "/tmp/nmsbonker-demo/..." reads as an example while
+# "/tmp/tmp.4Xk9aP/..." reads as a mistake. It is this script's own directory and
+# is rebuilt from nothing on every run.
+DEMO_ROOT="${TMPDIR:-/tmp}/nmsbonker-demo"
 
-    cat > "$DEMO/library/ExampleFasterMining.lua" <<'LUA'
-MINING_SPEED = 4
+# demo builds the world the captures are taken in.
+#
+# Everything the window can see is inside DEMO: its settings, its mod library, its
+# workspace, its caches, and the game itself. The game is a directory laid out the way
+# Steam lays one out, whose PCBANKS is a symlink to the real archives -- so the window
+# reads real game data and reports real numbers, while every path it prints is under
+# /tmp. That is the rule these images are made under: they go into a public README, and
+# nothing in one may be a path, a library or a Steam identifier belonging to whoever
+# refreshed them.
+#
+# The compiler is copied in rather than downloaded, when this machine has one. Without
+# it the Tools card reads "not installed" and the compatibility line has nothing to
+# measure, which is a truthful first-run screenshot and a poor illustration.
+demo() {
+    DEMO="$DEMO_ROOT"
+    rm -rf "$DEMO"
+    mkdir -p "$DEMO/library" "$DEMO/build" "$DEMO/cache" "$DEMO/home/.config" \
+        "$DEMO/home/.local/share" "$DEMO/home/.cache"
+
+    local cli="${REPO_DIR}/nmsbonker"
+    [ -x "$cli" ] || cli="$(command -v nmsbonker || true)"
+
+    # The real install, found the way the tool itself finds it. Only its PCBANKS and its
+    # appmanifest are used, and neither is written to.
+    local real=""
+    if [ -n "${NMSBONKER_DEMO_GAME:-}" ]; then
+        real="$NMSBONKER_DEMO_GAME"
+    elif [ -x "$cli" ]; then
+        real=$("$cli" detect --json 2>/dev/null | python3 -c \
+            'import json,sys; print(json.load(sys.stdin).get("GameDir",""))' 2>/dev/null || true)
+    fi
+
+    local game="$DEMO/SteamLibrary/steamapps/common/No Man's Sky"
+    mkdir -p "$game/GAMEDATA/MODS" "$game/Binaries/SETTINGS" "$DEMO/SteamLibrary/steamapps"
+    if [ -n "$real" ] && [ -d "$real/GAMEDATA/PCBANKS" ]; then
+        ln -sfn "$real/GAMEDATA/PCBANKS" "$game/GAMEDATA/PCBANKS"
+        cp -f "$real/../../appmanifest_275850.acf" \
+            "$DEMO/SteamLibrary/steamapps/appmanifest_275850.acf" 2>/dev/null || true
+        cp -f "$real/Binaries/SETTINGS/GCMODSETTINGS.MXML" \
+            "$game/Binaries/SETTINGS/GCMODSETTINGS.MXML" 2>/dev/null || true
+    else
+        mkdir -p "$game/GAMEDATA/PCBANKS"
+        echo "note: no game found, so the captures will show a first-run machine" >&2
+    fi
+
+    # The compiler, if this machine has one. Copied, never used from its own directory,
+    # so nothing the window does can reach the real tools tree.
+    local tools="${XDG_DATA_HOME:-$HOME/.local/share}/nmsbonker/tools"
+    if [ -d "$tools" ]; then
+        cp -r "$tools" "$DEMO/tools"
+    fi
+
+    # Two library scripts, so the Mods table shows what a mod from elsewhere looks like
+    # beside the built-ins. They are written here rather than copied from anyone's
+    # library: a third-party script belongs to its author and does not go in this
+    # repository or in a picture of it.
+    cat > "$DEMO/library/ExampleAsteroidYield.lua" <<'LUA'
+ASTEROID_YIELD = 2
+
 NMS_MOD_DEFINITION_CONTAINER =
 {
-["MOD_FILENAME"] = "ExampleFasterMining.pak",
+["MOD_FILENAME"] = "ExampleAsteroidYield.pak",
 ["MOD_AUTHOR"]   = "an example",
 ["MODIFICATIONS"] =
     {
         { ["MBIN_CHANGE_TABLE"] =
-            { { ["MBIN_FILE_SOURCE"] = "GCGAMEPLAYGLOBALS.GLOBAL.MBIN",
+            { { ["MBIN_FILE_SOURCE"] =
+                  "MODELS\SPACE\ASTEROIDS\SMALLASTEROID\ENTITIES\ASTEROID.ENTITY.MBIN",
                 ["EXML_CHANGE_TABLE"] =
-                  { { ["MATH_OPERATION"] = "*",
-                      ["VALUE_CHANGE_TABLE"] = { {"MiningLaserHeatTime", MINING_SPEED} } } } } } }
+                  { { ["PRECEDING_KEY_WORDS"] = "", ["MATH_OPERATION"] = "*",
+                      ["REPLACE_TYPE"] = "ALL",
+                      ["VALUE_CHANGE_TABLE"] =
+                        { {"AmountMin", ASTEROID_YIELD}, {"AmountMax", ASTEROID_YIELD} } } } } } }
     }
 }
 LUA
-    cat > "$DEMO/library/ExampleQuieterScanner.lua" <<'LUA'
-SCAN_COOLDOWN = 2
+    cat > "$DEMO/library/ExampleRicherChests.lua" <<'LUA'
+CHEST_MULTIPLIER = 2
+
 NMS_MOD_DEFINITION_CONTAINER =
 {
-["MOD_FILENAME"] = "ExampleQuieterScanner.pak",
+["MOD_FILENAME"] = "ExampleRicherChests.pak",
 ["MOD_AUTHOR"]   = "an example",
 ["MODIFICATIONS"] =
     {
         { ["MBIN_CHANGE_TABLE"] =
-            { { ["MBIN_FILE_SOURCE"] = "GCGAMEPLAYGLOBALS.GLOBAL.MBIN",
+            { { ["MBIN_FILE_SOURCE"] = "METADATA\REALITY\TABLES\REWARDTABLE.MBIN",
                 ["EXML_CHANGE_TABLE"] =
-                  { { ["VALUE_CHANGE_TABLE"] = { {"ScanTime", SCAN_COOLDOWN} } } } } } }
+                  { { ["SPECIAL_KEY_WORDS"] = {"GcRewardSpecificSubstance"},
+                      ["MATH_OPERATION"] = "*", ["REPLACE_TYPE"] = "ALL",
+                      ["VALUE_CHANGE_TABLE"] =
+                        { {"AmountMin", CHEST_MULTIPLIER}, {"AmountMax", CHEST_MULTIPLIER} } } } } } }
     }
 }
 LUA
 
     cat > "$DEMO/config.json" <<JSON
 {
+  "game_dir": "$game",
   "library_dir": "$DEMO/library",
   "workspace_dir": "$DEMO/build",
   "cache_dir": "$DEMO/cache",
@@ -135,12 +196,30 @@ LUA
   "mod_name": "COSMOS COMBINE"
 }
 JSON
+
+    # A build, so the Report section has something to report and the Mods table has a
+    # verdict per row. Skipped when there is no compiler to build with.
+    if [ -x "$cli" ] && [ -d "$DEMO/tools" ] && [ -n "$real" ]; then
+        echo "building the demo mod set ..."
+        # `mods list` first: it is what reconciles the library and the built-ins
+        # into the settings file, and nothing can be enabled before it has.
+        HOME="$DEMO/home" "$cli" --config "$DEMO/config.json" mods list >/dev/null 2>&1 || true
+        HOME="$DEMO/home" "$cli" --config "$DEMO/config.json" mods enable \
+            ExampleAsteroidYield ExampleRicherChests >/dev/null 2>&1 || true
+        HOME="$DEMO/home" "$cli" --config "$DEMO/config.json" tweaks enable \
+            MaterialYield10x ChestAndLootMaterials10x MoneyAndNanites5x ItemValueBoost \
+            LearnMoreWords MissionStandingBuff >/dev/null 2>&1 || true
+        HOME="$DEMO/home" "$cli" --config "$DEMO/config.json" tweaks set \
+            MaterialYield10x MATERIAL_MULTIPLIER 20 >/dev/null 2>&1 || true
+        HOME="$DEMO/home" "$cli" --config "$DEMO/config.json" build >/dev/null 2>&1 || true
+    fi
 }
 
 demo_cleanup() {
     [ -n "$DEMO" ] || return 0
     rm -rf "$DEMO"
 }
+
 
 # capture starts a window on the requested section, grabs it, and stops it again.
 # Starting fresh per shot rather than reusing one window keeps each image independent
