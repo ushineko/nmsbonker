@@ -75,6 +75,31 @@ coverage: ## Run all tests and open a coverage report in the default browser
 build: ## Build the CLI for the host platform (no CGO: the CLI needs no display)
 	CGO_ENABLED=0 go build -ldflags='$(LDFLAGS)' -trimpath -o nmsbonker ./cmd/nmsbonker
 
+.PHONY: build-gui
+build-gui: ## Build the desktop front end for the host platform (requires CGO)
+	CGO_ENABLED=1 go build -ldflags='$(LDFLAGS)' -trimpath -o nmsbonker-gui ./cmd/nmsbonker-gui
+
+.PHONY: build-all
+build-all: ## Build static CLI binaries for every platform, plus the host's GUI
+	@set -e; for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \
+		os=$${p%/*}; arch=$${p#*/}; \
+		echo "building $$os/$$arch ..."; \
+		mkdir -p dist; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
+			go build -ldflags='$(LDFLAGS)' -trimpath -o dist/nmsbonker-$$os-$$arch ./cmd/nmsbonker; \
+	done
+	@# The GUI is built for this machine only. It needs CGO, so cross-compiling
+	@# it would need a C toolchain per target. Nothing about the tool's job
+	@# depends on the difference: the CLI builds and deploys mods on its own.
+	@echo "building the GUI for this host ..."; \
+	if CGO_ENABLED=1 go build -ldflags='$(LDFLAGS)' -trimpath \
+		-o dist/nmsbonker-gui-$$(go env GOOS)-$$(go env GOARCH) ./cmd/nmsbonker-gui; then \
+		echo "  built dist/nmsbonker-gui-$$(go env GOOS)-$$(go env GOARCH)"; \
+	else \
+		echo "  the GUI did not build; the CLI binaries are unaffected" >&2; \
+	fi
+	@ls -l dist/
+
 .PHONY: clean
 clean: ## Remove build artifacts
 	@rm -rf nmsbonker nmsbonker-gui dist/ coverage.out count.out
