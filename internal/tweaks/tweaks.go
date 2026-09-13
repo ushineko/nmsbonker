@@ -57,6 +57,8 @@ var order = []string{
 	"LearnMoreWords",
 	"NaniteRewardBuff",
 	"MissionStandingBuff",
+	"NexusRewards",
+	"MissionBoardRewards",
 }
 
 // Groups are the headings the Tweaks section lays the cards out under, in
@@ -66,7 +68,7 @@ var order = []string{
 //nolint:gochecknoglobals // a fixed list, read-only after initialisation
 var Groups = []string{
 	"Mining", "Loot", "Currency", "Standing", "Inventory", "Economy",
-	"Exploration", "Language",
+	"Exploration", "Language", "Missions",
 }
 
 // GroupOther is where a tweak with an unrecognised group lands.

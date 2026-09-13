@@ -209,7 +209,7 @@ nmsbonker status                # is the game here, is there a compiler, what wo
 nmsbonker tools ensure          # download the MBINCompiler this game version needs
 nmsbonker tools check           # prove it can read this install's files
 
-nmsbonker tweaks list           # the ten built-in mods and every number in them
+nmsbonker tweaks list           # the twelve built-in mods and every number in them
 nmsbonker tweaks enable MaterialYield10x ItemValueBoost
 nmsbonker tweaks set MaterialYield10x MATERIAL_MULTIPLIER 20
 
@@ -372,6 +372,15 @@ nmsbonker tweaks set MoneyAndNanites5x UNITS_CAP 50000000
 | MissionStandingBuff | `STANDING_CAP` | 500 |
 | LearnMoreWords | `WORDS_CAP` | 25 |
 | BigStacks | `ANTIMATTER_HARVESTER_CAP` | 20 |
+| NexusRewards | `ITEM_CAP`, `UNITS_CAP`, `NANITES_CAP`, `QS_CAP` | 50,000 / 50,000,000 / 250,000 / 100,000 |
+| MissionBoardRewards | `ITEM_CAP`, `UNITS_CAP`, `NANITES_CAP` | 50,000 / 50,000,000 / 250,000 |
+
+`NexusRewards` and `MissionBoardRewards` are the two tweaks that multiply by
+reward-table entry rather than across the whole table: the seven Nexus entries,
+and the eight station mission board and corvette entries. They run after the
+global tweaks, so their factors compound with them (one item ×10 ×5 = 50), and
+quicksilver, which no global tweak touches, has its own multiplier on the Nexus
+one. `MissionBoardRewards` ships at ×1 so it does nothing until you set it.
 
 Setting a cap to `0` removes the ceiling. `ANTIMATTER_HARVESTER_CAP` is the odd
 one: it is not a ceiling on a multiplier but an absolute figure for how much
@@ -598,7 +607,7 @@ The first release: the whole pipeline, both front ends, and the packaging.
   replaces is enforced by a golden suite: same decoded scripts, byte-identical
   merged documents, same report lines, same per-mod verdicts.
 - **Reports what happened**, per mod and per file, in Markdown and JSON.
-- **Ten built-in tweaks**, with a declared range and a slider for every number
+- **Twelve built-in tweaks**, with a declared range and a slider for every number
   they change. Overrides live in the settings and are substituted into an
   in-memory copy of the script at build time, so the scripts themselves are
   never edited.

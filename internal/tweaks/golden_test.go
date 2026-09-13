@@ -49,6 +49,9 @@ func TestBuiltInsDecodeAsTheReferenceCopiesDo(t *testing.T) {
 
 	for _, name := range tweaks.Names() {
 		t.Run(name, func(t *testing.T) {
+			if projectAuthored[name] {
+				t.Skip("written for this project; there is no reference copy to decode against")
+			}
 			src, ok := tweaks.Source(name)
 			require.True(t, ok)
 			if param, off := switchedOff[name]; off {
@@ -75,6 +78,16 @@ the game's own value alone".
 //nolint:gochecknoglobals // a fixed lookup, read-only after initialisation
 var switchedOff = map[string]string{
 	"BigStacks": "ANTIMATTER_HARVESTER_CAP",
+}
+
+// projectAuthored names the built-ins that never had a reference copy: they
+// were written here (spec 006), so there is nothing for them to decode "as".
+// The other ten fail loudly when their copy is missing, and should.
+//
+//nolint:gochecknoglobals // a fixed lookup, read-only after initialisation
+var projectAuthored = map[string]bool{
+	"NexusRewards":        true,
+	"MissionBoardRewards": true,
 }
 
 // requireDecodesAsReference is the comparison itself: the embedded script and

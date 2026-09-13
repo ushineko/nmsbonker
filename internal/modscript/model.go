@@ -44,10 +44,12 @@ type ValueChange struct {
 }
 
 // CurrencyMult multiplies the amounts inside every GcRewardMoney block whose
-// currency matches (R1.3).
+// currency matches (R1.3). Entry, when set, confines it to one reward-table
+// entry (spec 006 R1.1).
 type CurrencyMult struct {
 	Currency string
 	Mult     float64
+	Entry    string
 	// MultErr carries Python's message for a MULT that float() would refuse, so
 	// the engine can report the same failure the reference builder did instead of
 	// silently multiplying by zero.
@@ -55,11 +57,13 @@ type CurrencyMult struct {
 }
 
 // WrapperMult multiplies named keys inside every block with a given wrapper
-// property (R1.3).
+// property (R1.3). Entry, when set, confines it to one reward-table entry
+// (spec 006 R1.1).
 type WrapperMult struct {
 	Wrapper string
 	Mult    float64
 	Keys    []string
+	Entry   string
 	MultErr string
 }
 
@@ -353,6 +357,7 @@ func decodeBlock(raw map[string]any) *Block {
 		mult, err := multOf(cm["MULT"])
 		blk.CurrencyMult = &CurrencyMult{
 			Currency: scalarString(cm["CURRENCY"]), Mult: mult, MultErr: err,
+			Entry: scalarString(cm["ENTRY"]),
 		}
 	}
 	if wm, ok := raw["WRAPPER_MULT"].(map[string]any); ok {
@@ -363,6 +368,7 @@ func decodeBlock(raw map[string]any) *Block {
 		}
 		blk.WrapperMult = &WrapperMult{
 			Wrapper: scalarString(wm["WRAPPER"]), Mult: mult, Keys: keys, MultErr: err,
+			Entry: scalarString(wm["ENTRY"]),
 		}
 	}
 

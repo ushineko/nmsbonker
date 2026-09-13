@@ -86,11 +86,15 @@ func applyCurrencyMult(lines []string, cm *modscript.CurrencyMult, limit float64
 	if cm.MultErr != "" {
 		return lines, []Event{actx.warn("exception on %s: %s", actx.File(), cm.MultErr)}
 	}
+	from, to, ok := entryScope(lines, cm.Entry)
+	if !ok {
+		return lines, []Event{actx.warn("entry %s not found in %s", cm.Entry, actx.File())}
+	}
 	const opener = `<Property name="GcRewardMoney">`
 	needle := `value="` + cm.Currency + `"`
 	count, capped := 0, 0
 
-	for i := 0; i < len(lines); {
+	for i := from; i < to; {
 		if strings.TrimSpace(lines[i]) != opener {
 			i++
 			continue
@@ -113,8 +117,9 @@ func applyCurrencyMult(lines []string, cm *modscript.CurrencyMult, limit float64
 		}
 		i = last + 1
 	}
-	e := actx.ok("CURRENCY_MULT %s x%s%s across %d GcRewardMoney blocks in %s%s",
-		cm.Currency, modscript.PyRepr(cm.Mult), capText(limit), count, actx.File(), cappedText(capped))
+	e := actx.ok("CURRENCY_MULT %s x%s%s%s across %d GcRewardMoney blocks in %s%s",
+		cm.Currency, modscript.PyRepr(cm.Mult), capText(limit), entryText(cm.Entry), count,
+		actx.File(), cappedText(capped))
 	e.Capped = capped
 	return lines, []Event{e}
 }
@@ -128,10 +133,14 @@ func applyWrapperMult(lines []string, wm *modscript.WrapperMult, limit float64,
 	if wm.MultErr != "" {
 		return lines, []Event{actx.warn("exception on %s: %s", actx.File(), wm.MultErr)}
 	}
+	from, to, ok := entryScope(lines, wm.Entry)
+	if !ok {
+		return lines, []Event{actx.warn("entry %s not found in %s", wm.Entry, actx.File())}
+	}
 	opener := `<Property name="` + wm.Wrapper + `">`
 	count, capped := 0, 0
 
-	for i := 0; i < len(lines); {
+	for i := from; i < to; {
 		if strings.TrimSpace(lines[i]) != opener {
 			i++
 			continue
@@ -147,10 +156,45 @@ func applyWrapperMult(lines []string, wm *modscript.WrapperMult, limit float64,
 		count++
 		i = last + 1
 	}
-	e := actx.ok("WRAPPER_MULT %s x%s%s across %d blocks in %s%s",
-		wm.Wrapper, modscript.PyRepr(wm.Mult), capText(limit), count, actx.File(), cappedText(capped))
+	e := actx.ok("WRAPPER_MULT %s x%s%s%s across %d blocks in %s%s",
+		wm.Wrapper, modscript.PyRepr(wm.Mult), capText(limit), entryText(wm.Entry), count,
+		actx.File(), cappedText(capped))
 	e.Capped = capped
 	return lines, []Event{e}
+}
+
+/*
+entryScope bounds an op to one reward-table entry (spec 006 R1.1).
+
+An empty entry is the whole file, which is what every script written before the
+key existed means. Otherwise the entry is the GcGenericRewardTableEntry whose
+opening line MBINCompiler stamped with _id="<entry>"; failing that, the line
+`name="Id" value="<entry>"` and its parent, for an MXML written without the
+attribute. Not found is reported by the caller, not guessed at here: an op that
+fell back to the whole file would silently multiply every entry in the table.
+*/
+func entryScope(lines []string, entry string) (from, to int, ok bool) {
+	if entry == "" {
+		return 0, len(lines), true
+	}
+	if i := FindKW(lines, `_id="`+entry+`"`, 0, len(lines)); i >= 0 {
+		return i, CloseIndex(lines, i) + 1, true
+	}
+	i := FindKW(lines, `name="Id" value="`+entry+`"`, 0, len(lines))
+	if i < 0 {
+		return 0, 0, false
+	}
+	start := walkUp(lines, i, 1)
+	return start, CloseIndex(lines, start) + 1, true
+}
+
+// entryText is the " in entry X" clause of an event, empty when the op ran
+// over the whole file so the pre-006 event text is unchanged.
+func entryText(entry string) string {
+	if entry == "" {
+		return ""
+	}
+	return " in entry " + entry
 }
 
 // scaleLine multiplies the line's value when it names one of the keys, and

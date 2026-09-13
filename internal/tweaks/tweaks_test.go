@@ -16,7 +16,7 @@ import (
 // one listed but not embedded is a name the interface offers and cannot load.
 func TestEveryEmbeddedScriptIsListedAndEveryListedScriptIsEmbedded(t *testing.T) {
 	files := tweaks.Files()
-	require.Len(t, files, 10, "the built-in set is ten scripts")
+	require.Len(t, files, 12, "the built-in set is twelve scripts")
 
 	listed := map[string]bool{}
 	for _, n := range tweaks.Names() {
@@ -213,6 +213,8 @@ func TestEveryDeclaredCapReachesABlock(t *testing.T) {
 		"ScanValue50x":             {"SCAN_CAP"},
 		"MissionStandingBuff":      {"STANDING_CAP"},
 		"LearnMoreWords":           {"WORDS_CAP"},
+		"NexusRewards":             {"ITEM_CAP", "UNITS_CAP", "NANITES_CAP", "QS_CAP"},
+		"MissionBoardRewards":      {"ITEM_CAP", "UNITS_CAP", "NANITES_CAP"},
 	}
 	for name, params := range caps {
 		t.Run(name, func(t *testing.T) {
