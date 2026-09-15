@@ -88,8 +88,10 @@ This repository is **public**. The following hold without exception:
 - **Long-running work is cancellable** (`context.Context`) and reports progress
   through `core.Events`; the GUI never blocks its render thread (angou's
   `fyne.Do` idiom).
-- **Nothing transient may reflow the interface** (angou rule): banners, progress
-  and the busy indicator live in fixed-height regions.
+- **Nothing transient may reflow the interface** (angou rule): result banners
+  and the progress indicator float over the content as popups (a non-modal
+  banner above the status bar; a centred modal progress popup after 300 ms) and
+  never insert themselves into a section's layout.
 
 ---
 

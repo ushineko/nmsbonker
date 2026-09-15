@@ -68,7 +68,7 @@ archives it changed.
 **Acquires MBINCompiler and proves it matches your install.** It picks the
 release that matches your game, downloads the Linux binary and its `libMBIN`
 together, and verifies the pair by running it. `nmsbonker tools check` then
-decompiles two known game files, recompiles them, and compares the bytes outside
+decompiles three known game files, recompiles them, and compares the bytes outside
 the header — which answers the question a version string cannot, because the
 game's own MBINs carry no libMBIN version.
 
@@ -144,13 +144,18 @@ The save editor below takes the same copy before every write it makes.
 
 **Edits your saves, natively.** `saves slots` lists what the game has, `saves
 inspect` decodes one, and `saves edit` sets units, nanites, quicksilver, health,
-shield and the exosuit's unlocked item and technology slot counts (up to the
-120 and 60 the game's own grid allows). The chunked LZ4 container, the XXTEA
+shield, the exosuit's unlocked item and technology slot counts (up to the
+120 and 60 the game's own grid allows) and the standing with each race and guild
+as the levels 1 to 9 the game shows — downwards too, which is how to get back
+under a story mission's rank gate after over-earning early. Starships and the
+freighter get the same treatment: unlocked slots within their grids, and the
+class letter. The chunked LZ4 container, the XXTEA
 manifest beside each save and the obfuscated JSON keys are all handled in Go;
 the key names come from the `mapping.json` MBINCompiler publishes with each
 release, fetched beside the compiler. Everything the editor does not change is
-written back byte for byte. `saves export` and `saves import` are the raw
-escape hatch for anything else.
+written back byte for byte. `saves get` and `saves set` read and replace one
+node of the JSON by path, and the window's Raw JSON tab browses and edits it
+inline; `saves export` and `saves import` do the whole file.
 
 **Has a window, if you want one.** `nmsbonker-gui` is the same operations with
 the facts ranked and the build watchable. It reads and writes the same
@@ -309,14 +314,19 @@ nmsbonker rollback 20260911-204500Z  # or a particular one
 nmsbonker mods-off                   # stop the game loading any mod
 nmsbonker mods-on                    # let it again
 
+nmsbonker mods show "Some Mod"       # print a script; mods write replaces it, keeping a .bak
 nmsbonker saves backup               # copy the save profiles out of the prefix
 nmsbonker saves list
 nmsbonker saves slots                # the game's save slots, newest marked
 nmsbonker saves inspect 9            # what the editor sees in slot 9 (newest half)
 nmsbonker saves edit 9 --suit-slots 120 --suit-tech-slots 60 --dry-run
 nmsbonker saves edit 9:manual --units 500000000 --nanites 100000
+nmsbonker saves edit 9 --standing gek=7 --standing vykeen=3   # faction standing, as levels 1..9
+nmsbonker saves edit 9 --ship-class S --ship-slots 60 --freighter-class S   # the ship you fly, and the freighter
 nmsbonker saves export 9 --names --pretty --out ~/slot9.json
 nmsbonker saves import 9 ~/slot9.json
+nmsbonker saves get 9 BaseContext/PlayerStateData/DifficultyState   # one node, keys named
+nmsbonker saves set 9 BaseContext/PlayerStateData/DifficultyState edited.json
 
 nmsbonker config show
 nmsbonker config set mod_name "COSMOS COMBINE"
@@ -328,8 +338,8 @@ Global flags: `--config PATH`, `--game-dir PATH`, `-v/--verbose`,
 `mods check`, `tweaks list`, `archive list`, `saves list`, `saves slots`,
 `saves inspect`, `saves edit`, `report` and `audit` also take `--json`.
 
-`saves edit` and `saves import` are the only commands that write into the
-game's save folder. Both copy the whole profile to the backup directory first,
+`saves edit`, `saves set` and `saves import` are the only commands that write
+into the game's save folder. Both copy the whole profile to the backup directory first,
 every time; both refuse while the game is running (`--force` overrides, and
 says why that is unsafe); both rewrite the slot's manifest so its recorded
 sizes match the new file. If Steam shows a cloud sync conflict on the next
@@ -506,7 +516,8 @@ turning the limit off: a limit of zero would flag every reward in the game.
   The build report names them and names the mods relying on them; the edits
   those keys asked for do not happen.
 - **The save editor edits what it names and nothing else.** Currencies, health,
-  shield and the exosuit slot counts, within the grid the save already has.
+  shield, the exosuit slot counts within the grid the save already has, and the
+  six global faction standings.
   Inventory items, ships, bases, difficulty settings, slot copying and
   `accountdata.hg` are out of scope; `saves export` and `saves import` exist
   for the person who wants to change them by hand. Restoring a backup is still
@@ -621,6 +632,27 @@ flow in more detail, including how the golden fixtures are regenerated.
 > tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
 
 ## Changelog
+
+### 0.3.0
+
+- **Save editor, second round.** Faction standing as the levels 1–9 the game
+  shows, with the thresholds from the game's leveled stats table; starships
+  and the freighter (unlocked slots up to the game's own 120/60 ceiling, the
+  grid growing as it does when slots are bought; class; type from the
+  procedural scene files); a Raw JSON tab that browses a save by path and
+  edits one node inline (`saves get`, `saves set`); slots listed most recent
+  first; the Saves section as four tabs.
+- **Edit a mod's script in place** from the Mods section (`mods show`,
+  `mods write`), checked through the sandbox before it is written, the
+  previous text kept as `.bak`.
+- **Compiler failures are named.** A game file MBINCompiler could not
+  decompile or recompile is reported apart from the mod verdicts, in the
+  report, the Overview and the build banner, with the advice to check
+  compatibility and pin. GcUIGlobals joins the compatibility probes: v7.02.0-pre2
+  read the other two and failed on it.
+- **Window.** Result banners and progress are popups over the content instead
+  of a reserved strip; a rebuilt section keeps its scroll position; the About
+  text is shorter.
 
 ### 0.2.0
 
