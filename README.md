@@ -27,7 +27,7 @@ false". A Tools card below it: MBINCompiler v7.02.0-pre1 (dotnet10) ticked,
 "compatible — game files round-trip through this compiler unchanged (2 file(s)
 round-tripped byte-identical outside the header)", with ".NET 10 runtime
 present". Along the bottom, Build and a red "Deploy…" beside Refresh,
-and under them Disable all mods, Back up saves and a red "Remove deployed
+and under them Disable all mods, Saves… and a red "Remove deployed
 mod…". The status bar reads: game 25233815, compiler v7.02.0-pre1, mods 0/12,
 output COSMOS COMBINE.](assets/screenshot-overview.png)
 
@@ -140,7 +140,17 @@ which is the cheapest thing to try when the game stops starting.
 
 **Copies your saves first.** The first deploy of each run copies every `st_*`
 save profile out of the Proton prefix into a timestamped folder, retention ten.
-Copy only, one direction: nothing here ever writes into the prefix.
+The save editor below takes the same copy before every write it makes.
+
+**Edits your saves, natively.** `saves slots` lists what the game has, `saves
+inspect` decodes one, and `saves edit` sets units, nanites, quicksilver, health,
+shield and the exosuit's unlocked item and technology slot counts (up to the
+120 and 60 the game's own grid allows). The chunked LZ4 container, the XXTEA
+manifest beside each save and the obfuscated JSON keys are all handled in Go;
+the key names come from the `mapping.json` MBINCompiler publishes with each
+release, fetched beside the compiler. Everything the editor does not change is
+written back byte for byte. `saves export` and `saves import` are the raw
+escape hatch for anything else.
 
 **Has a window, if you want one.** `nmsbonker-gui` is the same operations with
 the facts ranked and the build watchable. It reads and writes the same
@@ -301,6 +311,12 @@ nmsbonker mods-on                    # let it again
 
 nmsbonker saves backup               # copy the save profiles out of the prefix
 nmsbonker saves list
+nmsbonker saves slots                # the game's save slots, newest marked
+nmsbonker saves inspect 9            # what the editor sees in slot 9 (newest half)
+nmsbonker saves edit 9 --suit-slots 120 --suit-tech-slots 60 --dry-run
+nmsbonker saves edit 9:manual --units 500000000 --nanites 100000
+nmsbonker saves export 9 --names --pretty --out ~/slot9.json
+nmsbonker saves import 9 ~/slot9.json
 
 nmsbonker config show
 nmsbonker config set mod_name "COSMOS COMBINE"
@@ -309,8 +325,16 @@ nmsbonker config set save_backup false
 
 Global flags: `--config PATH`, `--game-dir PATH`, `-v/--verbose`,
 `--no-network`. `status`, `detect`, `pak find`, `tools check`, `mods list`,
-`mods check`, `tweaks list`, `archive list`, `saves list`, `report` and `audit`
-also take `--json`.
+`mods check`, `tweaks list`, `archive list`, `saves list`, `saves slots`,
+`saves inspect`, `saves edit`, `report` and `audit` also take `--json`.
+
+`saves edit` and `saves import` are the only commands that write into the
+game's save folder. Both copy the whole profile to the backup directory first,
+every time; both refuse while the game is running (`--force` overrides, and
+says why that is unsafe); both rewrite the slot's manifest so its recorded
+sizes match the new file. If Steam shows a cloud sync conflict on the next
+launch, choose the local file: it is the edited one. A slot is `9`, `9:auto` or
+`9:manual`; a bare number means the half the game would load.
 
 `build` exits 1 if any game file had to be dropped, and 0 otherwise — a mod that
 applied nothing is a warning in the report, not a build failure.
@@ -423,8 +447,9 @@ yet.](assets/screenshot-report.png)
 | `$XDG_DATA_HOME/nmsbonker/save-backup/` | copies of your save profiles, newest ten |
 | `$XDG_CACHE_HOME/nmsbonker/` | the pak index, the release listing, the decompiled game files |
 | `$XDG_CONFIG_HOME/fyne/io.ushineko.nmsbonker/` | the window's colour scheme, font and text size |
-| `<game>/GAMEDATA/MODS/<mod_name>/` | the only place in the game this tool writes |
+| `<game>/GAMEDATA/MODS/<mod_name>/` | where deploy installs the mod |
 | `<game>/Binaries/SETTINGS/GCMODSETTINGS.MXML` | the game's own mod list, which deploy edits |
+| `<compatdata>/275850/pfx/.../HelloGames/NMS/st_*/` | your saves; `saves edit` and `saves import` write here, after a backup |
 
 The defaults are `~/.config`, `~/.local/share` and `~/.cache`; every one of the
 first four is a setting, and `nmsbonker config show` prints where they resolved
@@ -480,8 +505,12 @@ turning the limit off: a limit of zero would flag every reward in the game.
   `SECTION_ACTIVE`, `VALUE_MATCH`, `VALUE_MATCH_OPTIONS`, `VALUE_MATCH_TYPE`.
   The build report names them and names the mods relying on them; the edits
   those keys asked for do not happen.
-- **Not a save editor.** Save backup is a copy, in one direction, and restoring
-  is a copy you do yourself.
+- **The save editor edits what it names and nothing else.** Currencies, health,
+  shield and the exosuit slot counts, within the grid the save already has.
+  Inventory items, ships, bases, difficulty settings, slot copying and
+  `accountdata.hg` are out of scope; `saves export` and `saves import` exist
+  for the person who wants to change them by hand. Restoring a backup is still
+  a copy you do yourself.
 - **Not a Nexus client.** Third-party scripts are yours to download; `mods
   import` brings a folder of them in.
 - **A parameter override is one substitution.** It rewrites the *first*
@@ -568,6 +597,7 @@ are never committed.
 | `internal/mxml` | The line-based MXML edit engine |
 | `internal/build` | The target plan, the merge and recompile gate, the report |
 | `internal/build/audit` | The reward-amount audit: reward blocks parsed, limits applied, contributors attributed |
+| `internal/save` | The save file codec: the chunked LZ4 container, the encrypted manifest, a byte-preserving JSON tree, the key mapping and the typed edits |
 | `internal/tweaks` | The ten built-in mod scripts, embedded |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
@@ -586,9 +616,24 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/004`](specs/004-tweaks-deploy-rollback-packaging.md) for the tweaks,
 > the deploy story and the packaging;
 > [`specs/005`](specs/005-amount-audit-and-caps.md) for the reward-amount audit
-> and the caps on the multiplier tweaks.
+> and the caps on the multiplier tweaks;
+> [`specs/006`](specs/006-mission-reward-tweaks.md) for the mission reward
+> tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
 
 ## Changelog
+
+### 0.2.0
+
+- **A save editor.** `saves slots`, `saves inspect`, `saves edit`, `saves
+  export` and `saves import`, and a Saves section in the window. Native Go
+  handling of the chunked LZ4 save container, the XXTEA-encrypted manifest and
+  the obfuscated JSON keys, with the key names fetched from MBINCompiler's
+  `mapping.json` beside the compiler. Edits units, nanites, quicksilver,
+  health, shield and the exosuit's unlocked slot counts; everything else is
+  written back byte for byte. Every write backs the profile up first, refuses
+  while the game is running, and rewrites the manifest to match.
+- **Mission reward tweaks** (spec 006): Nexus and mission board rewards
+  multiplied per reward-table entry, on top of the global tweaks.
 
 ### 0.1.0
 

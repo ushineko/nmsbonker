@@ -62,6 +62,7 @@ Two consequences that are easy to lose:
 | `internal/build/cache` | The pristine cache: game files extracted and decompiled once per game buildid |
 | `internal/build/report` | The result model and its two renderings, `BUILD_REPORT.md` and `report.json` |
 | `internal/modsettings` | The game's `GCMODSETTINGS.MXML`, read and written line by line |
+| `internal/save` | The save file codec (spec 007): chunked LZ4 container, XXTEA manifest, a JSON tree that reproduces untouched bytes, the key mapping, the typed edits |
 | `internal/tweaks` | The ten built-in mod scripts, embedded, with their headers parsed |
 | `internal/buildinfo` | Version and commit, injected by the linker |
 | `tests/parity` | The CLI/GUI parity guard, behind a build tag `make test` always passes |
@@ -123,7 +124,11 @@ Two consequences that are easy to lose:
 
 Three properties of that path are load-bearing and easy to break:
 
-- **The game directory is read-only except during deploy.** Everything else
+- **The game directory is read-only except during deploy and a save edit.**
+  `core.writeSave` (spec 007) is the second exception: it rewrites one save and
+  its manifest under the Proton prefix, after copying the whole profile to the
+  save backup, only while the game is not running, and atomically per file.
+  Everything else
   writes under the workspace and the cache. `deploy`, `undeploy`, `rollback` and
   `mods-off` are the only operations that write inside the install, and each of
   them archives what it displaces first.

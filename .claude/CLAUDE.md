@@ -73,10 +73,12 @@ This repository is **public**. The following hold without exception:
   cobra CLI (`cmd/nmsbonker`) and the Fyne GUI (`cmd/nmsbonker-gui`) render only.
   A new operation lands in core first, then in both front ends, in the same
   commit. Enforced by a parity test with a documented allow-list.
-- **The game directory is read-only except during deploy.** Build output goes to
-  the workspace under `$XDG_DATA_HOME/nmsbonker/`; only `core.Deploy` writes under
-  `GAMEDATA/MODS/` and `Binaries/SETTINGS/GCMODSETTINGS.MXML`, and it archives what
-  it replaces first.
+- **The game directory is read-only except during deploy and a save edit.** Build
+  output goes to the workspace under `$XDG_DATA_HOME/nmsbonker/`; only `core.Deploy`
+  writes under `GAMEDATA/MODS/` and `Binaries/SETTINGS/GCMODSETTINGS.MXML`, and it
+  archives what it replaces first. Only `core.writeSave` (spec 007) writes under the
+  Proton prefix's save folder, and it copies the whole profile to the save backup
+  first, refuses while the game is running, and writes each file atomically.
 - **Recompile gate**: a MBIN is shipped only if MBINCompiler recompiles the merged
   MXML cleanly. A failed structural edit is retried without it, then dropped and
   reported. Never ship a file the compiler rejected.
