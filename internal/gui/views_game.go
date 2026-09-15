@@ -20,7 +20,7 @@ The operations that reach into the game (spec 004 R3.3, R4, R5).
 Everything here changes something outside this program's own directories, so
 every one of them is behind a confirmation that says what it touches and, as
 importantly, what it does not. The game directory is read-only to this tool
-except for these and for deploy.
+except for these, for deploy, and for the save editor (views_saves.go).
 */
 
 // --- save backup (R5.2) -----------------------------------------------------
@@ -97,40 +97,6 @@ func (u *ui) backupSaves() {
 		})
 		return nil
 	})
-}
-
-// showSaveBackups lists what has been copied and how to put one back.
-//
-// Restoring is a documented manual copy rather than a button, and that is the
-// design: a tool that can write into a save directory is a tool that can
-// destroy a save by getting one path wrong, and the whole value of this feature
-// is that it cannot.
-func (u *ui) showSaveBackups() {
-	var t detailTable
-	t.header("Taken", "Profiles", "Files", "Size")
-	t.setWidths(240, 100, 90, 120)
-	for _, b := range u.saves.Backups {
-		t.row(StatusInfo, b.Created.Format("2006-01-02 15:04")+" · "+humanAgo(b.Created),
-			strconv.Itoa(b.Profiles), strconv.Itoa(b.Files), humanSize(b.Bytes))
-	}
-
-	open := widget.NewButtonWithIcon("Open backup folder", theme.FolderOpenIcon(),
-		func() { u.openPath(u.saves.Dir) })
-	take := widget.NewButtonWithIcon("Back up now", theme.ContentCopyIcon(),
-		func() { u.backupSaves() })
-	take.Importance = widget.HighImportance
-
-	head := container.NewVBox(
-		plainRow("Backups", u.saves.Dir),
-		plainRow("Saves", orNone(u.saves.Source, "no Proton prefix for this game")),
-		plainRow("Kept", fmt.Sprintf("the newest %d", u.saves.Retention)),
-		wrapped("To restore one: close the game, then copy an st_* folder from a backup back "+
-			"into the saves directory above. nmsbonker never writes into the prefix itself, "+
-			"which is why this is a copy you do rather than a button here."),
-	)
-	body := container.NewBorder(head, container.NewHBox(take, open), nil, nil,
-		fixedHeight(t.widget(), 220))
-	u.showDetail("Save backups", body, 820, 560)
 }
 
 // --- the game's mod directory -----------------------------------------------
@@ -423,8 +389,8 @@ func (u *ui) gameActions() fyne.CanvasObject {
 			func() { u.confirmDisableAllMods() })
 	}
 
-	saves := widget.NewButtonWithIcon("Back up saves", theme.ContentCopyIcon(),
-		func() { u.showSaveBackups() })
+	saves := widget.NewButtonWithIcon("Saves…", theme.StorageIcon(),
+		func() { u.selectSection("Saves") })
 	openMods := widget.NewButtonWithIcon("Open mods folder", theme.FolderIcon(),
 		func() { u.openModsDir() })
 	remove := widget.NewButtonWithIcon("Remove deployed mod…", theme.DeleteIcon(),

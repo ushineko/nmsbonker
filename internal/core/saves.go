@@ -26,10 +26,10 @@ synced everywhere before anyone notices. Copying the folder before a deploy
 costs a second and a few megabytes and is the only thing standing between "that
 mod broke my save" and losing it.
 
-Copy only, in one direction. Nothing here ever writes into the prefix, and
-restoring is a documented manual copy: a tool that can put files back into a
-save directory is a tool that can destroy a save by getting one path wrong, and
-the whole value of this feature is that it cannot.
+Copy only, in one direction; nothing in this file writes into the prefix, and
+restoring is a documented manual copy. The save editor (saveedit.go, spec 007)
+is the one place that does write there, and it calls backupSaves first, every
+time, which is what makes that write survivable.
 */
 
 // SaveRetention is how many save backups are kept (R5.1).
@@ -133,8 +133,18 @@ func (s *session) backupSaves() (BackupSavesResult, error) {
 	}
 	sort.Strings(profiles)
 
-	out.Timestamp = time.Now().UTC().Format(saveStamp)
-	out.Dir = filepath.Join(s.paths.SaveBackup, out.Timestamp)
+	// The directory name is the second; a second write within the same second
+	// (the save editor, spec 007 R6.1) must not copy edited saves over the
+	// originals the first one preserved, so wait for the clock rather than
+	// reuse the name.
+	for {
+		out.Timestamp = time.Now().UTC().Format(saveStamp)
+		out.Dir = filepath.Join(s.paths.SaveBackup, out.Timestamp)
+		if _, err := os.Stat(out.Dir); errors.Is(err, os.ErrNotExist) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if err := config.MkdirAll(out.Dir); err != nil {
 		return out, err
 	}

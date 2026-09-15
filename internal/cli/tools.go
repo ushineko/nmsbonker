@@ -47,6 +47,11 @@ func newToolsEnsureCmd() *cobra.Command {
 				fact(w, "result", "installed")
 			}
 			fact(w, "binary", res.Bin)
+			if res.Mapping != "" {
+				fact(w, "save-key mapping", res.Mapping)
+			} else if res.MappingWarning != "" {
+				fact(w, "save-key mapping", "absent: "+res.MappingWarning)
+			}
 			return nil
 		},
 	}
@@ -72,13 +77,13 @@ func newToolsListCmd() *cobra.Command {
 				return nil
 			}
 			var t table
-			t.header("", "TAG", "FLAVOR", "REPORTS")
+			t.header("", "TAG", "FLAVOR", "MAPPING", "REPORTS")
 			for _, e := range res.Entries {
 				marker := ""
 				if e.Active {
 					marker = "*"
 				}
-				t.row(marker, e.Tag, e.Flavor, e.Version)
+				t.row(marker, e.Tag, e.Flavor, yesNo(e.Mapping), e.Version)
 			}
 			t.write(w)
 			return nil

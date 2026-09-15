@@ -33,6 +33,10 @@ type EnsureToolsResult struct {
 	Attempts []string
 	// GameDataVersion is what the selection was matched against, or "unknown".
 	GameDataVersion string
+	// Mapping is the save-key mapping installed beside the compiler (spec 007
+	// R4.1); MappingWarning says why there is none.
+	Mapping        string
+	MappingWarning string
 }
 
 /*
@@ -103,6 +107,22 @@ func EnsureTools(ctx context.Context, req EnsureToolsRequest) (EnsureToolsResult
 	out.AlreadyPresent = install.AlreadyPresent
 	out.Flavor = install.Flavor
 	out.Bin = install.Compiler.Bin
+	// The save-key mapping (spec 007 R4.1) is fetched separately so that
+	// --no-network keeps its promise: an installed compiler with no mapping
+	// is reported, not downloaded around.
+	if req.NoNetwork {
+		install.MappingWarning = ""
+		if install.Mapping == "" {
+			install.MappingWarning = "not fetched: --no-network"
+		}
+	} else {
+		mbin.InstallMapping(ctx, install, selection.Release, nil)
+	}
+	out.Mapping = install.Mapping
+	out.MappingWarning = install.MappingWarning
+	if out.MappingWarning != "" {
+		req.Events.logf(LevelWarn, "save-key mapping: %s", out.MappingWarning)
+	}
 	return out, nil
 }
 
@@ -121,6 +141,8 @@ type ToolEntry struct {
 	// Version is what the binary reports, or why it could not be asked. A
 	// release whose binary no longer runs is exactly what this list is for.
 	Version string
+	// Mapping says whether the save-key mapping sits beside it (spec 007 R4.2).
+	Mapping bool
 }
 
 // ListToolsResult is the installed set (R7.2).
@@ -151,6 +173,8 @@ func ListTools(ctx context.Context, req ListToolsRequest) (ListToolsResult, erro
 		if c, err := mbin.Locate(s.paths.Tools, tag); err == nil {
 			entry.Flavor = c.Flavor
 			entry.Bin = c.Bin
+			_, statErr := os.Stat(mbin.MappingPath(c.Bin))
+			entry.Mapping = statErr == nil
 			if v, err := c.Version(ctx); err == nil {
 				entry.Version = v
 			} else {

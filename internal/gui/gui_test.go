@@ -46,7 +46,7 @@ func testUI(t *testing.T) *ui {
 func TestSectionNamesNeedsNoApp(t *testing.T) {
 	names := SectionNames()
 	require.Equal(t, []string{
-		"Overview", "Mods", "Tweaks", "Build", "Report", "Tools", "Settings", "Appearance", "About",
+		"Overview", "Mods", "Tweaks", "Build", "Report", "Saves", "Tools", "Settings", "Appearance", "About",
 	}, names)
 
 	// Every advertised name must have a section behind it. sections() walks

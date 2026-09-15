@@ -77,16 +77,29 @@ type ui struct {
 	// itself, so inferring "not loaded yet" from an empty slice makes an empty
 	// library load forever. "Loaded and empty" and "not loaded" are different
 	// states and need to be stored as such.
-	status    core.StatusResult
-	statusOK  bool
-	detect    core.DetectResult
-	detectOK  bool
-	mods      core.ListModsResult
-	modsOK    bool
-	tweaks    core.ListTweaksResult
-	tweaksOK  bool
-	saves     core.ListSaveBackupsResult
-	savesOK   bool
+	status   core.StatusResult
+	statusOK bool
+	detect   core.DetectResult
+	detectOK bool
+	mods     core.ListModsResult
+	modsOK   bool
+	tweaks   core.ListTweaksResult
+	tweaksOK bool
+	saves    core.ListSaveBackupsResult
+	savesOK  bool
+	// slots is the Saves section's slot listing (spec 007 R8.1); slotsErr is
+	// why it is empty when the listing failed, so the section reports it rather
+	// than asking again on every rebuild. inspect is the save the editor card
+	// shows, nil until a row is picked.
+	slots    core.ListSaveSlotsResult
+	slotsErr string
+	slotsOK  bool
+	inspect  *core.InspectSaveResult
+	// draft holds what has been typed into the editor form but not yet
+	// written, keyed by field label. The section is rebuilt whenever an
+	// operation starts or stops (regate), and a rebuild that reset the form
+	// would throw away the values Preview was just asked about.
+	draft     map[string]string
 	archive   core.ListArchiveResult
 	archiveOK bool
 	// checks are the per-script facts the Mods table's Author and Files columns
@@ -184,7 +197,7 @@ func (u *ui) applyAppearance() {
 // title with no builder draws nothing, so the two are kept in step by
 // TestSectionNamesNeedsNoApp rather than by memory.
 var sectionTitles = []string{
-	"Overview", "Mods", "Tweaks", "Build", "Report", "Tools", "Settings", "Appearance", "About",
+	"Overview", "Mods", "Tweaks", "Build", "Report", "Saves", "Tools", "Settings", "Appearance", "About",
 }
 
 // sectionBuilders is what each section is made of. sections() walks
@@ -208,6 +221,7 @@ func sectionBuilders() map[string]struct {
 		"Tweaks":     {theme.SettingsIcon, (*ui).buildTweaks},
 		"Build":      {theme.MediaPlayIcon, (*ui).buildBuild},
 		"Report":     {theme.DocumentIcon, (*ui).buildReport},
+		"Saves":      {theme.StorageIcon, (*ui).buildSaves},
 		"Tools":      {theme.ComputerIcon, (*ui).buildTools},
 		"Settings":   {theme.SettingsIcon, (*ui).buildSettings},
 		"Appearance": {theme.ColorPaletteIcon, (*ui).buildAppearance},
@@ -916,6 +930,8 @@ func Actions() []string {
 		"undeploy", "rollback", "archive list",
 		"mods-off", "mods-on",
 		"saves backup", "saves list",
+		// Saves (spec 007 R8)
+		"saves slots", "saves inspect", "saves export", "saves import", "saves edit",
 		// Tools
 		"tools ensure", "tools list", "tools check", "tools pin", "tools unpin",
 		"tools releases", "tools remove",

@@ -2,6 +2,7 @@ package mbin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -94,6 +95,91 @@ type InstallResult struct {
 	// Attempts records each flavor tried and how it went, so a fallback is
 	// visible rather than silent.
 	Attempts []string
+	// Mapping is the path of the save-key mapping installed beside the
+	// compiler (spec 007 R4.1), "" when the release publishes none.
+	Mapping string
+	// MappingWarning says why there is no mapping, when there is none.
+	MappingWarning string
+}
+
+// MappingAsset is the save-key mapping MBINCompiler publishes with each
+// release (spec 007 R4.1).
+const MappingAsset = "mapping.json"
+
+// MappingPath is where the mapping lives once installed: beside the compiler
+// it was published with, so the two track the game together.
+func MappingPath(compilerBin string) string {
+	return filepath.Join(filepath.Dir(compilerBin), MappingAsset)
+}
+
+// noteMapping records whether an installed release already has its mapping,
+// without touching the network.
+func noteMapping(result *InstallResult) {
+	if result.Compiler == nil {
+		return
+	}
+	path := MappingPath(result.Compiler.Bin)
+	if _, err := os.Stat(path); err == nil {
+		result.Mapping = path
+	} else {
+		result.MappingWarning = "no save-key mapping is installed; run `nmsbonker tools ensure` with network access"
+	}
+}
+
+/*
+InstallMapping fetches the mapping for an installed release if it is not
+already there (R4.1). Separate from Install so a caller honouring --no-network
+can leave it out.
+
+Its absence is a warning, not a failure: the compiler is what a build needs,
+and a release that forgot to attach the mapping should not stop mods being
+built. The file is checked to parse as JSON with a Mapping array, because a
+GitHub error page saved under the right name is the one failure mode that would
+otherwise surface as "the mapping names nothing".
+*/
+func InstallMapping(ctx context.Context, result *InstallResult, release Release, client *http.Client) {
+	if result == nil || result.Compiler == nil {
+		return
+	}
+	result.MappingWarning = ""
+	path := MappingPath(result.Compiler.Bin)
+	if _, err := os.Stat(path); err == nil {
+		result.Mapping = path
+		return
+	}
+	asset, ok := release.Asset(MappingAsset)
+	if !ok {
+		result.MappingWarning = fmt.Sprintf("release %s publishes no %s", release.Tag, MappingAsset)
+		return
+	}
+	if err := download(ctx, client, asset.URL, path, 0o640); err != nil {
+		result.MappingWarning = err.Error()
+		return
+	}
+	if err := checkMapping(path); err != nil {
+		_ = os.Remove(path)
+		result.MappingWarning = err.Error()
+		return
+	}
+	result.Mapping = path
+}
+
+// checkMapping makes sure a downloaded mapping is the document it should be.
+func checkMapping(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", path, err)
+	}
+	var doc struct {
+		Mapping []json.RawMessage `json:"Mapping"`
+	}
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return fmt.Errorf("%s is not a mapping document: %w", path, err)
+	}
+	if len(doc.Mapping) == 0 {
+		return fmt.Errorf("%s holds no mapping entries", path)
+	}
+	return nil
 }
 
 // ErrInvalidTag reports a release tag that cannot be used as a path segment.
@@ -138,6 +224,7 @@ func Install(ctx context.Context, toolsDir string, release Release, configuredFl
 		result.Compiler = c
 		result.Flavor = c.Flavor
 		result.AlreadyPresent = true
+		noteMapping(result)
 		return result, nil
 	}
 
@@ -190,6 +277,7 @@ func Install(ctx context.Context, toolsDir string, release Release, configuredFl
 		result.Attempts = append(result.Attempts, fmt.Sprintf("%s: installed and verified (%s)", flavor, out))
 		result.Compiler = compiler
 		result.Flavor = flavor
+		noteMapping(result)
 		return result, nil
 	}
 

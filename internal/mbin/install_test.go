@@ -252,3 +252,59 @@ func TestInstalledSkipsDirectoriesThatAreNotValidTags(t *testing.T) {
 	_, err := mbin.Locate(tools, "../../evil-1.2.3")
 	require.ErrorIs(t, err, mbin.ErrInvalidTag)
 }
+
+/*
+Spec 007 AC8: a release that attaches mapping.json gets it installed beside the
+compiler; one that does not still installs, with the absence reported as a
+warning rather than a failure. An install that is already present fetches a
+missing mapping on its own, which is how an existing install picks it up.
+*/
+func TestInstallFetchesTheSaveKeyMappingWhenTheReleaseHasOne(t *testing.T) {
+	mbin.SetMaxProcesses(2)
+	srv, release := assetServer(t, false)
+	tools := t.TempDir()
+
+	// Without the asset: installed, warned. Install itself never fetches the
+	// mapping (so --no-network can skip it); InstallMapping does.
+	got, err := mbin.Install(t.Context(), tools, release, mbin.FlavorDotnet10, srv.Client())
+	require.NoError(t, err)
+	require.Empty(t, got.Mapping)
+	require.Contains(t, got.MappingWarning, "no save-key mapping is installed")
+	mbin.InstallMapping(t.Context(), got, release, srv.Client())
+	require.Empty(t, got.Mapping)
+	require.Contains(t, got.MappingWarning, "mapping.json")
+	require.NoFileExists(t, mbin.MappingPath(got.Compiler.Bin))
+
+	// The release grows the asset; the already-present install picks it up.
+	mapping := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"libMBIN_version":"7.1.0.1","Mapping":[{"Key":"F2P","Value":"Version"}]}`))
+	}))
+	t.Cleanup(mapping.Close)
+	release.Assets = append(release.Assets, mbin.Asset{Name: mbin.MappingAsset, URL: mapping.URL + "/mapping.json"})
+	got, err = mbin.Install(t.Context(), tools, release, mbin.FlavorDotnet10, srv.Client())
+	require.NoError(t, err)
+	require.True(t, got.AlreadyPresent)
+	mbin.InstallMapping(t.Context(), got, release, srv.Client())
+	require.Equal(t, mbin.MappingPath(got.Compiler.Bin), got.Mapping)
+	require.Empty(t, got.MappingWarning)
+	require.FileExists(t, got.Mapping)
+
+	// Already there: Install reports it without any network.
+	got, err = mbin.Install(t.Context(), tools, release, mbin.FlavorDotnet10, nil)
+	require.NoError(t, err)
+	require.Equal(t, mbin.MappingPath(got.Compiler.Bin), got.Mapping)
+
+	// A download that is not a mapping document is removed and reported.
+	tools2 := t.TempDir()
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("<html>rate limited</html>"))
+	}))
+	t.Cleanup(bad.Close)
+	release.Assets[len(release.Assets)-1].URL = bad.URL
+	got, err = mbin.Install(t.Context(), tools2, release, mbin.FlavorDotnet10, srv.Client())
+	require.NoError(t, err)
+	mbin.InstallMapping(t.Context(), got, release, srv.Client())
+	require.Empty(t, got.Mapping)
+	require.Contains(t, got.MappingWarning, "not a mapping document")
+	require.NoFileExists(t, mbin.MappingPath(got.Compiler.Bin))
+}

@@ -45,14 +45,18 @@ func (u *ui) compilerCard() fyne.CanvasObject {
 	entries := u.tools.Entries
 
 	var t detailTable
-	t.header("", "Tag", "Flavor", "Reports", "Path")
-	t.setWidths(30, 150, 130, 260, 420)
+	t.header("", "Tag", "Flavor", "Save mapping", "Reports", "Path")
+	t.setWidths(30, 150, 130, 110, 260, 420)
 	for _, e := range entries {
 		marker, st := "", StatusInfo
 		if e.Active {
 			marker, st = "*", StatusGood
 		}
-		t.row(st, marker, e.Tag, orNone(e.Flavor, "—"), e.Version, e.Dir)
+		mapping := "absent"
+		if e.Mapping {
+			mapping = "present"
+		}
+		t.row(st, marker, e.Tag, orNone(e.Flavor, "—"), mapping, e.Version, e.Dir)
 	}
 	table := t.widget()
 

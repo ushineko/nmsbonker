@@ -68,6 +68,7 @@ func (u *ui) invalidate() {
 	u.modsOK = false
 	u.tweaksOK = false
 	u.savesOK = false
+	u.slotsOK = false
 	u.archiveOK = false
 	u.toolsOK = false
 	u.releasesOK = false
