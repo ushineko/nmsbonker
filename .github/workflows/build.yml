@@ -24,12 +24,13 @@ jobs:
           cache: true
 
       - name: Install the window's build dependencies
-        # Fyne over GLFW: OpenGL and X11 headers. The CLI needs none of this and
-        # builds with CGO_ENABLED=0; the GUI package's tests still compile it.
+        # Fyne over GLFW: OpenGL, X11 and Wayland headers (this Fyne builds GLFW
+        # with both back ends). The CLI needs none of this and builds with
+        # CGO_ENABLED=0; the GUI package's tests still compile it.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
+            gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
 
       - name: Test
         # Headless: the parity guard and the GUI tests need no display.
@@ -53,7 +54,7 @@ jobs:
           pacman -Sy --noconfirm archlinux-keyring
           pacman -Su --noconfirm
           # nodejs is for the GitHub Actions runtime inside the container.
-          pacman -S --noconfirm base-devel git go gcc pkgconf mesa \
+          pacman -S --noconfirm base-devel git go gcc pkgconf mesa wayland wayland-protocols \
             libgl libx11 libxcursor libxrandr libxinerama libxi libxxf86vm libxkbcommon nodejs
           # makepkg refuses to run as root.
           useradd -m builder
@@ -107,7 +108,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
+            gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libwayland-dev wayland-protocols
 
       - name: Check the tag matches VERSION
         run: |

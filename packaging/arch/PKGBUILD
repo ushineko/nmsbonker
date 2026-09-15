@@ -12,10 +12,10 @@ pkgdesc="No Man's Sky mod builder and save editor for Linux: AMUMSS .lua scripts
 arch=('x86_64' 'aarch64')
 url="https://github.com/ushineko/nmsbonker"
 license=('MIT')
-# The CLI is static. The window is Fyne over GLFW and needs OpenGL and X11 at
-# run time; Wayland sessions run it through XWayland, as Fyne does everywhere.
-depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon')
-makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa')
+# The CLI is static. The window is Fyne over GLFW, built with both the X11 and
+# the Wayland back end, so it needs OpenGL, X11 and Wayland at run time.
+depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon' 'wayland')
+makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa' 'wayland-protocols')
 optdepends=('dotnet-runtime: run the framework-dependent MBINCompiler build (the self-contained one needs nothing)')
 options=('!strip' '!debug') # Go binaries: stripped by the linker flags in the Makefile; no separate debug package
 source=()
