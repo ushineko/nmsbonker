@@ -38,6 +38,17 @@ type Target struct {
 	Items  []Item
 }
 
+// ModsFor lists the mods whose targets name a source, in build order; nil when
+// no target does. For the report's account of a file the compiler refused.
+func (p *Plan) ModsFor(source string) []string {
+	for _, t := range p.Targets {
+		if t.Source == source {
+			return t.Mods()
+		}
+	}
+	return nil
+}
+
 // Mods lists the contributing scripts in order, de-duplicated.
 func (t *Target) Mods() []string {
 	seen := map[string]bool{}

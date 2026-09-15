@@ -54,6 +54,10 @@ type Options struct {
 	CacheReused         int
 	CacheBuilt          int
 	CacheMisses         []string
+	// DecompileFailures are the sources the compiler could not read out of
+	// the paks, for the report's compiler-failure list (the merge never sees
+	// them; they are cache misses to it).
+	DecompileFailures []report.CompilerFailure
 	// Params are the parameter overrides the scripts were loaded with, recorded
 	// in the report so a front end can tell whether the output on disk was
 	// built from the settings currently in force (spec 004 R2.1).
@@ -74,6 +78,9 @@ type outcome struct {
 	// amounts is the reward-amount audit of this target, when it is one of the
 	// audited tables (spec 005 R1.1).
 	amounts *audit.Result
+	// compileFailed marks a drop caused by the compiler rather than by the
+	// file system, for the report's compiler-failure list.
+	compileFailed bool
 }
 
 // runner carries the per-run state the target workers share.
@@ -115,7 +122,8 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 		CompilerVersion: opts.CompilerVersion, GameBuildID: opts.GameBuildID,
 		Compatibility: opts.Compatibility, CompatibilityDetail: opts.CompatibilityDetail,
 		UnsupportedKeys: plan.Unsupported, CacheMisses: opts.CacheMisses,
-		CacheReused: opts.CacheReused, CacheBuilt: opts.CacheBuilt,
+		CompilerFailures: append([]report.CompilerFailure(nil), opts.DecompileFailures...),
+		CacheReused:      opts.CacheReused, CacheBuilt: opts.CacheBuilt,
 		Complex: plan.Complex, Workers: opts.Workers, Params: opts.Params,
 	}
 
@@ -161,6 +169,12 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 			res.Dropped++
 			if o.target.Outcome == report.OutcomeDropped {
 				stats.drop(o.target.Mods)
+			}
+			if o.compileFailed {
+				res.CompilerFailures = append(res.CompilerFailures, report.CompilerFailure{
+					Internal: o.target.Internal, Stage: report.StageRecompile,
+					Detail: o.target.Error, Mods: o.target.Mods,
+				})
 			}
 		}
 	}
@@ -393,7 +407,7 @@ func (r *runner) target(ctx context.Context, t *Target) outcome {
 			})
 		}
 		return outcome{events: events, target: res, merge: merged, compile: compiled,
-			audit: audited, amounts: amounts}
+			audit: audited, amounts: amounts, compileFailed: true}
 	}
 
 	dest := filepath.Join(r.modRoot, filepath.FromSlash(res.Internal))

@@ -125,10 +125,24 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 			req.Events.logf(LevelWarn, "%s resolved by basename to %s", entry.Source, entry.Internal)
 		}
 	}
-	var misses []string
+	// A miss is one of two things: the file is in no pak (a game update moved
+	// it; the mod needs updating) or the compiler could not decompile it (the
+	// compiler does not match the game). They are reported apart because the
+	// fixes differ.
+	var (
+		misses     []string
+		decompiled []report.CompilerFailure
+	)
 	for _, m := range cached.Misses {
-		misses = append(misses, m.Source+" ("+m.Reason+")")
-		req.Events.logf(LevelWarn, "no game file for %s: %s", m.Source, m.Reason)
+		if m.Reason == cache.ReasonNotInPaks {
+			misses = append(misses, m.Source+" ("+m.Reason+")")
+			req.Events.logf(LevelWarn, "no game file for %s: %s", m.Source, m.Reason)
+			continue
+		}
+		decompiled = append(decompiled, report.CompilerFailure{
+			Internal: m.Source, Stage: report.StageDecompile, Detail: m.Reason, Mods: plan.ModsFor(m.Source),
+		})
+		req.Events.logf(LevelWarn, "MBINCompiler could not decompile %s: %s", m.Source, report.FirstLine(m.Reason))
 	}
 
 	req.Events.progress(5, 5, "merging and compiling")
@@ -140,7 +154,7 @@ func Build(ctx context.Context, req BuildRequest) (BuildResult, error) {
 		CompilerVersion: compilerVersion, GameBuildID: s.install.BuildID,
 		Compatibility: compat.Status, CompatibilityDetail: compat.Detail,
 		CacheTime: cached.Duration, CacheReused: cached.Reused, CacheBuilt: cached.Extracted,
-		CacheMisses: misses, Params: s.cfg.Params, Audit: s.cfg.Audit.Thresholds(),
+		CacheMisses: misses, DecompileFailures: decompiled, Params: s.cfg.Params, Audit: s.cfg.Audit.Thresholds(),
 	})
 	if err != nil {
 		return BuildResult{}, err

@@ -68,6 +68,10 @@ type Entry struct {
 	ResolvedBy string `json:"resolvedBy"`
 }
 
+// ReasonNotInPaks is the miss reason for a source no archive holds, as opposed
+// to one the compiler could not decompile; callers tell the two apart by it.
+const ReasonNotInPaks = "in none of the indexed paks"
+
 // Miss is a source the cache could not produce, and why (R3.3).
 type Miss struct {
 	Source string `json:"source"`
@@ -250,7 +254,7 @@ func (c *Cache) Ensure(ctx context.Context, sources []string, force bool) (Resul
 
 		loc, byBase, ok := c.index.Resolve(src)
 		if !ok {
-			out.Misses = append(out.Misses, Miss{Source: src, Reason: "in none of the indexed paks"})
+			out.Misses = append(out.Misses, Miss{Source: src, Reason: ReasonNotInPaks})
 			continue
 		}
 		info, err := statPak(loc.Pak)

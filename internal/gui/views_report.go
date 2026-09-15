@@ -26,6 +26,40 @@ five verdicts. That matters more than it sounds: the report is what a user reads
 after a game update to decide which mods to re-download, and two different
 explanations of WORKING~ would be two different decisions.
 */
+/*
+compilerFailuresBlock is the report's loudest block, and empty when there is
+nothing to say.
+
+A file the compiler could not decompile or recompile is not a mod problem and
+must not read as one: the mod is fine, the compiler does not match the game,
+and the fix is a different compiler release. Game and compiler drift apart
+after every game update, so this happens often enough to deserve its own red
+block at the top rather than a line among the warnings.
+*/
+func (u *ui) compilerFailuresBlock(r *report.Result) fyne.CanvasObject {
+	if len(r.CompilerFailures) == 0 {
+		return container.NewVBox()
+	}
+	var t detailTable
+	t.header("File", "Stage", "Compiler said", "Wanted by")
+	t.setWidths(300, 90, 420, 200)
+	for _, f := range r.CompilerFailures {
+		t.row(StatusBad, f.Internal, f.Stage, report.FirstLine(f.Detail), strings.Join(f.Mods, ", "))
+	}
+	check := widget.NewButtonWithIcon("Check compatibility", theme.QuestionIcon(), func() { u.toolCheck() })
+	tools := widget.NewButtonWithIcon("Tools", theme.ComputerIcon(), func() { u.selectSection("Tools") })
+	u.gate(check, tools)
+	return container.NewVBox(
+		note(fmt.Sprintf("MBINCompiler %s could not handle %d game file(s) on game build %s. "+
+			"These mods are fine; the compiler does not match the game. Run the compatibility check, "+
+			"and pin a release that passes it in Tools.",
+			orNone(r.CompilerVersion, "(unknown)"), len(r.CompilerFailures), orNone(r.GameBuildID, "unknown")), StatusBad),
+		fixedHeight(t.widget(), min(60+float32(len(r.CompilerFailures))*36, 240)),
+		container.NewHBox(check, tools),
+		widget.NewSeparator(),
+	)
+}
+
 func (u *ui) buildReport() fyne.CanvasObject {
 	u.loadReport()
 	u.loadArchive()
@@ -80,6 +114,7 @@ func (u *ui) buildReport() fyne.CanvasObject {
 	// of it and a page of numbers.
 	body := container.NewVBox(
 		heading("Report", "What the last build made of each mod."),
+		u.compilerFailuresBlock(r),
 		u.auditBlock(),
 		widget.NewSeparator(),
 		fixedHeight(t.widget(), 320),

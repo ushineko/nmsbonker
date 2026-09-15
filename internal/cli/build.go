@@ -119,6 +119,13 @@ func printReport(w io.Writer, r *report.Result) {
 	for _, m := range r.CacheMisses {
 		fact(w, "missing game file", m)
 	}
+	if len(r.CompilerFailures) > 0 {
+		fact(w, "COMPILER FAILURES", fmt.Sprintf("MBINCompiler %s could not handle %d file(s); "+
+			"run `nmsbonker tools check` and pin a matching release", orDash(r.CompilerVersion), len(r.CompilerFailures)))
+		for _, f := range r.CompilerFailures {
+			fact(w, "  did not "+f.Stage, f.Internal+": "+report.FirstLine(f.Detail))
+		}
+	}
 	fact(w, "timings", fmt.Sprintf(
 		"%s wall clock (cache %s; merge %s, audit %s and compile %s summed over %d workers)",
 		r.Timings.Total.Round(1e6), r.Timings.Cache.Round(1e6), r.Timings.Merge.Round(1e6),

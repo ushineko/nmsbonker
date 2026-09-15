@@ -24,16 +24,21 @@ const (
 )
 
 /*
-ToolCheckFiles are the two game files the compatibility check round-trips.
+ToolCheckFiles are the game files the compatibility check round-trips.
 
-One globals file and one table, chosen because they exercise different template
-families and because every mod library edits at least one of them. Both are read
-out of the paks at check time; neither is committed.
+Two globals files and one table, chosen because they exercise different
+template families and because every mod library edits at least one of them.
+GcUIGlobals earned its place on 2026-09-15: MBINCompiler v7.02.0-pre2 read
+GcGameplayGlobals and the reward table cleanly and rejected GcUIGlobals with
+"File not recognized", so a check on the first two alone called a compiler
+compatible that failed a build. All are read out of the paks at check time;
+none is committed.
 */
 //
 //nolint:gochecknoglobals // a fixed list, read-only
 var ToolCheckFiles = []string{
 	"gcgameplayglobals.global.mbin",
+	"gcuiglobals.global.mbin",
 	"metadata/reality/tables/rewardtable.mbin",
 }
 

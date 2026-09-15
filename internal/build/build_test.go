@@ -302,6 +302,27 @@ func TestATargetThatNeverCompilesIsDroppedAndEveryContributorIsWarned(t *testing
 		}
 	}
 	require.True(t, dropped, "the warning names the file, in the pak's own spelling")
+
+	// The drop is the compiler's doing, so the report says so apart from the
+	// verdicts: this is a compiler-matches-game problem, not a mod problem.
+	require.Len(t, res.CompilerFailures, 1)
+	require.Equal(t, report.StageRecompile, res.CompilerFailures[0].Stage)
+	require.Equal(t, "BROKEN.MBIN", res.CompilerFailures[0].Internal)
+	require.Equal(t, []string{"M"}, res.CompilerFailures[0].Mods)
+	require.NotEmpty(t, res.CompilerFailures[0].Detail)
+	require.Contains(t, report.Markdown(res), "could not handle 1 file(s)")
+	require.Contains(t, report.Markdown(res), "`BROKEN.MBIN` did not recompile")
+
+	// Decompile failures handed in from the cache stage land in the same list.
+	res2, err := Run(t.Context(), plan, Options{
+		Sources: map[string]Source{}, Compiler: fakeCompiler(t), Workspace: t.TempDir(), ModName: "TEST MOD", Workers: 1,
+		DecompileFailures: []report.CompilerFailure{{Internal: "broken.mbin", Stage: report.StageDecompile,
+			Detail: "File not recognized.\n[ERROR]: MbinException", Mods: plan.ModsFor("broken.mbin")}},
+	})
+	require.NoError(t, err)
+	require.Len(t, res2.CompilerFailures, 1)
+	require.Equal(t, []string{"M"}, res2.CompilerFailures[0].Mods, "ModsFor found the target")
+	require.Equal(t, "File not recognized. …", report.FirstLine(res2.CompilerFailures[0].Detail))
 }
 
 // R3.3/R4.2: a source the cache could not produce warns and does not stop the

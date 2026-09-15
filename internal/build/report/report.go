@@ -101,6 +101,39 @@ type TargetResult struct {
 	Mods []string `json:"mods"`
 }
 
+// CompilerFailure is a game file MBINCompiler could not handle: it did not
+// decompile from the pak, or the merged result did not recompile. These are
+// the symptom of a compiler that does not match the game, which a game update
+// or a bad compiler release produces, and they are reported apart from
+// everything else because the fix is a different compiler, not a different mod.
+type CompilerFailure struct {
+	// Internal is the pak-internal path, or the source spelling when the file
+	// never got as far as an internal path.
+	Internal string `json:"internal"`
+	// Stage is "decompile" or "recompile".
+	Stage string `json:"stage"`
+	// Detail is the compiler's own account.
+	Detail string `json:"detail"`
+	// Mods are the scripts that wanted the file, in order.
+	Mods []string `json:"mods,omitempty"`
+}
+
+// Compiler failure stages.
+const (
+	StageDecompile = "decompile"
+	StageRecompile = "recompile"
+)
+
+// FirstLine is a compiler message cut to its first line, for a table cell or
+// a report bullet; the full text is in the JSON.
+func FirstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i]) + " …"
+	}
+	return s
+}
+
 // DegradedFile records a file that shipped without its structural edits.
 type DegradedFile struct {
 	Internal string   `json:"internal"`
@@ -142,6 +175,9 @@ type Result struct {
 	Targets  []TargetResult `json:"targets"`
 	Mods     []ModResult    `json:"mods"`
 	Degraded []DegradedFile `json:"degraded"`
+	// CompilerFailures are the files MBINCompiler could not decompile or
+	// recompile, the sign of a compiler that does not match the game.
+	CompilerFailures []CompilerFailure `json:"compilerFailures,omitempty"`
 	// Complex lists mods carrying ADD or REMOVE, in first-seen order.
 	Complex []string `json:"complex"`
 	Lines   []Line   `json:"lines"`
@@ -287,6 +323,14 @@ func Markdown(r *Result) string {
 	}
 	if len(r.CacheMisses) > 0 {
 		w("- Sources not found in the game's paks: %s", strings.Join(r.CacheMisses, ", "))
+	}
+	if len(r.CompilerFailures) > 0 {
+		w("- **MBINCompiler %s could not handle %d file(s)** — a compiler that does not match "+
+			"this game build; run `nmsbonker tools check` and pin a matching release:",
+			orUnknown(r.CompilerVersion), len(r.CompilerFailures))
+		for _, f := range r.CompilerFailures {
+			w("  - `%s` did not %s: %s", f.Internal, f.Stage, FirstLine(f.Detail))
+		}
 	}
 	if line := paramLine(r); line != "" {
 		w("- Parameters changed from their defaults: %s", line)
