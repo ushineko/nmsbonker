@@ -1,0 +1,132 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - name: Install the window's build dependencies
+        # Fyne over GLFW: OpenGL and X11 headers. The CLI needs none of this and
+        # builds with CGO_ENABLED=0; the GUI package's tests still compile it.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
+
+      - name: Test
+        # Headless: the parity guard and the GUI tests need no display.
+        run: make test
+
+      - name: Lint
+        # The Makefile downloads the pinned golangci-lint into GOPATH/bin and
+        # runs it under the Go toolchain it was built with.
+        run: make lint
+
+      - name: Build the CLI without CGO
+        run: CGO_ENABLED=0 make build
+
+  build-arch:
+    name: Arch package
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: |
+          pacman -Sy --noconfirm archlinux-keyring
+          pacman -Su --noconfirm
+          # nodejs is for the GitHub Actions runtime inside the container.
+          pacman -S --noconfirm base-devel git go gcc pkgconf mesa \
+            libgl libx11 libxcursor libxrandr libxinerama libxi libxxf86vm libxkbcommon nodejs
+          # makepkg refuses to run as root.
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - uses: actions/checkout@v4
+        with:
+          path: src
+
+      - name: Build the package from this checkout
+        run: |
+          chown -R builder:builder src
+          cd src
+          su builder -c "git config --global --add safe.directory '$(pwd)'"
+          # -s installs makedepends (already present); --noconfirm for pacman.
+          # The PKGBUILD packages the tree it lives in, so a pull request
+          # builds the pull request.
+          su builder -c "cd packaging/arch && BUILDDIR=/tmp/nmsbonker-pkg makepkg -s --noconfirm"
+          ls -l packaging/arch/*.pkg.tar.zst
+
+      - name: Smoke-test the package
+        run: |
+          cd src/packaging/arch
+          pacman -U --noconfirm ./*.pkg.tar.zst
+          nmsbonker version
+          nmsbonker status || true   # no game on a runner; the command must still answer
+          desktop-file-validate /usr/share/applications/io.ushineko.nmsbonker.desktop || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: src/packaging/arch/*.pkg.tar.zst
+          if-no-files-found: error
+
+  release:
+    name: Release
+    needs: [test, build-arch]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - name: Install the window's build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev
+
+      - name: Check the tag matches VERSION
+        run: |
+          test "v$(tr -d '[:space:]' < VERSION)" = "${GITHUB_REF_NAME}" \
+            || { echo "tag ${GITHUB_REF_NAME} does not match VERSION $(cat VERSION)"; exit 1; }
+
+      - name: Build the release tarballs
+        # Static CLI for four targets, the GUI for the runner, SHA256SUMS.
+        run: make release
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: arch-package
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
+            dist/*.pkg.tar.zst
+          generate_release_notes: true

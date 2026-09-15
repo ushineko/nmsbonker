@@ -120,10 +120,19 @@ release: build-all ## Package dist/ into per-target tar.gz archives with SHA256S
 	@set -e; 	rm -f dist/*.tar.gz dist/SHA256SUMS; 	stage=$$(mktemp -d); trap 'rm -rf "$$stage"' EXIT; 	for bin in dist/nmsbonker-*; do 		case "$$bin" in *.tar.gz|*SHA256SUMS) continue;; esac; 		name=$$(basename "$$bin"); 		target=$${name#nmsbonker-}; target=$${target#gui-}; 		dir="$$stage/nmsbonker-$(VERSION)-$$target"; 		mkdir -p "$$dir"; 		case "$$name" in 			nmsbonker-gui-*) cp "$$bin" "$$dir/nmsbonker-gui";; 			*) cp "$$bin" "$$dir/nmsbonker";; 		esac; 		cp README.md LICENSE "$$dir/"; 		mkdir -p "$$dir/packaging"; 		cp packaging/io.ushineko.nmsbonker.desktop packaging/nmsbonker.svg "$$dir/packaging/"; 	done; 	for dir in "$$stage"/*; do 		base=$$(basename "$$dir"); 		tar -C "$$stage" -czf "dist/$$base.tar.gz" "$$base"; 	done; 	cd dist && (sha256sum *.tar.gz 2>/dev/null || shasum -a 256 *.tar.gz) > SHA256SUMS
 	@ls -l dist/*.tar.gz dist/SHA256SUMS
 
+# The Arch package, built from this checkout by packaging/arch/PKGBUILD. The
+# same target GitHub Actions runs; the result lands beside the PKGBUILD.
+.PHONY: pkg-arch
+pkg-arch: ## Build the Arch Linux package from this checkout (needs makepkg)
+	@# BUILDDIR outside the tree: makepkg's pkg/ is unreadable to `go test ./...`
+	@# and has no business inside a Go module.
+	cd packaging/arch && BUILDDIR="$$(mktemp -d)" makepkg -sf --noconfirm
+	@ls -l packaging/arch/*.pkg.tar.zst
+
 .PHONY: screenshots
 screenshots: build-gui ## Refresh the README screenshots (KDE/Wayland; needs kdotool and spectacle)
 	NMSBONKER_GUI=./nmsbonker-gui ./tools/screenshot.sh --all
 
 .PHONY: clean
 clean: ## Remove build artifacts
-	@rm -rf nmsbonker nmsbonker-gui dist/ coverage.out count.out
+	@rm -rf nmsbonker nmsbonker-gui dist/ coverage.out count.out packaging/arch/pkg packaging/arch/src packaging/arch/*.pkg.tar.zst

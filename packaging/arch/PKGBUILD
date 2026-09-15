@@ -1,0 +1,59 @@
+# Maintainer: ushineko <https://github.com/ushineko>
+#
+# Builds nmsbonker from the checkout this file lives in, not from a download:
+# `makepkg` here, `make pkg-arch` at the repository root, and the GitHub
+# Actions job all package exactly the tree they are run in, so a pull request
+# builds the pull request. The version is VERSION at the repository root, the
+# same file `make build` stamps into the binaries.
+pkgname=nmsbonker
+pkgver=0.3.0
+pkgrel=1
+pkgdesc="No Man's Sky mod builder and save editor for Linux: AMUMSS .lua scripts, natively, no Wine"
+arch=('x86_64' 'aarch64')
+url="https://github.com/ushineko/nmsbonker"
+license=('MIT')
+# The CLI is static. The window is Fyne over GLFW and needs OpenGL and X11 at
+# run time; Wayland sessions run it through XWayland, as Fyne does everywhere.
+depends=('libgl' 'libx11' 'libxcursor' 'libxrandr' 'libxinerama' 'libxi' 'libxxf86vm' 'libxkbcommon')
+makedepends=('go' 'git' 'gcc' 'pkgconf' 'mesa')
+optdepends=('dotnet-runtime: run the framework-dependent MBINCompiler build (the self-contained one needs nothing)')
+options=('!strip' '!debug') # Go binaries: stripped by the linker flags in the Makefile; no separate debug package
+source=()
+sha256sums=()
+
+# The repository root, two levels up from this file.
+_root="$(cd "${startdir}/../.." && pwd)"
+
+pkgver() {
+	tr -d '[:space:]' < "${_root}/VERSION"
+}
+
+build() {
+	cd "${_root}"
+	# Go's module cache lives in the build user's home; the Makefile's LDFLAGS
+	# carry VERSION and the commit. GOFLAGS=-buildvcs=false: the tree may be
+	# owned by another user in CI, and the version is stamped by hand anyway.
+	export GOFLAGS="-buildvcs=false -mod=readonly"
+	export CGO_ENABLED=1
+	make build build-gui
+}
+
+check() {
+	cd "${_root}"
+	# The GUI tests need no display; the parity tag is what `make test` adds.
+	# Named trees rather than ./..., so makepkg's own pkg/ and src/ directories
+	# (when BUILDDIR is the PKGBUILD's) are not walked.
+	GOFLAGS="-buildvcs=false" go test -tags parity ./cmd/... ./internal/... ./tests/...
+}
+
+package() {
+	cd "${_root}"
+	install -Dm755 nmsbonker "${pkgdir}/usr/bin/nmsbonker"
+	install -Dm755 nmsbonker-gui "${pkgdir}/usr/bin/nmsbonker-gui"
+	install -Dm644 packaging/io.ushineko.nmsbonker.desktop \
+		"${pkgdir}/usr/share/applications/io.ushineko.nmsbonker.desktop"
+	install -Dm644 packaging/nmsbonker.svg \
+		"${pkgdir}/usr/share/icons/hicolor/scalable/apps/nmsbonker.svg"
+	install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+	install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

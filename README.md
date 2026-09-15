@@ -179,6 +179,15 @@ the build if either front end grows an operation the other lacks.
 
 ## Installing
 
+**Arch Linux**: a package is built from every push and attached to every
+[release](https://github.com/ushineko/nmsbonker/releases) as
+`nmsbonker-<version>-1-x86_64.pkg.tar.zst`; `sudo pacman -U` it. To build it
+yourself from a checkout, `make pkg-arch` (needs `base-devel`, `go`, `mesa`
+and the X11 headers `makepkg -s` pulls in). The package installs the same
+binaries, desktop entry and icon as the script below, under `/usr`.
+
+**Anywhere else**, from source:
+
 ```
 git clone https://github.com/ushineko/nmsbonker
 cd nmsbonker
@@ -612,7 +621,8 @@ are never committed.
 | `internal/tweaks` | The ten built-in mod scripts, embedded |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
-| `packaging` | The desktop entry and the application icon |
+| `packaging` | The desktop entry, the application icon, and `arch/PKGBUILD` |
+| `.github/workflows` | Test, lint and Arch package on every push; release tarballs and the package on a `v*` tag |
 | `tools` | The screenshot harness and the reference fixture generator |
 
 [`docs/architecture.md`](docs/architecture.md) is the package map and the data
