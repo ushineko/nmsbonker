@@ -156,9 +156,11 @@ nothing under the prefix was written.
 All take a `SlotRef` naming a slot 1–15 and `auto` or `manual`, resolved to a
 file pair, and all read the manifest and payload through R1–R3.
 
-- R5.1 `ListSaveSlots` enumerates the profile: for each existing file, slot,
-  kind, file name, manifest name and summary, play time, base version, game
-  mode, difficulty, timestamp, on-disk size, and which pair is newest. It also
+- R5.1 `ListSaveSlots` enumerates the profile, most recently played first as
+  the game's slot screen does (slots by their newer half, the newer half first
+  within a slot): for each existing file, slot, kind, file name, manifest name
+  and summary, play time, base version, game mode, difficulty, timestamp,
+  on-disk size, and which file is newest. It also
   reports the mapping status (R4) and whether the game is running (R6.2).
 - R5.2 `InspectSave` decodes one save and returns the values this spec edits
   plus context: version and derived base version and mode, active context,
@@ -173,10 +175,10 @@ file pair, and all read the manifest and payload through R1–R3.
 - R5.4 `EditSave` applies a typed change set and writes through R6:
   - `Units`, `Nanites`, `Quicksilver`: integers 0 … 4,294,967,295.
   - `SuitItemSlots`, `SuitTechSlots`: target count of unlocked cells,
-    1 … Width × Height (120 and 60 at the vanilla grid). Unlocking appends the
-    missing `{X,Y}` in row-major order; shrinking removes only cells that hold
-    no item and refuses otherwise, naming the occupied cell. The grid size is
-    not changed.
+    1 … the game's ceiling (120 and 60; spec 011 R5 revised this from "the
+    save's grid": the grid grows a row at a time up to the ceiling). Unlocking
+    appends the missing `{X,Y}` in row-major order; shrinking removes only
+    cells that hold no item and refuses otherwise, naming the occupied cell.
   - `Health`, `Shield`: integers within the value's current range (a value
     above the game's maximum is clamped by the game; the editor states this).
   - The change set is applied to the context named by `ActiveContext`; a save

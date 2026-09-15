@@ -30,6 +30,7 @@ func TestGoldenEditSaveOnACopyOfARealProfile(t *testing.T) {
 		t.Skip("NMSBONKER_SAVE_DIR or NMSBONKER_MAPPING_FILE is unset; skipping the golden edit test")
 	}
 	root := bare(t)
+	t.Cleanup(core.SetProcRoot(t.TempDir()))
 	game, lib := steamGame(t, root)
 	dir := filepath.Join(lib, "steamapps", "compatdata", "275850",
 		"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS")

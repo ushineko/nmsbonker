@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -35,6 +36,11 @@ type Mapping struct {
 	Entries int
 	toName  map[string]string
 	toKey   map[string]string
+	// ambiguous are names that appear with more than one key. Such a key is
+	// never renamed on export, because the import could not know which key
+	// to turn it back into. The current mapping has none; the guard is for
+	// the release that does.
+	ambiguous map[string]bool
 }
 
 // ParseMapping reads the release asset.
@@ -57,6 +63,7 @@ func ParseMapping(b []byte) (*Mapping, error) {
 		Entries:        len(doc.Mapping),
 		toName:         make(map[string]string, len(doc.Mapping)),
 		toKey:          make(map[string]string, len(doc.Mapping)),
+		ambiguous:      map[string]bool{},
 	}
 	for _, e := range doc.Mapping {
 		if e.Key == "" || e.Value == "" {
@@ -65,8 +72,10 @@ func ParseMapping(b []byte) (*Mapping, error) {
 		if _, dup := m.toName[e.Key]; !dup {
 			m.toName[e.Key] = e.Value
 		}
-		if _, dup := m.toKey[e.Value]; !dup {
+		if prev, dup := m.toKey[e.Value]; !dup {
 			m.toKey[e.Value] = e.Key
+		} else if prev != e.Key {
+			m.ambiguous[e.Value] = true
 		}
 	}
 	return m, nil
@@ -120,19 +129,76 @@ func (m *Mapping) Resolve(segment string) string {
 	return segment
 }
 
-// Lookup walks a slash-separated path of names or keys.
+// Lookup walks a slash-separated path of names or keys, with a number for an
+// array element ("BaseContext/PlayerStateData/ShipOwnership/0").
 func (m *Mapping) Lookup(root *Node, path string) *Node {
 	cur := root
-	for _, seg := range strings.Split(strings.Trim(path, "/"), "/") {
-		if seg == "" {
-			continue
-		}
-		cur = cur.Member(m.Resolve(seg))
+	for _, seg := range SplitPath(path) {
+		cur = m.step(cur, seg)
 		if cur == nil {
 			return nil
 		}
 	}
 	return cur
+}
+
+// SplitPath breaks a slash-separated path into its segments, dropping empties.
+func SplitPath(path string) []string {
+	var out []string
+	for _, seg := range strings.Split(strings.Trim(path, "/"), "/") {
+		if seg != "" {
+			out = append(out, seg)
+		}
+	}
+	return out
+}
+
+// step is one segment of a Lookup.
+func (m *Mapping) step(cur *Node, seg string) *Node {
+	if cur != nil && cur.Type() == TypeArray {
+		i, err := strconv.Atoi(seg)
+		if err != nil {
+			return nil
+		}
+		return cur.Index(i)
+	}
+	return cur.Member(m.Resolve(seg))
+}
+
+/*
+Replace puts a value at a path, in place of what is there (spec 009).
+
+The path has to lead to an existing member or element: this edits a save, it
+does not grow one, and a typo in a path must not quietly add a key the game
+has never heard of. Returns false when the path leads nowhere.
+*/
+func (m *Mapping) Replace(root *Node, path string, value *Node) bool {
+	segs := SplitPath(path)
+	if len(segs) == 0 {
+		return false
+	}
+	parent := root
+	for _, seg := range segs[:len(segs)-1] {
+		parent = m.step(parent, seg)
+		if parent == nil {
+			return false
+		}
+	}
+	last := segs[len(segs)-1]
+	if parent.Type() == TypeArray {
+		i, err := strconv.Atoi(last)
+		if err != nil || parent.Index(i) == nil {
+			return false
+		}
+		parent.SetIndex(i, value)
+		return true
+	}
+	key := m.Resolve(last)
+	if parent.Member(key) == nil {
+		return false
+	}
+	parent.Set(key, value)
+	return true
 }
 
 // Unmapped lists the distinct keys in a tree that the mapping does not name,
@@ -160,6 +226,9 @@ func (m *Mapping) Deobfuscate(root *Node) int {
 			return "", false
 		}
 		name, ok := m.toName[key]
+		if ok && m.ambiguous[name] {
+			return "", false
+		}
 		return name, ok
 	})
 	return missed

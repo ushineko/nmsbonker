@@ -16,12 +16,34 @@ obfuscated key, so a mapping that renames one is followed automatically, and a
 mapping that lacks one fails with the name in the error rather than editing the
 wrong field.
 
-Currencies are unsigned 32-bit in the game. Slot counts are bounded by the grid
-the save already has: this editor unlocks cells the game knows about and does
-not grow the grid, because the grid's size is the game's to decide and a grid
-larger than the game's tables is the "game might break" case other editors warn
-about.
+Currencies are unsigned 32-bit in the game. Slot counts are bounded by the
+game's own ceiling for the inventory, read from metadata/reality/tables/
+inventorytable.mbin: every starship, freighter and exosuit size type shares the
+same "Large" bounds there, 10×12 for items and 10×6 for technology, and that is
+what the game grows a grid toward as slots are bought (the save's Width×Height
+is the grid so far, not the ceiling -- an A-class fighter with 59 slots bought
+had grown to 10×6). Unlocking past the current grid grows it a row at a time up
+to that ceiling, the way the game does, and never past it: a grid larger than
+the game's tables is the "game might break" case other editors warn about.
 */
+
+// GridCeiling is the largest grid the game grows an inventory to (the Large
+// bounds in the inventory table), for items and for technology.
+type GridCeiling struct {
+	Width, Height int
+}
+
+// The ceilings, from the inventory table's Large bounds. Identical for every
+// ship, freighter and exosuit size type in the current table.
+//
+//nolint:gochecknoglobals // fixed tables from game data
+var (
+	CeilingItems = GridCeiling{Width: 10, Height: 12}
+	CeilingTech  = GridCeiling{Width: 10, Height: 6}
+)
+
+// Max is the most cells the ceiling holds.
+func (g GridCeiling) Max() int { return g.Width * g.Height }
 
 // MaxCurrency is the largest value the game's counters hold.
 const MaxCurrency = math.MaxUint32
@@ -82,12 +104,32 @@ type ChangeSet struct {
 	Shield        *int64  `json:"shield,omitempty"`
 	SuitItemSlots *int    `json:"suit_item_slots,omitempty"`
 	SuitTechSlots *int    `json:"suit_tech_slots,omitempty"`
+	// Standings are faction standing levels (1..MaxLevel) to set, keyed by
+	// Faction.Key (spec 008).
+	Standings map[string]int64 `json:"standings,omitempty"`
+	// Ship is the ShipOwnership index the ship slot counts apply to; -1 (or
+	// unset, when both counts are nil) means the primary ship (spec 011).
+	Ship          int  `json:"ship"`
+	ShipItemSlots *int `json:"ship_item_slots,omitempty"`
+	ShipTechSlots *int `json:"ship_tech_slots,omitempty"`
+	// ShipClass is the class letter (C, B, A, S) for the selected ship;
+	// ShipType a ShipTypes key.
+	ShipClass *string `json:"ship_class,omitempty"`
+	ShipType  *string `json:"ship_type,omitempty"`
+	// Freighter slot counts, class and type (spec 011).
+	FreighterItemSlots *int    `json:"freighter_item_slots,omitempty"`
+	FreighterTechSlots *int    `json:"freighter_tech_slots,omitempty"`
+	FreighterClass     *string `json:"freighter_class,omitempty"`
+	FreighterType      *string `json:"freighter_type,omitempty"`
 }
 
 // Empty says whether the set asks for anything.
 func (c ChangeSet) Empty() bool {
 	return c.Units == nil && c.Nanites == nil && c.Quicksilver == nil &&
-		c.Health == nil && c.Shield == nil && c.SuitItemSlots == nil && c.SuitTechSlots == nil
+		c.Health == nil && c.Shield == nil && c.SuitItemSlots == nil && c.SuitTechSlots == nil &&
+		len(c.Standings) == 0 && c.ShipItemSlots == nil && c.ShipTechSlots == nil && c.ShipClass == nil &&
+		c.ShipType == nil && c.FreighterItemSlots == nil && c.FreighterTechSlots == nil &&
+		c.FreighterClass == nil && c.FreighterType == nil
 }
 
 // Change is one edit that was, or would be, made.
@@ -240,6 +282,9 @@ type Summary struct {
 	Multitools  int              `json:"multitools"`
 	SuitItems   InventorySummary `json:"suit_items"`
 	SuitTech    InventorySummary `json:"suit_tech"`
+	Standings   []StandingValue  `json:"standings"`
+	ShipList    []ShipSummary    `json:"ship_list"`
+	Freighter   FreighterSummary `json:"freighter"`
 	// Unmapped are the keys the mapping does not name (R3.3).
 	Unmapped []string `json:"unmapped,omitempty"`
 }
@@ -273,6 +318,9 @@ func Summarize(root *Node, m *Mapping) (Summary, error) {
 	if s.SuitTech, err = Inventory(ps.Member(m.Resolve(nameInventoryTech)), m); err != nil {
 		return s, fmt.Errorf("%s: %w", nameInventoryTech, err)
 	}
+	s.Standings = Standings(ps, m)
+	s.ShipList = Ships(ps, m)
+	s.Freighter = Freighter(ps, m)
 	s.Unmapped = m.Unmapped(root)
 	return s, nil
 }
@@ -337,18 +385,38 @@ func Apply(root *Node, m *Mapping, c ChangeSet) ([]Change, error) {
 	for _, cur := range []struct {
 		name, field string
 		want        *int
+		ceiling     GridCeiling
 	}{
-		{nameInventory, "suit item slots", c.SuitItemSlots},
-		{nameInventoryTech, "suit technology slots", c.SuitTechSlots},
+		{nameInventory, "suit item slots", c.SuitItemSlots, CeilingItems},
+		{nameInventoryTech, "suit technology slots", c.SuitTechSlots, CeilingTech},
 	} {
 		if cur.want == nil {
 			continue
 		}
-		ch, ok, err := setSlotCount(ps.Member(m.Resolve(cur.name)), m, cur.field, prefix+cur.name, *cur.want)
+		ch, ok, err := setSlotCount(ps.Member(m.Resolve(cur.name)), m, cur.field, prefix+cur.name, *cur.want, cur.ceiling)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", cur.name, err)
 		}
 		add(ch, ok)
+	}
+	for key := range c.Standings {
+		if _, ok := FactionByKey(key); !ok {
+			return nil, fmt.Errorf("unknown faction %q (one of gek, korvax, vykeen, mercenaries, explorers, merchants)", key)
+		}
+	}
+	for _, f := range Factions {
+		want, asked := c.Standings[f.Key]
+		if !asked {
+			continue
+		}
+		ch, ok, err := setStanding(ps, m, prefix, f, want)
+		if err != nil {
+			return nil, err
+		}
+		add(ch, ok)
+	}
+	if err := applyShipAndFreighter(ps, m, prefix, c, add); err != nil {
+		return nil, err
 	}
 	return changes, nil
 }
@@ -376,22 +444,33 @@ func setInt(ps *Node, m *Mapping, prefix, name string, want int64) (Change, bool
 setSlotCount unlocks or locks cells until the inventory has `want` of them.
 
 Unlocking appends the missing cells in row-major order, which is the order the
-game itself unlocks them in. Locking takes cells off the end of the list and
-refuses to remove one that holds an item, naming the cell and the item: a
-player who wants that cell gone can move the item first, and a tool that
-silently deleted it would be a tool that deletes inventory.
+game itself unlocks them in. When the grid the save has is too small for the
+count, it is grown toward the game's ceiling for that kind of inventory: the
+width to the ceiling's, the height to as many rows as the count needs, never
+past the ceiling and never smaller than it was. Locking takes cells off the end
+of the list and refuses to remove one that holds an item, naming the cell and
+the item: a player who wants that cell gone can move the item first, and a tool
+that silently deleted it would be a tool that deletes inventory.
 */
-func setSlotCount(inv *Node, m *Mapping, field, path string, want int) (Change, bool, error) {
+func setSlotCount(inv *Node, m *Mapping, field, path string, want int, ceiling GridCeiling) (Change, bool, error) {
 	sum, err := Inventory(inv, m)
 	if err != nil {
 		return Change{}, false, err
 	}
-	if want < 1 || want > sum.Max() {
-		return Change{}, false, fmt.Errorf("%d slot(s) is outside 1..%d (the grid is %d×%d)",
-			want, sum.Max(), sum.Width, sum.Height)
+	limit := max(sum.Max(), ceiling.Max())
+	if want < 1 || want > limit {
+		return Change{}, false, fmt.Errorf("%d slot(s) is outside 1..%d (the game's largest grid for this is %d×%d)",
+			want, limit, ceiling.Width, ceiling.Height)
 	}
 	if want == sum.Valid {
 		return Change{}, false, nil
+	}
+	if want > sum.Max() {
+		width := max(sum.Width, ceiling.Width)
+		height := max(sum.Height, (want+width-1)/width)
+		inv.Set(m.Resolve(nameWidth), NewInt(int64(width)))
+		inv.Set(m.Resolve(nameHeight), NewInt(int64(height)))
+		sum.Width, sum.Height = width, height
 	}
 	xKey, yKey := m.Resolve(nameX), m.Resolve(nameY)
 	valid := inv.Member(m.Resolve(nameValidSlotIndices))

@@ -88,6 +88,9 @@ func writeSaveFixture(t *testing.T, profile string, ref save.SlotRef, payload []
 func editorFixture(t *testing.T) (game, profile string) {
 	t.Helper()
 	root := bare(t)
+	// The game-running check reads /proc; a test must not depend on whether
+	// the machine running it has the game open.
+	t.Cleanup(core.SetProcRoot(t.TempDir()))
 	game, lib := steamGame(t, root)
 	dir := filepath.Join(lib, "steamapps", "compatdata", "275850",
 		"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS")
@@ -122,13 +125,25 @@ func TestListSaveSlotsReadsTheManifestsAndMarksTheNewest(t *testing.T) {
 	require.Equal(t, profile, res.Profile)
 	require.True(t, res.Mapping.Present)
 	require.Len(t, res.Slots, 2)
-	require.Equal(t, save.KindAuto, res.Slots[0].Kind)
-	require.False(t, res.Slots[0].Newest)
-	require.True(t, res.Slots[1].Newest, "the manual save was written later")
-	require.Equal(t, "Test save", res.Slots[1].Name)
-	require.Equal(t, "On a planet", res.Slots[1].Summary)
-	require.EqualValues(t, 4223, res.Slots[1].BaseVersion)
-	require.Equal(t, "Normal", res.Slots[1].GameMode)
+	require.Equal(t, save.KindManual, res.Slots[0].Kind, "newest first, as the game lists them")
+	require.True(t, res.Slots[0].Newest, "the manual save was written later")
+	require.False(t, res.Slots[1].Newest)
+	require.Equal(t, "Test save", res.Slots[0].Name)
+	require.Equal(t, "On a planet", res.Slots[0].Summary)
+	require.EqualValues(t, 4223, res.Slots[0].BaseVersion)
+	require.Equal(t, "Normal", res.Slots[0].GameMode)
+
+	// A second, older slot sorts after the newer one whatever its number.
+	writeSaveFixture(t, profile, save.SlotRef{Slot: 1, Kind: save.KindAuto}, savePayload(4735, 1), time.Now().Add(-3*time.Hour))
+	writeSaveFixture(t, profile, save.SlotRef{Slot: 12, Kind: save.KindAuto}, savePayload(4735, 1), time.Now().Add(-30*time.Minute))
+	res, err = core.ListSaveSlots(t.Context(), core.ListSaveSlotsRequest{Request: core.Request{GameDir: game}})
+	require.NoError(t, err)
+	var order []int
+	for _, sl := range res.Slots {
+		order = append(order, sl.Slot)
+	}
+	require.Equal(t, []int{12, 9, 9, 1}, order)
+	require.True(t, res.Slots[0].Newest)
 }
 
 // R5.2: inspect resolves "slot 9" to the newer half and reads its values.
@@ -280,12 +295,12 @@ func TestEditSaveDryRunWritesNothing(t *testing.T) {
 func TestEditSaveRefusesWhileTheGameRunsUnlessForced(t *testing.T) {
 	game, _ := editorFixture(t)
 	proc := t.TempDir()
+	t.Cleanup(core.SetProcRoot(proc))
 	require.NoError(t, os.MkdirAll(filepath.Join(proc, "4242"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(proc, "4242", "comm"), []byte("NMS.exe\n"), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(proc, "4242", "cmdline"),
 		[]byte("Z:\\games\\No Man's Sky\\Binaries\\NMS.exe\x00"), 0o600))
 	require.NoError(t, os.MkdirAll(filepath.Join(proc, "self"), 0o750))
-	defer core.SetProcRoot(proc)()
 
 	list, err := core.ListSaveSlots(t.Context(), core.ListSaveSlotsRequest{Request: core.Request{GameDir: game}})
 	require.NoError(t, err)
@@ -447,4 +462,88 @@ func TestParseSlotSelector(t *testing.T) {
 	require.Equal(t, core.SlotSelector{Slot: 2, Kind: save.KindManual}, sel)
 	_, err = core.ParseSlotSelector("99")
 	require.ErrorIs(t, err, save.ErrSlot)
+}
+
+// Spec 009: the raw browser reads a node by path with its children, refuses to
+// inline one that is too large, and set replaces exactly that node.
+func TestGetAndSetSaveNodeBrowseAndReplaceOneNode(t *testing.T) {
+	game, profile := editorFixture(t)
+	req := core.Request{GameDir: game}
+	sel := core.SlotSelector{Slot: 9}
+
+	root, err := core.GetSaveNode(t.Context(), core.SaveNodeRequest{Request: req, Slot: sel})
+	require.NoError(t, err)
+	require.Equal(t, "", root.Path)
+	require.Equal(t, "object", root.Type)
+	names := []string{}
+	for _, c := range root.Children {
+		names = append(names, c.Name)
+	}
+	require.Equal(t, []string{"Version", "Platform", "ActiveContext", "CommonStateData", "BaseContext"}, names)
+	require.Contains(t, root.JSON, `"Version": 4735`, "small enough to inline, keys named")
+
+	node, err := core.GetSaveNode(t.Context(), core.SaveNodeRequest{
+		Request: req, Slot: sel, Path: "BaseContext/PlayerStateData/Inventory/Slots/0",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "BaseContext/PlayerStateData/Inventory/Slots/0", node.Path)
+	require.Contains(t, node.JSON, `"Id": "^OXYGEN"`)
+
+	raw, err := core.GetSaveNode(t.Context(), core.SaveNodeRequest{Request: req, Slot: sel, Path: "CommonStateData", Raw: true})
+	require.NoError(t, err)
+	require.Contains(t, raw.JSON, `"Pk4"`)
+
+	_, err = core.GetSaveNode(t.Context(), core.SaveNodeRequest{Request: req, Slot: sel, Path: "Nope/Nothing"})
+	require.ErrorContains(t, err, "nothing at")
+
+	// Set: a dry run reports the change and writes nothing; the write replaces
+	// the node and only the node.
+	before, err := os.ReadFile(filepath.Join(profile, "save18.hg"))
+	require.NoError(t, err)
+	res, err := core.SetSaveNode(t.Context(), core.SetSaveNodeRequest{
+		Request: req, Slot: sel, Path: "CommonStateData", JSON: `{"SaveName": "Renamed", "TotalPlayTime": 3600}`, DryRun: true,
+	})
+	require.NoError(t, err)
+	require.True(t, res.Changed)
+	require.Nil(t, res.Write)
+	after, err := os.ReadFile(filepath.Join(profile, "save18.hg"))
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+
+	res, err = core.SetSaveNode(t.Context(), core.SetSaveNodeRequest{
+		Request: req, Slot: sel, Path: "CommonStateData", JSON: `{"SaveName": "Renamed", "TotalPlayTime": 3600}`,
+	})
+	require.NoError(t, err)
+	require.True(t, res.Changed)
+	require.NotNil(t, res.Write)
+	require.Equal(t, 2, res.Obfuscated)
+	after, err = os.ReadFile(filepath.Join(profile, "save18.hg"))
+	require.NoError(t, err)
+	payload, err := save.Decode(after)
+	require.NoError(t, err)
+	want := strings.Replace(string(savePayload(4735, 2000)), `"<h0":{"Pk4":"Test save","Lg8":3600}`, `"<h0":{"Pk4":"Renamed","Lg8":3600}`, 1)
+	require.Equal(t, want, string(payload), "the node and nothing else, in the game's spelling")
+
+	// Same value again: nothing to do, nothing written.
+	res, err = core.SetSaveNode(t.Context(), core.SetSaveNodeRequest{
+		Request: req, Slot: sel, Path: "CommonStateData", JSON: `{"SaveName":"Renamed","TotalPlayTime":3600}`,
+	})
+	require.NoError(t, err)
+	require.False(t, res.Changed)
+	require.Nil(t, res.Write)
+
+	// Refusals: bad JSON, a path that is not there, the root, and a change
+	// that breaks the save.
+	for _, tc := range []struct{ path, json, want string }{
+		{"CommonStateData", `{"a":`, "not valid JSON"},
+		{"CommonStateData/Nope", `1`, "nothing at"},
+		{"", `{}`, "a path is needed"},
+		{"BaseContext", `{}`, "not one this editor writes"},
+	} {
+		_, err = core.SetSaveNode(t.Context(), core.SetSaveNodeRequest{Request: req, Slot: sel, Path: tc.path, JSON: tc.json})
+		require.ErrorContains(t, err, tc.want, tc.path)
+	}
+	after2, err := os.ReadFile(filepath.Join(profile, "save18.hg"))
+	require.NoError(t, err)
+	require.Equal(t, after, after2, "refusals write nothing")
 }

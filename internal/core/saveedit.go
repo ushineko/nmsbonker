@@ -98,7 +98,7 @@ type ListSaveSlotsRequest struct {
 	Request
 }
 
-// ListSaveSlotsResult is the profile's saves, slot order (R5.1).
+// ListSaveSlotsResult is the profile's saves, most recently played first (R5.1).
 type ListSaveSlotsResult struct {
 	// Dir is the game's save folder; Profile the st_* directory read.
 	Dir     string `json:"dir"`
@@ -163,11 +163,23 @@ func listSlots(profile string) ([]SaveSlotInfo, error) {
 	if newest >= 0 {
 		slots[newest].Newest = true
 	}
-	sort.Slice(slots, func(i, j int) bool {
-		if slots[i].Slot != slots[j].Slot {
-			return slots[i].Slot < slots[j].Slot
+	// Most recently played first, the way the game's slot screen orders
+	// them: slots by their newer half, and within a slot the newer half first.
+	latest := map[int]time.Time{}
+	for _, sl := range slots {
+		if w := slotWritten(sl); w.After(latest[sl.Slot]) {
+			latest[sl.Slot] = w
 		}
-		return slots[i].Kind == save.KindAuto
+	}
+	sort.SliceStable(slots, func(i, j int) bool {
+		a, b := slots[i], slots[j]
+		if a.Slot != b.Slot {
+			if !latest[a.Slot].Equal(latest[b.Slot]) {
+				return latest[a.Slot].After(latest[b.Slot])
+			}
+			return a.Slot < b.Slot
+		}
+		return slotWritten(a).After(slotWritten(b))
 	})
 	return slots, nil
 }
@@ -806,4 +818,170 @@ func ParseSlotSelector(s string) (SlotSelector, error) {
 		sel.Kind = ref.Kind
 	}
 	return sel, nil
+}
+
+// --- the raw JSON browser (spec 009) ------------------------------------------
+
+// MaxInlineJSON is the largest node the front ends put in an editor box. A
+// whole save is two megabytes on one line; a text widget holding that is not an
+// editor anyone can use, so the browser descends until a node fits.
+const MaxInlineJSON = 256 * 1024
+
+// SaveNodeRequest asks for one node of a save's JSON by path.
+type SaveNodeRequest struct {
+	Request
+	Slot SlotSelector
+	// Path is slash-separated names or keys, with a number for an array
+	// element; "" is the whole save.
+	Path string
+	// Raw keeps the game's obfuscated keys in the JSON instead of naming them.
+	Raw bool
+}
+
+// SaveNodeChild is one member or element of the node, for descending.
+type SaveNodeChild struct {
+	// Name is the readable name (or the key when unnamed); Key the key as the
+	// save spells it; for an array element both are the index.
+	Name  string `json:"name"`
+	Key   string `json:"key"`
+	Type  string `json:"type"`
+	Bytes int    `json:"bytes"`
+	// Len is the child's member or element count, for containers.
+	Len int `json:"len"`
+}
+
+// SaveNodeResult is the node, pretty-printed when it is small enough.
+type SaveNodeResult struct {
+	Ref   save.SlotRef `json:"ref"`
+	File  string       `json:"file"`
+	Path  string       `json:"path"`
+	Type  string       `json:"type"`
+	Bytes int          `json:"bytes"`
+	// JSON is the node indented, with keys named unless Raw; "" when TooLarge.
+	JSON     string          `json:"json,omitempty"`
+	TooLarge bool            `json:"too_large,omitempty"`
+	Children []SaveNodeChild `json:"children,omitempty"`
+}
+
+// GetSaveNode reads one node of a save (spec 009 R1). It writes nothing.
+func GetSaveNode(_ context.Context, req SaveNodeRequest) (SaveNodeResult, error) {
+	s, err := open(req.Request)
+	if err != nil {
+		return SaveNodeResult{}, err
+	}
+	m, st := s.saveMapping()
+	if m == nil {
+		return SaveNodeResult{}, errors.New(st.Warning)
+	}
+	l, err := s.loadSave(req.Slot)
+	if err != nil {
+		return SaveNodeResult{}, err
+	}
+	out := SaveNodeResult{Ref: l.ref, File: l.path, Path: strings.Join(save.SplitPath(req.Path), "/")}
+	node := m.Lookup(l.root, req.Path)
+	if node == nil {
+		return out, fmt.Errorf("nothing at %q in %s", req.Path, l.ref.DataFile())
+	}
+	out.Type = node.TypeName()
+	out.Bytes = node.Size()
+	for i, mem := range node.Members() {
+		_ = i
+		out.Children = append(out.Children, SaveNodeChild{
+			Name: m.Name(mem.Name), Key: mem.Name, Type: mem.Value.TypeName(),
+			Bytes: mem.Value.Size(), Len: mem.Value.Len(),
+		})
+	}
+	if node.Type() == save.TypeArray {
+		for i := range node.Len() {
+			el := node.Index(i)
+			idx := strconv.Itoa(i)
+			out.Children = append(out.Children, SaveNodeChild{
+				Name: idx, Key: idx, Type: el.TypeName(), Bytes: el.Size(), Len: el.Len(),
+			})
+		}
+	}
+	if out.Bytes > MaxInlineJSON {
+		out.TooLarge = true
+		return out, nil
+	}
+	if !req.Raw {
+		m.Deobfuscate(node)
+	}
+	out.JSON = string(node.Pretty())
+	return out, nil
+}
+
+// SetSaveNodeRequest replaces one node of a save with JSON text (spec 009 R2).
+type SetSaveNodeRequest struct {
+	Request
+	Slot SlotSelector
+	Path string
+	// JSON is the new value, keys named or obfuscated.
+	JSON string
+	// DryRun reports whether the node would change and writes nothing.
+	DryRun bool
+	// Force writes even when the game is running (R6.2).
+	Force bool
+}
+
+// SetSaveNodeResult says what happened.
+type SetSaveNodeResult struct {
+	Ref  save.SlotRef `json:"ref"`
+	Path string       `json:"path"`
+	// Changed is false when the new value serialises to what was there.
+	Changed bool `json:"changed"`
+	// Obfuscated is how many keys the text spelled by name.
+	Obfuscated int              `json:"obfuscated,omitempty"`
+	DryRun     bool             `json:"dry_run"`
+	Write      *SaveWriteResult `json:"write,omitempty"`
+}
+
+// SetSaveNode parses the text, turns named keys back, puts the value at the
+// path and writes the save through the guarded path.
+func SetSaveNode(_ context.Context, req SetSaveNodeRequest) (SetSaveNodeResult, error) {
+	s, err := open(req.Request)
+	if err != nil {
+		return SetSaveNodeResult{}, err
+	}
+	m, st := s.saveMapping()
+	if m == nil {
+		return SetSaveNodeResult{}, errors.New(st.Warning)
+	}
+	value, err := save.Parse([]byte(req.JSON))
+	if err != nil {
+		return SetSaveNodeResult{}, fmt.Errorf("the new value: %w", err)
+	}
+	l, err := s.loadSave(req.Slot)
+	if err != nil {
+		return SetSaveNodeResult{}, err
+	}
+	out := SetSaveNodeResult{Ref: l.ref, Path: strings.Join(save.SplitPath(req.Path), "/"), DryRun: req.DryRun}
+	if len(save.SplitPath(req.Path)) == 0 {
+		return out, errors.New("a path is needed; to replace the whole save use `saves import`")
+	}
+	old := m.Lookup(l.root, req.Path)
+	if old == nil {
+		return out, fmt.Errorf("nothing at %q in %s; this replaces a value, it does not add one", req.Path, l.ref.DataFile())
+	}
+	out.Obfuscated = m.Obfuscate(value)
+	if string(value.Bytes()) == string(old.Bytes()) {
+		return out, nil
+	}
+	if !m.Replace(l.root, req.Path, value) {
+		return out, fmt.Errorf("could not replace %q", req.Path)
+	}
+	out.Changed = true
+	// The same gate every write passes (R5.5): the result still has to be a
+	// save this editor recognises.
+	if _, _, err := save.PlayerState(l.root, m); err != nil {
+		return out, fmt.Errorf("after the change the save is not one this editor writes: %w", err)
+	}
+	if req.DryRun {
+		return out, nil
+	}
+	w, err := s.writeSave(req.Events, l, l.root.Bytes(), req.Force)
+	if w.Backup != "" {
+		out.Write = &w
+	}
+	return out, err
 }

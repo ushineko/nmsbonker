@@ -153,6 +153,37 @@ func (n *Node) Append(child *Node) {
 	}
 }
 
+// SetIndex replaces an array element.
+func (n *Node) SetIndex(i int, child *Node) {
+	if n != nil && n.kind == TypeArray && i >= 0 && i < len(n.elems) {
+		n.elems[i] = child
+	}
+}
+
+// Size is the compact serialisation's length in bytes.
+func (n *Node) Size() int { return len(n.Bytes()) }
+
+// TypeName is the JSON type, for display.
+func (n *Node) TypeName() string {
+	if n == nil {
+		return "missing"
+	}
+	switch n.kind {
+	case TypeObject:
+		return "object"
+	case TypeArray:
+		return "array"
+	case TypeString:
+		return "string"
+	case TypeNumber:
+		return "number"
+	case TypeBool:
+		return "boolean"
+	default:
+		return "null"
+	}
+}
+
 // Truncate keeps the first k elements of an array.
 func (n *Node) Truncate(k int) {
 	if n != nil && n.kind == TypeArray && k >= 0 && k < len(n.elems) {
@@ -325,7 +356,9 @@ func newline(w *bytes.Buffer, indent int) {
 	}
 }
 
-// quote formats a string the way the game does: JSON escapes, and `/` as `\/`.
+// quote formats a string with JSON's escapes. Slashes are left as they are:
+// the game's own saves carry model paths as "MODELS/COMMON/…" unescaped, and
+// an existing string's escapes are preserved by the tree regardless.
 func quote(s string) []byte {
 	var w bytes.Buffer
 	w.WriteByte('"')
@@ -335,8 +368,6 @@ func quote(s string) []byte {
 			w.WriteString(`\"`)
 		case '\\':
 			w.WriteString(`\\`)
-		case '/':
-			w.WriteString(`\/`)
 		case '\n':
 			w.WriteString(`\n`)
 		case '\r':

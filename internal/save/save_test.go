@@ -26,6 +26,10 @@ func testMapping(t *testing.T) *save.Mapping {
 		{"=Tb", "Width"}, {"N9>", "Height"}, {"hl?", "ValidSlotIndices"}, {":No", "Slots"},
 		{"3ZH", "Index"}, {">Qh", "X"}, {"XJ>", "Y"}, {"b2n", "Id"}, {"1o9", "Amount"},
 		{"@Cs", "ShipOwnership"}, {"OsQ", "Multitools"},
+		{":rc", "GroupId"}, {"gUR", "Stats"}, {">MX", "Value"}, {">vs", "IntValue"},
+		{"aBc", "PrimaryShip"}, {"NTx", "Resource"}, {"93M", "Filename"}, {"B@N", "Class"}, {"1o6", "InventoryClass"},
+		{"gan", "Inventory_Cargo"}, {"8ZP", "FreighterInventory"}, {"0wS", "FreighterInventory_TechOnly"},
+		{"FdP", "FreighterInventory_Cargo"}, {"NKm", "Name"}, {"CuF", "CurrentFreighter"}, {"@EL", "Seed"},
 		// The real file's ambiguity, reproduced: one key, two names.
 		{"V86", "RocketLockerInventory"}, {"V86", "FireteamSessionCount"},
 	}
@@ -63,7 +67,22 @@ func payload(version int) []byte {
 		`{"b2n":"^CARBON","1o9":9999,"3ZH":{">Qh":3,"XJ>":3}}],` +
 		`"hl?":` + cells(10, 34) + `,"=Tb":10,"N9>":12},` +
 		`"PMT":{":No":[],"hl?":` + cells(10, 13) + `,"=Tb":10,"N9>":6},` +
-		`"@Cs":[{},{},{}],"OsQ":[{}],"Path":"MODELS\/COMMON\/X.MBIN","F":1.0,"Neg":-0.0,"E":1e5}}}`)
+		`"aBc":1,"@Cs":[{"NKm":"","NTx":{"93M":"MODELS/COMMON/SPACECRAFT/FIGHTERS/FIGHTER_PROC.SCENE.MBIN"},` +
+		`";l5":{":No":[],"hl?":` + cells(10, 20) + `,"B@N":{"1o6":"C"},"=Tb":10,"N9>":4},` +
+		`"PMT":{":No":[],"hl?":` + cells(10, 5) + `,"B@N":{"1o6":"C"},"=Tb":10,"N9>":2},` +
+		`"gan":{":No":[],"hl?":[],"B@N":{"1o6":"C"},"=Tb":7,"N9>":5}},` +
+		`{"NKm":"Ada","NTx":{"93M":"MODELS/COMMON/SPACECRAFT/DROPSHIPS/DROPSHIP_PROC.SCENE.MBIN"},` +
+		`";l5":{":No":[{"b2n":"^GOLD","1o9":1,"3ZH":{">Qh":0,"XJ>":0}}],"hl?":` + cells(10, 59) + `,"B@N":{"1o6":"A"},"=Tb":10,"N9>":6},` +
+		`"PMT":{":No":[],"hl?":` + cells(10, 28) + `,"B@N":{"1o6":"A"},"=Tb":10,"N9>":3},` +
+		`"gan":{":No":[],"hl?":[],"B@N":{"1o6":"A"},"=Tb":7,"N9>":5}},{}],"OsQ":[{}],` +
+		`"8ZP":{":No":[],"hl?":` + cells(7, 19) + `,"B@N":{"1o6":"A"},"=Tb":7,"N9>":5},` +
+		`"0wS":{":No":[],"hl?":` + cells(7, 12) + `,"B@N":{"1o6":"A"},"=Tb":7,"N9>":3},` +
+		`"FdP":{":No":[],"hl?":[],"B@N":{"1o6":"A"},"=Tb":7,"N9>":5},` +
+		`"CuF":{"93M":"MODELS/COMMON/SPACECRAFT/INDUSTRIAL/FREIGHTER_PROC.SCENE.MBIN","@EL":[true,"0x1"]},` +
+		`"Path":"MODELS\/COMMON\/X.MBIN","F":1.0,"Neg":-0.0,"E":1e5,` +
+		`"gUR":[{":rc":"^SYSTEM_STATS","gUR":[{"b2n":"^WAR_STANDING",">MX":{">vs":15}}]},` +
+		`{":rc":"^GLOBAL_STATS","gUR":[{"b2n":"^WAR_STANDING",">MX":{">vs":135}},{"b2n":"^EGUILD_STAND",">MX":{}},` +
+		`{"b2n":"^TRA_STANDING",">MX":{">vs":45}},{"b2n":"^EXP_STANDING",">MX":{">vs":5}},{"b2n":"^WGUILD_STAND",">MX":{">vs":17}}]}]}}}`)
 }
 
 // --- container (AC1) --------------------------------------------------------
@@ -278,7 +297,7 @@ func TestDocumentGivesBackTheBytesItWasGiven(t *testing.T) {
 	n.Member("c").Index(3).SetInt(42)
 	require.Equal(t, strings.Replace(string(src), "-7", "42", 1), string(n.Bytes()))
 	n.Member("a").SetString("p/q")
-	require.Contains(t, string(n.Bytes()), `"a":"p\/q"`, "slashes are escaped the way the game writes them")
+	require.Contains(t, string(n.Bytes()), `"a":"p/q"`, "slashes are written plain, as the game's own paths are")
 }
 
 func TestDocumentRejectsWhatIsNotJSON(t *testing.T) {
@@ -326,7 +345,7 @@ func TestMappingNamesResolvesAndReportsCoverage(t *testing.T) {
 
 	var nilMap *save.Mapping
 	require.Equal(t, "F2P", nilMap.Name("F2P"))
-	require.Len(t, nilMap.Unmapped(root), 30, "with no mapping every key is unmapped")
+	require.Len(t, nilMap.Unmapped(root), 46, "with no mapping every key is unmapped")
 }
 
 func TestMappingDeobfuscatesForExportAndBackForImport(t *testing.T) {
@@ -426,7 +445,7 @@ func TestShrinkingSlotsRefusesAnOccupiedCellAndTheGridBoundsHold(t *testing.T) {
 	require.ErrorContains(t, err, "(3,3)")
 	require.ErrorContains(t, err, "^CARBON")
 
-	// Above the grid.
+	// Above the game's ceiling.
 	want = 121
 	_, err = save.Apply(root, m, save.ChangeSet{SuitItemSlots: &want})
 	require.ErrorContains(t, err, "1..120")
@@ -490,4 +509,195 @@ func TestEditsRefuseAPreWaypointSaveAndNeedTheMapping(t *testing.T) {
 	require.ErrorIs(t, err, save.ErrNoMapping)
 	_, err = save.Summarize(root, nil)
 	require.ErrorIs(t, err, save.ErrNoMapping)
+}
+
+// --- faction standing (spec 008) ---------------------------------------------
+
+func TestStandingsReadTheGlobalStatsAndEditsWriteThemBack(t *testing.T) {
+	m := testMapping(t)
+	src := payload(4735)
+	root, err := save.Parse(src)
+	require.NoError(t, err)
+
+	sum, err := save.Summarize(root, m)
+	require.NoError(t, err)
+	require.Len(t, sum.Standings, 6)
+	byKey := map[string]save.StandingValue{}
+	for _, sv := range sum.Standings {
+		byKey[sv.Key] = sv
+	}
+	require.EqualValues(t, 135, byKey["vykeen"].Value, "the global value, not the per-system 15")
+	require.EqualValues(t, 45, byKey["gek"].Value)
+	require.EqualValues(t, 5, byKey["korvax"].Value)
+	require.EqualValues(t, 17, byKey["mercenaries"].Value)
+	require.EqualValues(t, 0, byKey["explorers"].Value)
+	require.True(t, byKey["explorers"].Present, "an empty union is a present standing of zero")
+	require.False(t, byKey["merchants"].Present, "the fixture has no ^TGUILD_STAND entry")
+
+	// Levels, as the game shows them: 135 is level 9, 45 level 7, 5 level 2,
+	// 17 level 4, 0 level 1.
+	require.Equal(t, 9, byKey["vykeen"].Level)
+	require.Equal(t, 7, byKey["gek"].Level)
+	require.Equal(t, 2, byKey["korvax"].Level)
+	require.Equal(t, 4, byKey["mercenaries"].Level)
+	require.Equal(t, 1, byKey["explorers"].Level)
+	require.Equal(t, 0, save.StandingLevel(-3), "hostile")
+
+	changes, err := save.Apply(root, m, save.ChangeSet{Standings: map[string]int64{
+		"vykeen": 5, "explorers": 2, "mercenaries": 1, "korvax": 2,
+	}})
+	require.NoError(t, err)
+	require.Len(t, changes, 3, "korvax was already level 2")
+	out := string(root.Bytes())
+	require.Contains(t, out, `{"b2n":"^WAR_STANDING",">MX":{">vs":21}}`, "level 5 starts at 21")
+	require.Contains(t, out, `{"b2n":"^EGUILD_STAND",">MX":{">vs":3}}`, "level 2 starts at 3")
+	require.Contains(t, out, `{"b2n":"^WGUILD_STAND",">MX":{}}`, "level 1 is zero, written the way the game writes it")
+	require.Contains(t, out, `{":rc":"^SYSTEM_STATS","gUR":[{"b2n":"^WAR_STANDING",">MX":{">vs":15}}]}`, "per-system standing untouched")
+	require.Equal(t, "Vy'keen standing", changes[0].Field)
+	require.Equal(t, "level 9 (135)", changes[0].Old)
+	require.Equal(t, "level 5 (21)", changes[0].New)
+
+	_, err = save.Apply(root, m, save.ChangeSet{Standings: map[string]int64{"merchants": 1}})
+	require.ErrorContains(t, err, "^TGUILD_STAND")
+	_, err = save.Apply(root, m, save.ChangeSet{Standings: map[string]int64{"gek": 10}})
+	require.ErrorContains(t, err, "outside 1..9")
+	_, err = save.Apply(root, m, save.ChangeSet{Standings: map[string]int64{"sentinels": 1}})
+	require.ErrorContains(t, err, "unknown faction")
+}
+
+// Spec 009: paths address array elements by index, and Replace puts a value at
+// an existing path only.
+func TestLookupIndexesArraysAndReplaceNeedsAnExistingPath(t *testing.T) {
+	m := testMapping(t)
+	root, err := save.Parse(payload(4735))
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "b"}, save.SplitPath("/a//b/"))
+
+	id, ok := m.Lookup(root, "BaseContext/PlayerStateData/Inventory/Slots/1/Id").String()
+	require.True(t, ok)
+	require.Equal(t, "^CARBON", id)
+	require.Nil(t, m.Lookup(root, "BaseContext/PlayerStateData/Inventory/Slots/x"))
+	require.Nil(t, m.Lookup(root, "BaseContext/PlayerStateData/Inventory/Slots/9"))
+
+	require.True(t, m.Replace(root, "BaseContext/PlayerStateData/Inventory/Slots/1/Id", save.NewString("^GOLD")))
+	id, _ = m.Lookup(root, "BaseContext/PlayerStateData/Inventory/Slots/1/Id").String()
+	require.Equal(t, "^GOLD", id)
+	require.True(t, m.Replace(root, "BaseContext/PlayerStateData/Inventory/Slots/0", save.NewObject()))
+	require.Equal(t, 0, m.Lookup(root, "BaseContext/PlayerStateData/Inventory/Slots/0").Len())
+	require.False(t, m.Replace(root, "BaseContext/PlayerStateData/NewKey", save.NewInt(1)), "no adding")
+	require.False(t, m.Replace(root, "BaseContext/PlayerStateData/Inventory/Slots/7", save.NewInt(1)))
+	require.False(t, m.Replace(root, "", save.NewInt(1)))
+	require.Equal(t, "object", root.TypeName())
+	require.Equal(t, "missing", (*save.Node)(nil).TypeName())
+}
+
+// --- starships and the freighter (spec 011) -----------------------------------
+
+func TestShipsAndFreighterAreSummarisedAndTheirSlotsAndClassEdited(t *testing.T) {
+	m := testMapping(t)
+	root, err := save.Parse(payload(4735))
+	require.NoError(t, err)
+	sum, err := save.Summarize(root, m)
+	require.NoError(t, err)
+
+	require.Len(t, sum.ShipList, 2, "the empty third entry is skipped")
+	require.Equal(t, "Fighter", sum.ShipList[0].Kind)
+	require.Equal(t, "fighter", sum.ShipList[0].Type)
+	require.Equal(t, "hauler", sum.ShipList[1].Type)
+	require.Equal(t, "Hauler", sum.ShipList[1].Kind, "the in-game name, not the model's")
+	require.Equal(t, "regular", sum.Freighter.Type)
+	require.Equal(t, "C", sum.ShipList[0].Class)
+	require.False(t, sum.ShipList[0].Primary)
+	require.Equal(t, save.InventorySummary{Width: 10, Height: 4, Valid: 20}, sum.ShipList[0].Items)
+	require.Equal(t, "Hauler", sum.ShipList[1].Kind)
+	require.Equal(t, "Ada", sum.ShipList[1].Name)
+	require.True(t, sum.ShipList[1].Primary)
+	require.Equal(t, "2: Hauler “Ada” (A) — current", sum.ShipList[1].Label())
+	require.Equal(t, save.InventorySummary{Width: 10, Height: 6, Valid: 59, Occupied: 1}, sum.ShipList[1].Items)
+	require.True(t, sum.Freighter.Present)
+	require.Equal(t, "A", sum.Freighter.Class)
+	require.Equal(t, save.InventorySummary{Width: 7, Height: 5, Valid: 19}, sum.Freighter.Items)
+	require.Equal(t, save.InventorySummary{Width: 7, Height: 3, Valid: 12}, sum.Freighter.Tech)
+
+	// Slots on the primary ship (Ship -1) and on the freighter; class on both.
+	sixty, thirty, fItems, fTech := 60, 30, 35, 21
+	sClass, fClass := "S", "S"
+	changes, err := save.Apply(root, m, save.ChangeSet{
+		Ship: -1, ShipItemSlots: &sixty, ShipTechSlots: &thirty, ShipClass: &sClass,
+		FreighterItemSlots: &fItems, FreighterTechSlots: &fTech, FreighterClass: &fClass,
+	})
+	require.NoError(t, err)
+	require.Len(t, changes, 6)
+	require.Equal(t, "BaseContext/PlayerStateData/ShipOwnership/1/Inventory/ValidSlotIndices", changes[0].Path)
+	require.Equal(t, "ship class", changes[2].Field)
+	require.Equal(t, "A", changes[2].Old)
+	require.Equal(t, "S", changes[2].New)
+	after, err := save.Summarize(root, m)
+	require.NoError(t, err)
+	require.Equal(t, 60, after.ShipList[1].Items.Valid)
+	require.Equal(t, 30, after.ShipList[1].Tech.Valid)
+	require.Equal(t, "S", after.ShipList[1].Class)
+	require.Equal(t, "C", after.ShipList[0].Class, "the other ship is untouched")
+	require.Equal(t, 35, after.Freighter.Items.Valid)
+	require.Equal(t, "S", after.Freighter.Class)
+	out := string(root.Bytes())
+	require.Equal(t, 3, strings.Count(out, `"B@N":{"1o6":"S"}`)-3, "all three inventories of ship and freighter carry the class")
+
+	// A named ship by index, bounds and bad input.
+	ten := 10
+	changes, err = save.Apply(root, m, save.ChangeSet{Ship: 0, ShipItemSlots: &ten})
+	require.NoError(t, err)
+	require.Equal(t, "20", changes[0].Old)
+	// Past the grid the save has, up to the game's ceiling: the grid grows a
+	// row at a time, the way the game grows it when slots are bought.
+	grow := 75
+	changes, err = save.Apply(root, m, save.ChangeSet{Ship: 1, ShipItemSlots: &grow})
+	require.NoError(t, err)
+	require.Equal(t, "60", changes[0].Old)
+	require.Equal(t, "75", changes[0].New)
+	grown, err := save.Summarize(root, m)
+	require.NoError(t, err)
+	require.Equal(t, save.InventorySummary{Width: 10, Height: 8, Valid: 75, Occupied: 1}, grown.ShipList[1].Items)
+	full := 120
+	_, err = save.Apply(root, m, save.ChangeSet{Ship: 1, ShipItemSlots: &full})
+	require.NoError(t, err)
+	grown, _ = save.Summarize(root, m)
+	require.Equal(t, 12, grown.ShipList[1].Items.Height)
+	over := 121
+	_, err = save.Apply(root, m, save.ChangeSet{Ship: 1, ShipItemSlots: &over})
+	require.ErrorContains(t, err, "1..120")
+	techOver := 61
+	_, err = save.Apply(root, m, save.ChangeSet{Ship: 1, ShipTechSlots: &techOver})
+	require.ErrorContains(t, err, "1..60")
+	_, err = save.Apply(root, m, save.ChangeSet{Ship: 7, ShipItemSlots: &ten})
+	require.ErrorContains(t, err, "no ship at index 7")
+	bad := "X"
+	_, err = save.Apply(root, m, save.ChangeSet{Ship: 0, ShipClass: &bad})
+	require.ErrorContains(t, err, "not one of C, B, A, S")
+	same := "S"
+	changes, err = save.Apply(root, m, save.ChangeSet{FreighterClass: &same})
+	require.NoError(t, err)
+	require.Empty(t, changes, "already S")
+
+	// Types: the scene file changes, the seed stays, the label follows.
+	exotic, capital := "exotic", "capital"
+	changes, err = save.Apply(root, m, save.ChangeSet{Ship: 0, ShipType: &exotic, FreighterType: &capital})
+	require.NoError(t, err)
+	require.Len(t, changes, 2)
+	require.Equal(t, "fighter", changes[0].Old)
+	require.Equal(t, "exotic", changes[0].New)
+	require.Equal(t, "BaseContext/PlayerStateData/ShipOwnership/0/Resource/Filename", changes[0].Path)
+	typed, err := save.Summarize(root, m)
+	require.NoError(t, err)
+	require.Equal(t, "exotic", typed.ShipList[0].Type)
+	require.Equal(t, "Exotic", typed.ShipList[0].Kind)
+	require.Equal(t, "capital", typed.Freighter.Type)
+	require.Contains(t, string(root.Bytes()), `"93M":"MODELS/COMMON/SPACECRAFT/S-CLASS/S-CLASS_PROC.SCENE.MBIN"`)
+	require.Contains(t, string(root.Bytes()), `"CuF":{"93M":"MODELS/COMMON/SPACECRAFT/INDUSTRIAL/CAPITALFREIGHTER_PROC.SCENE.MBIN","@EL":[true,"0x1"]}`, "the seed is kept")
+	nope := "corvette"
+	_, err = save.Apply(root, m, save.ChangeSet{Ship: 0, ShipType: &nope})
+	require.ErrorContains(t, err, "not one of fighter, hauler")
+	changes, err = save.Apply(root, m, save.ChangeSet{Ship: 0, ShipType: &exotic})
+	require.NoError(t, err)
+	require.Empty(t, changes, "already exotic")
 }
