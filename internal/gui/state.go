@@ -572,6 +572,9 @@ func buildSummary(res core.BuildResult) (string, Status) {
 		msg += " Installed to " + res.Deployed.Dest + "."
 	}
 	switch {
+	case len(r.CompilerFailures) > 0:
+		return msg + fmt.Sprintf(" MBINCompiler could not handle %d file(s) — the compiler may not match "+
+			"this game build; see the report.", len(r.CompilerFailures)), StatusBad
 	case r.Dropped > 0:
 		return msg + fmt.Sprintf(" %d target(s) were dropped — see the report.", r.Dropped), StatusBad
 	case partial > 0:

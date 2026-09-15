@@ -240,3 +240,16 @@ func TestDrawingWithNoWidgetsIsHarmless(t *testing.T) {
 		u.drawControls()
 	})
 }
+
+// A message carrying newlines becomes one row per line: the list draws rows at
+// one line's height, and a multi-line label painted over the rows beneath it.
+func TestLogSplitsMultiLineMessagesIntoRows(t *testing.T) {
+	m := newLogModel()
+	m.append(core.LevelWarn, "no game file for X: compiler said\n[INFO]: one\n[INFO]: two\n")
+	m.append(core.LevelInfo, "single")
+	require.Equal(t, 4, m.len())
+	require.Equal(t, "no game file for X: compiler said", m.at(0).text)
+	require.Equal(t, "[INFO]: one", m.at(1).text)
+	require.Equal(t, core.LevelWarn, m.at(2).level, "every row keeps the message's level")
+	require.Equal(t, "single", m.at(3).text)
+}

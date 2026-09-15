@@ -62,16 +62,24 @@ type logModel struct {
 
 func newLogModel() *logModel { return &logModel{} }
 
-// append adds a line, dropping the oldest chunk when the cap is reached.
+// append adds a message, one list row per line of it, dropping the oldest
+// chunk when the cap is reached.
+//
+// A message with newlines in it -- MBINCompiler's output quoted into a warning
+// is the usual one -- must be split here: the list draws every row at one
+// line's height, and a multi-line label in a one-line row paints over the rows
+// beneath it.
 func (m *logModel) append(level core.Level, text string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.lines) >= maxLogLines {
-		drop := min(logDropChunk, len(m.lines))
-		m.lines = append(m.lines[:0], m.lines[drop:]...)
-		m.dropped += drop
+	for _, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		if len(m.lines) >= maxLogLines {
+			drop := min(logDropChunk, len(m.lines))
+			m.lines = append(m.lines[:0], m.lines[drop:]...)
+			m.dropped += drop
+		}
+		m.lines = append(m.lines, logLine{level: level, text: strings.TrimRight(line, "\r")})
 	}
-	m.lines = append(m.lines, logLine{level: level, text: text})
 	m.dirty = true
 }
 

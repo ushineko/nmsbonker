@@ -69,6 +69,13 @@ type ui struct {
 	// out when the first of them finishes.
 	busyCount int
 	busyWhat  string
+	// busyPop is the centred progress popup, up while busyCount > 0 once the
+	// operation has run longer than busyPopDelay; busyLabel is its text.
+	busyPop   *widget.PopUp
+	busyLabel *widget.Label
+	busySeq   int
+	// flashPop carries the result banner over the content.
+	flashPop *widget.PopUp
 
 	// Loaded from the core on a goroutine, read and written on the UI thread.
 	//
@@ -99,7 +106,23 @@ type ui struct {
 	// written, keyed by field label. The section is rebuilt whenever an
 	// operation starts or stops (regate), and a rebuild that reset the form
 	// would throw away the values Preview was just asked about.
-	draft     map[string]string
+	draft map[string]string
+	// reinspect is a save to read again once the operation that wrote it has
+	// finished. Set inside that operation, acted on by the rebuild its end
+	// triggers: starting a second core call from inside the first trips the
+	// one-at-a-time guard.
+	reinspect *core.SlotSelector
+	// savesTab is the Saves section's selected tab, kept across rebuilds.
+	savesTab int
+	// rawPath, rawNode and rawText are the Raw JSON tab's browser: the path
+	// being looked at, what core returned for it, and the text as edited (a
+	// draft, kept across the rebuilds an operation causes).
+	rawPath string
+	rawNode *core.SaveNodeResult
+	rawText string
+	// shipIndex is the ship the editor's Starship group shows; -1 is the one
+	// being flown.
+	shipIndex int
 	archive   core.ListArchiveResult
 	archiveOK bool
 	// checks are the per-script facts the Mods table's Author and Files columns
@@ -313,28 +336,16 @@ func Run(o Options) {
 	)
 	u.nav.OnSelected = func(i widget.ListItemID) {
 		u.current = i
-		u.swap(secs[i].build)
+		u.swap(secs[i].build, false)
 	}
 
 	split := container.NewHSplit(u.nav, u.content)
 	split.SetOffset(0.16)
 
-	// Result banners get their own region above the status bar, and that region
-	// keeps its height whether or not a banner is in it.
-	//
-	// Both of the obvious alternatives are worse. Stacked above the content,
-	// every banner pushed the whole section down — the row under the pointer
-	// moved out from under it, which is jarring in a window whose buttons
-	// include Remove. Floated over the content, nothing reflowed but the banner
-	// covered whatever was at the bottom of the section, which on Build is the
-	// Cancel button.
-	//
-	// The reserved height is the price. The banner scrolls inside the slot
-	// rather than growing it, so a long message cannot reflow the window either.
-	u.frame = container.NewVBox(
-		fixedHeight(container.NewVScroll(u.flashes), flashSlotHeight),
-		u.statusBar(),
-	)
+	// Result banners and the progress indicator float over the content as
+	// popups (see flash and busy), so nothing below the header reflows when
+	// an operation starts, finishes or reports. The frame is the status bar.
+	u.frame = container.NewVBox(u.statusBar())
 	u.win.SetContent(container.NewBorder(u.header(), u.frame, nil, nil, split))
 	// F5 and Ctrl+R reload, the two bindings people already try. The library is
 	// a plain directory and the game is updated by Steam behind our back, so
@@ -409,7 +420,7 @@ func (u *ui) refresh() {
 	}
 	secs := sections()
 	if u.current >= 0 && u.current < len(secs) {
-		u.swap(secs[u.current].build)
+		u.swap(secs[u.current].build, true)
 	}
 }
 
@@ -421,22 +432,33 @@ Built first and dropped afterwards -- which is what this did, inside show() --
 the Build section registered its brand-new log list and step rows and then had
 them thrown away by the very call that put them on screen, so a running build
 streamed into nothing.
+
+keepScroll is for a rebuild of the section already on screen: every operation
+rebuilds it when it starts and when it stops (regate), and a rebuild that
+scrolled to the top threw the reader away from the slider they had just moved.
+Navigating to a section starts at its top.
 */
-func (u *ui) swap(build func(*ui) fyne.CanvasObject) {
+func (u *ui) swap(build func(*ui) fyne.CanvasObject, keepScroll bool) {
 	if u.content == nil {
 		return
 	}
 	u.run.detach()
-	u.show(build(u))
+	u.show(build(u), keepScroll)
 }
 
-func (u *ui) show(o fyne.CanvasObject) {
+func (u *ui) show(o fyne.CanvasObject, keepScroll bool) {
 	if u.content == nil {
 		return
 	}
+	offset := u.content.Offset
 	u.content.Content = o
 	u.content.Refresh()
-	u.content.ScrollToTop()
+	if !keepScroll {
+		u.content.ScrollToTop()
+		return
+	}
+	u.content.Offset = offset
+	u.content.Refresh()
 }
 
 // header is the window's title strip. It carries Refresh because the two
@@ -482,65 +504,14 @@ func (u *ui) statusBar() fyne.CanvasObject {
 		output = u.status.ModName
 	}
 
-	// One HBox, laid out left to right, with a spacer pushing the busy slot to
-	// the right-hand end. A border layout's centre region is sized from what is
-	// left over rather than from the slot's own width, so a long compiler
-	// version would push the two into each other. Sequential layout cannot
-	// overlap.
 	bar := container.NewHBox(
 		dim("game"), game, sep(),
 		dim("compiler"), compiler, sep(),
 		dim("mods"), widget.NewLabel(modsText), sep(),
 		dim("output"), widget.NewLabel(output),
-		layout.NewSpacer(),
-		u.busyStrip(),
 	)
 	return container.NewVBox(widget.NewSeparator(), container.NewPadded(bar))
 }
-
-// busyStrip is the right-hand end of the status bar: what is running, and a bar
-// that says it is still running.
-//
-// It occupies the same height whether or not anything is happening. A slot that
-// only exists while busy would resize the status bar as operations start and
-// finish, which is the same reflow this placement exists to avoid, just at the
-// other end of the window.
-func (u *ui) busyStrip() fyne.CanvasObject {
-	if u.busyCount == 0 {
-		spacer := canvas.NewRectangle(nil)
-		spacer.SetMinSize(fyne.NewSize(0, busyStripHeight))
-		return spacer
-	}
-
-	label := widget.NewLabel(u.busyWhat)
-	label.Truncation = fyne.TextTruncateEllipsis
-	label.Alignment = fyne.TextAlignTrailing
-
-	// Both halves are pinned to a width. An HBox hands a truncating label its
-	// minimum size, which for a truncating label is nothing at all — the text
-	// collapsed to an ellipsis and the indicator said nothing about what was
-	// running. A progress bar left to itself has the opposite problem and
-	// expands into whatever room the text beside it leaves.
-	labelSlot := canvas.NewRectangle(nil)
-	labelSlot.SetMinSize(fyne.NewSize(busyLabelWidth, busyStripHeight))
-
-	barSlot := canvas.NewRectangle(nil)
-	barSlot.SetMinSize(fyne.NewSize(120, busyStripHeight))
-
-	return container.NewHBox(
-		container.New(layout.NewStackLayout(), labelSlot, label),
-		container.New(layout.NewStackLayout(), barSlot, widget.NewProgressBarInfinite()),
-	)
-}
-
-// busyStripHeight keeps the status bar the same height whether or not something
-// is running. busyLabelWidth is how much room the description gets: enough for a
-// short phrase, and fixed so that starting an operation does not shuffle the
-// rest of the bar sideways.
-const (
-	busyStripHeight = 18
-	busyLabelWidth  = 260
-)
 
 /*
 busy shows an indeterminate progress indicator until the returned function is
@@ -565,7 +536,7 @@ func (u *ui) busy(what string) func() {
 	fyne.Do(func() {
 		u.busyCount++
 		u.busyWhat = what
-		u.redrawStatus()
+		u.showBusy()
 		if u.busyCount == 1 {
 			u.regate()
 		}
@@ -578,11 +549,60 @@ func (u *ui) busy(what string) func() {
 				u.busyCount--
 				if u.busyCount <= 0 {
 					u.busyCount, u.busyWhat = 0, ""
+					u.hideBusy()
 					u.regate()
 				}
-				u.redrawStatus()
 			})
 		})
+	}
+}
+
+// busyPopDelay is how long an operation runs before the progress popup
+// appears. Most operations finish inside it, and a popup that blinks for a
+// tenth of a second on every click is worse than none.
+const busyPopDelay = 300 * time.Millisecond
+
+/*
+showBusy puts the progress popup up, centred and modal, once the operation has
+lasted long enough to deserve one.
+
+Modal on purpose: the window runs one operation at a time (R4.2) and every
+button is disabled while one runs, so a popup that also swallows clicks changes
+nothing about what can be done, and says plainly why the window is not
+answering. It names the operation, in the words the caller of busy gave it.
+*/
+func (u *ui) showBusy() {
+	if !u.onScreen() {
+		return
+	}
+	if u.busyPop != nil {
+		u.busyLabel.SetText(u.busyWhat)
+		return
+	}
+	u.busySeq++
+	seq := u.busySeq
+	go func() {
+		time.Sleep(busyPopDelay)
+		fyne.Do(func() {
+			if u.busySeq != seq || u.busyCount == 0 || u.busyPop != nil {
+				return
+			}
+			u.busyLabel = widget.NewLabel(u.busyWhat)
+			u.busyLabel.Alignment = fyne.TextAlignCenter
+			bar := widget.NewProgressBarInfinite()
+			body := container.NewPadded(container.NewVBox(u.busyLabel, fixedWidth(bar, 320)))
+			u.busyPop = widget.NewModalPopUp(body, u.win.Canvas())
+			u.busyPop.Show()
+		})
+	}()
+}
+
+// hideBusy takes the progress popup down.
+func (u *ui) hideBusy() {
+	u.busySeq++ // a pending showBusy timer finds a different sequence and stops
+	if u.busyPop != nil {
+		u.busyPop.Hide()
+		u.busyPop, u.busyLabel = nil, nil
 	}
 }
 
@@ -624,17 +644,13 @@ func (u *ui) redrawStatus() {
 	u.frame.Refresh()
 }
 
-// The banner slot's geometry and timings.
+// The banner's geometry and timings.
 const (
-	// frameStatusBar is the status bar's position in u.frame, which also holds
-	// the banner slot above it.
-	frameStatusBar = 1
-	// flashSlotHeight reserves room for one banner. Reserved whether or not one
-	// is showing, so nothing moves when one arrives — which is the point, and
-	// also the cost: this is height the section below never gets back. A banner
-	// measures 44 at its minimum, so this is that plus a little air, and the
-	// rare message long enough to wrap scrolls inside the slot.
-	flashSlotHeight = 48
+	// frameStatusBar is the status bar's position in u.frame.
+	frameStatusBar = 0
+	// flashWidth is how wide a banner is drawn, so a long message wraps
+	// rather than spanning the window.
+	flashWidth = 720
 	// How long a banner stays before it starts fading. A warning gets longer
 	// because it usually names a condition to act on.
 	flashHoldGood = 6 * time.Second
@@ -662,10 +678,10 @@ func flashHold(st Status) (time.Duration, bool) {
 }
 
 /*
-flash reports the result of an operation as a banner in the slot above the
-status bar. One banner shows at a time: a newer result replaces an older one
-rather than stacking, so the slot cannot overflow and the most recent thing that
-happened is always the thing on screen.
+flash reports the result of an operation as a banner floated over the bottom of
+the content, centred. One banner shows at a time: a newer result replaces an
+older one rather than stacking, so the most recent thing that happened is always
+the thing on screen, and nothing in the section behind it moves.
 
 Fyne animates properties, not opacity: a widget has no alpha to fade. So the
 fade is on the banner's own background rectangle, whose colour animates from the
@@ -697,6 +713,7 @@ func (u *ui) flash(text string, st Status) {
 		container.NewBorder(nil, nil, marker(st), dismiss, label)))
 	u.flashes.Objects = []fyne.CanvasObject{banner}
 	u.flashes.Refresh()
+	u.showFlashPop()
 
 	hold, fades := flashHold(st)
 	if !fades || !u.onScreen() {
@@ -734,6 +751,28 @@ func (u *ui) clearFlash(seq int) {
 	}
 	u.flashes.Objects = nil
 	u.flashes.Refresh()
+	if u.flashPop != nil {
+		u.flashPop.Hide()
+	}
+}
+
+// showFlashPop floats the banner over the content, centred, a little above the
+// status bar. Not modal: a result is something to read, not something to
+// answer, and the section behind it stays usable.
+func (u *ui) showFlashPop() {
+	if !u.onScreen() {
+		return
+	}
+	c := u.win.Canvas()
+	if u.flashPop == nil {
+		u.flashPop = widget.NewPopUp(fixedWidth(u.flashes, flashWidth), c)
+	}
+	cs := c.Size()
+	width := min(float32(flashWidth), cs.Width-40)
+	u.flashPop.Content = fixedWidth(u.flashes, width)
+	size := u.flashPop.Content.MinSize()
+	pos := fyne.NewPos((cs.Width-size.Width)/2, cs.Height-size.Height-56)
+	u.flashPop.ShowAtPosition(pos)
 }
 
 // flashTint is the banner's starting colour: the status role from the active
@@ -921,6 +960,7 @@ func Actions() []string {
 		"detect", // the "where nmsbonker looked" block, shown when no game is found
 		// Mods
 		"mods list", "mods add", "mods import", "mods remove",
+		"mods show", "mods write", // the script editor dialog (spec 010)
 		"mods enable", "mods disable", "mods move", "mods check",
 		// Tweaks
 		"tweaks list", "tweaks set", "tweaks reset", "tweaks enable", "tweaks disable",
@@ -932,6 +972,7 @@ func Actions() []string {
 		"saves backup", "saves list",
 		// Saves (spec 007 R8)
 		"saves slots", "saves inspect", "saves export", "saves import", "saves edit",
+		"saves get", "saves set", // the Raw JSON tab's browser and editor (spec 009)
 		// Tools
 		"tools ensure", "tools list", "tools check", "tools pin", "tools unpin",
 		"tools releases", "tools remove",

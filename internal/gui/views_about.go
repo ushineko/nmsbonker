@@ -22,11 +22,9 @@ const projectURL = "https://github.com/ushineko/nmsbonker"
 /*
 buildAbout is what nmsbonker is and what it will and will not do.
 
-The three capability blocks are chosen to answer the questions someone asks
-before letting a tool near a game they have four hundred hours in: what does it
-build, what does it touch, and where does it put things. Limitations belong in
-the README, which carries them at length; restating a shortened version here
-would only produce a second, less careful copy to keep in sync.
+The blocks answer what someone asks before letting a tool near a game they have
+four hundred hours in: what it builds, what it touches, where it puts things.
+Limitations stay in the README; a shortened copy here would only drift.
 */
 func (u *ui) buildAbout(version, commit string) fyne.CanvasObject {
 	logo := canvas.NewImageFromResource(appIcon())
@@ -37,40 +35,33 @@ func (u *ui) buildAbout(version, commit string) fyne.CanvasObject {
 	ver := widget.NewLabel(version + " (" + commit + ")")
 	ver.Importance = widget.LowImportance
 	blurb := widget.NewLabel(
-		"nmsbonker rebuilds AMUMSS-format .lua mod scripts against the No Man's Sky files you " +
-			"actually have installed, merges every enabled mod into one collision-free mod " +
-			"folder, and deploys it. Native Go against a Steam/Proton install: no Wine, no " +
-			"Windows VM, no Python.")
+		"Builds AMUMSS-format .lua mods against the game files you have installed, merges " +
+			"them into one mod folder, and deploys it. Reads and edits your saves. Native Go " +
+			"on a Steam/Proton install: no Wine, no Windows VM, no Python.")
 	blurb.Wrapping = fyne.TextWrapWord
 
 	head := container.NewBorder(nil, nil, container.NewPadded(logo), nil,
 		container.NewVBox(name, ver, blurb))
 
 	can := container.NewVBox(
-		aboutNote("What it builds",
-			"One mod folder. Every enabled script's edits are applied to the same pristine game "+
-				"files in build order, so two mods editing one file produce one merged file "+
-				"rather than two that overwrite each other."),
-		aboutNote("What it ships, and what it refuses to",
-			"A merged file is shipped only if MBINCompiler recompiles it cleanly. A structural "+
-				"edit the compiler rejects is retried without it, and dropped if that fails — "+
-				"and the report names the file and the mod. Nothing the compiler rejected ever "+
-				"reaches the game."),
-		aboutNote("What it never touches",
-			"The game directory is read-only except during a deploy, which writes one folder "+
-				"under GAMEDATA/MODS and archives whatever it replaces first. Your saves are "+
-				"never read or written. The game's own .pak archives are never modified. A "+
-				"symlinked GAMEDATA/MODS is left alone unless you ask, and then only the link "+
-				"goes — never what it points at."),
-		aboutNote("Where files live",
-			"Scripts in the library directory, downloaded compilers in the tools directory, "+
-				"extracted game files in the cache, merged output in the workspace, and "+
-				"replaced deployments in the archive — all under your XDG directories, all "+
-				"shown in Settings."),
-		aboutNote("What it says about a game update",
-			"After an update, a build's report is the list of mods to re-download: a mod whose "+
-				"keys the update renamed comes out WORKING~ or NOT BUILT, named, with the keys "+
-				"it could not find."),
+		aboutNote("Build",
+			"Every enabled script edits the same pristine game files, in your order. Two mods "+
+				"touching one file yield one merged file, not two that fight."),
+		aboutNote("Ship only what compiles",
+			"A merged file ships only if MBINCompiler recompiles it cleanly. A rejected edit is "+
+				"retried without its structural changes, then dropped and named in the report."),
+		aboutNote("Touch little",
+			"Deploy writes one folder under GAMEDATA/MODS and archives what it replaces. The "+
+				"save editor writes one save and its manifest, after copying the whole profile "+
+				"to the backup directory. Nothing else in the game is written; the .pak archives "+
+				"never are."),
+		aboutNote("Keep files where you expect",
+			"Scripts in the library, compilers in tools, extracted game files in the cache, "+
+				"merged output in the workspace, replaced deployments in the archive, save "+
+				"copies in save-backup. All under your XDG directories; all listed in Settings."),
+		aboutNote("Survive a game update",
+			"After an update, the build report is your re-download list: a mod whose keys the "+
+				"update renamed comes out WORKING~ or NOT BUILT, with the keys it could not find."),
 	)
 
 	facts := widget.NewForm(

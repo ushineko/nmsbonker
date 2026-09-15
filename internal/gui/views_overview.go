@@ -259,6 +259,12 @@ func (u *ui) libraryCard() fyne.CanvasObject {
 			plainRow("Last build", humanAgo(r.Generated)+" ("+r.Generated.Format("2006-01-02 15:04")+")"),
 			factRow("Result", fmt.Sprintf("%d built, %d dropped, %d edits applied, %d skipped",
 				r.Built, r.Dropped, r.Applied, r.Skipped), builtStatus(r.Dropped)),
+		)
+		if n := len(r.CompilerFailures); n > 0 {
+			rows = append(rows, factRow("Compiler failures",
+				fmt.Sprintf("%d file(s) MBINCompiler could not handle — see the Report", n), StatusBad))
+		}
+		rows = append(rows,
 			plainRow("Verdicts", verdictCounts(r.Mods)),
 			amountFlagsRow(r.Audit),
 		)
