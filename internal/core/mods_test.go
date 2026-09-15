@@ -362,3 +362,75 @@ func TestABuiltInCannotBeRemoved(t *testing.T) {
 	require.ErrorIs(t, err, core.ErrBuiltInMod)
 	require.ErrorContains(t, err, "disable it instead")
 }
+
+// Spec 010: a library script can be read and rewritten in place; the new text
+// has to load, the previous text is kept beside the file, and a built-in is
+// read-only.
+func TestModScriptsAreReadAndRewrittenWithAGuardAndABackup(t *testing.T) {
+	bare(t)
+	lib := config.Defaults().Paths().Library
+	require.NoError(t, os.MkdirAll(lib, 0o750))
+	script := "NMS_MOD_DEFINITION_CONTAINER = {\n  MOD_FILENAME = \"Edit.pak\",\n  MOD_AUTHOR = \"t\",\n" +
+		"  MODIFICATIONS = { { MBIN_CHANGE_TABLE = { { MBIN_FILE_SOURCE = \"GCGAMEPLAYGLOBALS.GLOBAL.MBIN\",\n" +
+		"    EXML_CHANGE_TABLE = { { VALUE_CHANGE_TABLE = { {\"JetpackFillRate\", 999} } } } } } } }\n}\n"
+	path := filepath.Join(lib, "Edit.lua")
+	require.NoError(t, os.WriteFile(path, []byte(script), 0o600))
+	_, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+
+	got, err := core.ReadModScript(t.Context(), core.ModScriptRequest{Name: "Edit"})
+	require.NoError(t, err)
+	require.Equal(t, script, got.Text)
+	require.Equal(t, path, got.Path)
+	require.False(t, got.ReadOnly)
+
+	// Check: a verdict, nothing written.
+	edited := strings.Replace(script, "999", "1234", 1)
+	res, err := core.WriteModScript(t.Context(), core.WriteModScriptRequest{Name: "Edit", Text: edited, Check: true})
+	require.NoError(t, err)
+	require.True(t, res.Loads)
+	require.Equal(t, 1, res.Blocks)
+	require.False(t, res.Written)
+	require.Equal(t, script, read(t, path))
+
+	// Text that does not load is refused, and written with Force.
+	broken := "NMS_MOD_DEFINITION_CONTAINER = {"
+	_, err = core.WriteModScript(t.Context(), core.WriteModScriptRequest{Name: "Edit", Text: broken})
+	require.ErrorContains(t, err, "does not load")
+	require.Equal(t, script, read(t, path))
+	res, err = core.WriteModScript(t.Context(), core.WriteModScriptRequest{Name: "Edit", Text: broken, Force: true})
+	require.NoError(t, err)
+	require.True(t, res.Written)
+	require.False(t, res.Loads)
+	require.Equal(t, broken, read(t, path))
+	require.Equal(t, script, read(t, path+".bak"), "the previous text is kept")
+
+	// A good edit lands, and the .bak now holds the broken text it replaced.
+	res, err = core.WriteModScript(t.Context(), core.WriteModScriptRequest{Name: "Edit", Text: edited})
+	require.NoError(t, err)
+	require.True(t, res.Written)
+	require.Equal(t, edited, read(t, path))
+	require.Equal(t, broken, read(t, path+".bak"))
+	list, err := core.ListMods(t.Context(), core.ListModsRequest{})
+	require.NoError(t, err)
+	for _, m := range list.Mods {
+		require.NotContains(t, m.Name, ".bak", "the backup is not a mod")
+	}
+
+	// Identical text writes nothing.
+	res, err = core.WriteModScript(t.Context(), core.WriteModScriptRequest{Name: "Edit", Text: edited})
+	require.NoError(t, err)
+	require.False(t, res.Written)
+
+	// A built-in reads but does not write.
+	bi, err := core.ReadModScript(t.Context(), core.ModScriptRequest{Name: list.Mods[0].Name})
+	if list.Mods[0].Source == core.SourceBuiltin {
+		require.NoError(t, err)
+		require.True(t, bi.ReadOnly)
+		require.NotEmpty(t, bi.Text)
+		_, err = core.WriteModScript(t.Context(), core.WriteModScriptRequest{Name: list.Mods[0].Name, Text: "x"})
+		require.ErrorIs(t, err, core.ErrReadOnlyScript)
+	}
+	_, err = core.ReadModScript(t.Context(), core.ModScriptRequest{Name: "Nope"})
+	require.Error(t, err)
+}

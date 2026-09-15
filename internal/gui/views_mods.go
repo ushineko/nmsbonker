@@ -3,12 +3,14 @@ package gui
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -132,9 +134,10 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	down := widget.NewButtonWithIcon("Move down", theme.MoveDownIcon(), nil)
 	details := widget.NewButtonWithIcon("Details…", theme.InfoIcon(), nil)
 	open := widget.NewButtonWithIcon("Open script", theme.DocumentIcon(), nil)
+	edit := widget.NewButtonWithIcon("Edit script…", theme.DocumentCreateIcon(), nil)
 	remove := widget.NewButtonWithIcon("Remove…", theme.DeleteIcon(), nil)
 	remove.Importance = widget.DangerImportance
-	rowActions := []*widget.Button{enable, disable, up, down, details, open, remove}
+	rowActions := []*widget.Button{enable, disable, up, down, details, open, edit, remove}
 	for _, b := range rowActions {
 		b.Disable()
 	}
@@ -154,6 +157,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 		}
 		if rows[i].info.Status == core.ModMissing {
 			open.Disable()
+			edit.Disable()
 			details.Disable()
 		}
 		if rows[i].info.Source == core.SourceBuiltin && !rows[i].info.Shadowed {
@@ -236,6 +240,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	down.OnTapped = func() { u.moveMod(rows[selected], +1) }
 	details.OnTapped = func() { u.showModDetails(rows[selected]) }
 	open.OnTapped = func() { u.openPath(rows[selected].info.Path) }
+	edit.OnTapped = func() { u.editScriptDialog(rows[selected].info) }
 	remove.OnTapped = func() { u.removeModDialog(rows[selected].info) }
 
 	add := widget.NewButtonWithIcon("Add…", theme.ContentAddIcon(), func() { u.addModDialog() })
@@ -760,4 +765,109 @@ func enabledRowStatus(enabled bool) Status {
 		return StatusGood
 	}
 	return StatusInfo
+}
+
+// --- editing a script in place (spec 010) ------------------------------------
+
+/*
+editScriptDialog is a text editor over one library script.
+
+Check loads the text through the sandbox and says whether it would build; Save
+writes it, keeping the previous text as a .bak beside the file, and refuses text
+that does not load unless the box is ticked. A built-in tweak opens read-only:
+it is compiled in, and its numbers are parameters in Tweaks.
+*/
+func (u *ui) editScriptDialog(m core.ModInfo) {
+	u.perform("Reading "+m.Name+"…", func(ctx context.Context) error {
+		res, err := core.ReadModScript(ctx, core.ModScriptRequest{Request: u.request(), Name: m.Name})
+		if err != nil {
+			return err
+		}
+		fyne.Do(func() { u.showScriptEditor(res) })
+		return nil
+	})
+}
+
+func (u *ui) showScriptEditor(script core.ModScriptResult) {
+	text := widget.NewMultiLineEntry()
+	text.TextStyle = fyne.TextStyle{Monospace: true}
+	text.Wrapping = fyne.TextWrapOff
+	text.SetText(script.Text)
+
+	status := widget.NewLabel("")
+	status.Wrapping = fyne.TextWrapWord
+	force := widget.NewCheck("Save even if it does not load (the build will report the mod NOT BUILT)", nil)
+
+	var d *dialog.CustomDialog
+	revert := widget.NewButtonWithIcon("Revert", theme.ContentUndoIcon(), func() {
+		text.SetText(script.Text)
+		status.SetText("")
+	})
+	check := widget.NewButtonWithIcon("Check", theme.SearchIcon(), func() {
+		u.perform("Checking "+script.Name+"…", func(ctx context.Context) error {
+			res, err := core.WriteModScript(ctx, core.WriteModScriptRequest{
+				Request: u.request(), Name: script.Name, Text: text.Text, Check: true,
+			})
+			if err != nil {
+				return err
+			}
+			fyne.Do(func() { status.SetText(loadsText(res)) })
+			return nil
+		})
+	})
+	save := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
+		u.perform("Writing "+script.Name+"…", func(ctx context.Context) error {
+			res, err := core.WriteModScript(ctx, core.WriteModScriptRequest{
+				Request: u.request(), Name: script.Name, Text: text.Text, Force: force.Checked,
+			})
+			if err != nil {
+				// Shown in the dialog rather than as a banner behind it: the
+				// refusal names the line, and the editor is where to fix it.
+				fyne.Do(func() { status.SetText(err.Error()) })
+				return nil //nolint:nilerr // reported in the dialog, deliberately
+			}
+			fyne.Do(func() {
+				if !res.Written {
+					status.SetText("Nothing changed; the file already holds this text.")
+					return
+				}
+				d.Hide()
+				u.checksOK = false
+				u.flash(fmt.Sprintf("Wrote %s (%s). The previous text is kept as %s.",
+					res.Path, loadsText(res), filepath.Base(res.Backup)), StatusGood)
+				u.invalidate()
+			})
+			return nil
+		})
+	})
+	save.Importance = widget.HighImportance
+	closeBtn := widget.NewButton("Close", func() { d.Hide() })
+
+	head := container.NewVBox(plainRow("Script", orNone(script.Path, "compiled into nmsbonker")))
+	buttons := []fyne.CanvasObject{closeBtn, revert, check}
+	if script.ReadOnly {
+		head.Add(note("A built-in tweak is compiled in and cannot be edited here; its numbers are "+
+			"parameters in Tweaks. This is the text as shipped.", StatusInfo))
+		text.Disable()
+	} else {
+		head.Add(wrapped("Check loads the text through the sandbox the build uses. Save keeps the previous " +
+			"text beside the file as .bak and takes effect on the next build."))
+		buttons = append(buttons, save)
+	}
+	body := container.NewBorder(head, container.NewVBox(status, force), nil, nil, text)
+	if script.ReadOnly {
+		body = container.NewBorder(head, status, nil, nil, text)
+	}
+	d = dialog.NewCustomWithoutButtons("Edit "+script.Name, body, u.win)
+	d.SetButtons(buttons)
+	d.Resize(fyne.NewSize(1000, 700))
+	d.Show()
+}
+
+// loadsText is the sandbox's verdict in a sentence.
+func loadsText(res core.WriteModScriptResult) string {
+	if res.Loads {
+		return fmt.Sprintf("loads: %d change block(s)", res.Blocks)
+	}
+	return "does not load: " + res.LoadError
 }

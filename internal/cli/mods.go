@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -13,6 +15,7 @@ import (
 func newModsCmd() *cobra.Command {
 	cmd := group("mods", "Manage the mod library and the build order")
 	cmd.AddCommand(
+		newModsShowCmd(), newModsWriteCmd(),
 		newModsListCmd(), newModsAddCmd(), newModsRemoveCmd(),
 		newModsEnableCmd(true), newModsEnableCmd(false),
 		newModsMoveCmd(), newModsImportCmd(), newModsCheckCmd(),
@@ -274,4 +277,79 @@ func yesNo(b bool) string {
 		return "yes"
 	}
 	return "no"
+}
+
+// newModsShowCmd prints a script's text (spec 010 R3).
+func newModsShowCmd() *cobra.Command {
+	var asJSON bool
+	cmd := &cobra.Command{
+		Use:   "show <name>",
+		Short: "Print a mod's script as it is on disk (or compiled in, for a built-in)",
+		Args:  exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := core.ReadModScript(cmd.Context(), core.ModScriptRequest{Request: request(), Name: args[0]})
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return writeJSON(cmd.OutOrStdout(), res)
+			}
+			_, err = io.WriteString(cmd.OutOrStdout(), res.Text)
+			return err //nolint:wrapcheck // the writer's own error
+		},
+	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
+	return cmd
+}
+
+// newModsWriteCmd replaces a library script's text (spec 010 R3).
+func newModsWriteCmd() *cobra.Command {
+	var check, force bool
+	cmd := &cobra.Command{
+		Use:   "write <name> <file|->",
+		Short: "Replace a library mod's script with a file (or stdin with -), keeping a .bak",
+		Long: "The new text has to load through the sandbox, or it is not written; --force writes\n" +
+			"it anyway (the build will then report the mod NOT BUILT). The previous text is kept\n" +
+			"beside the script as <name>.lua.bak. Built-in tweaks cannot be written.",
+		Args: exactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			var body []byte
+			var err error
+			if args[1] == "-" {
+				body, err = io.ReadAll(cmd.InOrStdin())
+			} else {
+				body, err = os.ReadFile(args[1])
+			}
+			if err != nil {
+				return fmt.Errorf("read the new text: %w", err)
+			}
+			res, err := core.WriteModScript(cmd.Context(), core.WriteModScriptRequest{
+				Request: request(), Name: args[0], Text: string(body), Check: check, Force: force,
+			})
+			if err != nil {
+				return err
+			}
+			w := cmd.OutOrStdout()
+			fact(w, "mod", res.Name)
+			fact(w, "script", res.Path)
+			if res.Loads {
+				fact(w, "loads", fmt.Sprintf("yes, %d change block(s)", res.Blocks))
+			} else {
+				fact(w, "loads", "no: "+res.LoadError)
+			}
+			switch {
+			case check:
+				say(w, "%s", "Check only: nothing was written.")
+			case !res.Written:
+				say(w, "%s", "The file already holds that text; nothing was written.")
+			default:
+				fact(w, "wrote", fmt.Sprintf("%d bytes", res.Bytes))
+				fact(w, "previous text", res.Backup)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().BoolVar(&check, "check", false, "load the text through the sandbox and write nothing")
+	cmd.Flags().BoolVar(&force, "force", false, "write even if the text does not load")
+	return cmd
 }
