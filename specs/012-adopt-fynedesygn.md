@@ -128,9 +128,9 @@ fast-forwarded onto `main`.
   `theme.go`, `fonts.go`, `cursor_*.go`, `views_table.go`, `dialogs.go`,
   `buildlog.go`, `find_test.go` are gone (R2). The run's state moved to
   `buildrun.go`.
-- [x] AC2 `go.mod` requires `github.com/ushineko/fynedesygn v0.1.1`; no
-  `replace` (R1). The `go` directive rose to 1.26.0, which the library
-  requires; Fyne stays at v2.8.1.
+- [x] AC2 `go.mod` requires `github.com/ushineko/fynedesygn v0.1.3`; no
+  `replace` (R1; the spec said v0.1.1, and 0.1.3 carries the fixes this
+  adoption asked for).
 - [x] AC3 The grep `func (u \*ui) (flash|busy|perform|report|ok|invalidate|refresh|rebuild|redrawStatus|swap|show|detach|gate|working|regate|selectSection)\(` over `internal/gui` finds nothing (R3.1).
 - [x] AC4 `SectionNames()` returns the same list as before, in order, with
   no Fyne app; `Actions()` is unchanged and the parity test passes (R3.2).
@@ -150,6 +150,12 @@ fast-forwarded onto `main`.
 - [ ] AC9 The GUI is run on this machine under a throwaway HOME with the
   screenshot harness: Overview, Mods, Build, Tools, Settings, Appearance,
   About render; a banner shows (manual, recorded in the report).
+  _Partly verified 2026-09-18: all seven sections captured and checked by
+  eye under a throwaway HOME, XDG and STEAM_ROOT; the Build section shows
+  the step list with its standing notes beside the log pane; Overview shows
+  the detail table and an info banner floating over the toolbar; the status
+  bar carries game, compiler, mods and output. Not exercised: a real build
+  (no game install in the sandbox), Deploy, the save editor._
 - [x] AC10 Documentation updated; "Gaps found" filled (R5).
 - [x] AC11 Line counts of `internal/gui` (non-test) before and after are in
   the validation report.
@@ -166,6 +172,15 @@ fast-forwarded onto `main`.
   reads the same preferences and config.
 
 ## Gaps found
+
+Recorded against fynedesygn 0.1.1 during implementation, then fixed in
+fynedesygn 0.1.3 (its spec 007) and adopted here in the same branch: gaps
+1 and 2 (`steps.Advance` never reopens a finished step; `steps.NewSteps`
+with standing notes that `Reset` keeps), 3 (`logpane.Pane.SetFollowing`,
+re-armed at the start of every build), 4 (`forms.SliderEntry` hands `Commit`
+the typed value, so core's clamp banner fires again), 5 (`shell.Load`), 7
+(`shell.About.URLText`). Gap 6 was sequencing, not a defect. The original
+list, for the record:
 
 What the library lacked, and how the adoption handled each without changing
 the library:
