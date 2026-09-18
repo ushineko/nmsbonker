@@ -121,13 +121,10 @@ type buildRun struct {
 	// updated in place: rebuilding the section on every log line is exactly the
 	// reflow the project rule forbids.
 	totals *widget.Label
-	// controls are the buttons that start work, disabled while a run is in
-	// flight; cancelBtn is the one that is enabled only then, and deployBtn and
-	// viewBtn need a report rather than an idle window.
-	controls  []*widget.Button
+	// cancelBtn is the one control that is live only while a run is in flight;
+	// the builder gates the rest from state, and Cancel is disabled in place the
+	// moment it is pressed.
 	cancelBtn *widget.Button
-	deployBtn *widget.Button
-	viewBtn   *widget.Button
 }
 
 func (r *buildRun) init() {
@@ -154,8 +151,7 @@ func (r *buildRun) pendingNotes() {
 func (r *buildRun) detach() {
 	r.steps.Detach()
 	r.pane.Detach()
-	r.totals = nil
-	r.controls, r.cancelBtn, r.deployBtn, r.viewBtn = nil, nil, nil, nil
+	r.totals, r.cancelBtn = nil, nil
 }
 
 // reset starts a new run's state. The log is emptied rather than appended to:

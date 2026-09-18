@@ -33,10 +33,10 @@ buildBuild is the build, while it runs.
 
 The left column is the step list, the right is the log. Both are built once per
 visit to the section and then written to in place — the step list and the pane
-by the library, the totals and the controls by drawTotals and drawControls
-below — because rebuilding the section on every line is exactly the reflow the
-project forbids, and because a rebuild would throw away the user's scroll
-position in the middle of the thing they were reading.
+by the library, the totals by drawTotals below — because rebuilding the section
+on every line is exactly the reflow the project forbids, and because a rebuild
+would throw away the user's scroll position in the middle of the thing they
+were reading.
 */
 func (u *ui) buildBuild() fyne.CanvasObject {
 	head := widgets.Heading("Build",
@@ -62,13 +62,28 @@ func (u *ui) buildBuild() fyne.CanvasObject {
 	deploy.Importance = widget.DangerImportance
 
 	view := widget.NewButtonWithIcon("View report", theme.DocumentIcon(), func() {
-		u.selectSection("Report")
+		u.sh.Select("Report")
 	})
 
-	u.run.controls = []*widget.Button{build, recache}
+	// R4.2: while a run is in flight the buttons that would start another are
+	// disabled, and Cancel is the only one that is not. Disabled, never hidden:
+	// a toolbar that changes width mid-build is a toolbar whose buttons move
+	// under the pointer. The shell rebuilds this section when work starts and
+	// stops, so the gating is decided here, from state, every time.
+	u.sh.Gate(build, recache)
+	// View report needs a report, not an idle window.
+	if u.lastReport.Report == nil {
+		view.Disable()
+	}
+	// Deploy needs that same report, since it is what gets installed, and a
+	// game to install it into. The Report section's copy is gated the same way.
+	if u.sh.Working() || !u.canDeployLast() {
+		deploy.Disable()
+	}
+	if !u.run.running || u.run.cancelled {
+		cancel.Disable()
+	}
 	u.run.cancelBtn = cancel
-	u.run.deployBtn = deploy
-	u.run.viewBtn = view
 
 	toolbar := container.NewHBox(build, recache, cancel, deploy, view)
 
@@ -81,7 +96,6 @@ func (u *ui) buildBuild() fyne.CanvasObject {
 		widgets.FixedHeight(totals, totalsHeight), nil, nil, u.run.steps.Widget())
 
 	u.drawTotals()
-	u.drawControls()
 	return container.NewBorder(container.NewVBox(head, toolbar), nil, nil, nil,
 		container.NewBorder(nil, nil, widgets.FixedWidth(steps, stepColumnWidth), nil, u.logPane()))
 }
@@ -93,8 +107,8 @@ func (u *ui) logPane() fyne.CanvasObject {
 	return u.run.pane.Widget(logpane.Options{
 		Title:     "Output",
 		Height:    logPaneHeight,
-		Clipboard: u.app.Clipboard(),
-		Flash:     u.flash,
+		Clipboard: u.sh.App.Clipboard(),
+		Flash:     u.sh.Flash,
 	})
 }
 
@@ -120,47 +134,6 @@ func (u *ui) buildTotals() string {
 			widgets.HumanAgo(r.Generated), r.Built, r.Dropped, r.Applied, r.Skipped)
 	}
 	return "Nothing has been built yet in this session."
-}
-
-// drawControls applies R4.2: while a run is in flight the buttons that would
-// start another are disabled, and Cancel is the only one that is not. Disabled,
-// never hidden — a toolbar that changes width mid-build is a toolbar whose
-// buttons move under the pointer.
-func (u *ui) drawControls() {
-	for _, b := range u.run.controls {
-		if b == nil {
-			continue
-		}
-		if u.working() {
-			b.Disable()
-		} else {
-			b.Enable()
-		}
-	}
-	// View report needs a report, not an idle window.
-	if u.run.viewBtn != nil {
-		if u.lastReport.Report == nil {
-			u.run.viewBtn.Disable()
-		} else {
-			u.run.viewBtn.Enable()
-		}
-	}
-	// Deploy needs that same report, since it is what gets installed, and a
-	// game to install it into. The Report section's copy is gated the same way.
-	if u.run.deployBtn != nil {
-		if u.working() || !u.canDeployLast() {
-			u.run.deployBtn.Disable()
-		} else {
-			u.run.deployBtn.Enable()
-		}
-	}
-	if u.run.cancelBtn != nil {
-		if u.run.running && !u.run.cancelled {
-			u.run.cancelBtn.Enable()
-		} else {
-			u.run.cancelBtn.Disable()
-		}
-	}
 }
 
 // --- deploy ----------------------------------------------------------------
@@ -210,7 +183,7 @@ func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 			"and does not write it.", fd.StatusWarn))
 	}
 
-	dialogs.ConfirmWithBody(u.win, title, container.NewVScroll(body), "Deploy",
+	dialogs.ConfirmWithBody(u.sh.Window, title, container.NewVScroll(body), "Deploy",
 		func() { do(replace.Checked) }).Show()
 }
 
@@ -229,7 +202,7 @@ func (u *ui) deployLast() {
 		"The folder already built in the workspace is copied into the game. Nothing is "+
 			"rebuilt, so this installs exactly what the report describes.",
 		func(replaceSymlink bool) {
-			u.perform("Installing under GAMEDATA/MODS…", func(ctx context.Context) error {
+			u.sh.Perform("Installing under GAMEDATA/MODS…", func(ctx context.Context) error {
 				req := u.request()
 				req.Events = core.Events{Log: func(level core.Level, msg string) {
 					u.run.pane.Model().Append(logLevel(level), msg)
@@ -251,12 +224,12 @@ func (u *ui) deployLast() {
 				}
 				if len(res.Warnings) > 0 {
 					fyne.Do(func() {
-						u.flash(msg+" "+res.Warnings[0], fd.StatusWarn)
-						u.invalidate()
+						u.sh.Flash(msg+" "+res.Warnings[0], fd.StatusWarn)
+						u.sh.Invalidate()
 					})
 					return nil
 				}
-				u.ok(msg)
+				fyne.Do(func() { u.sh.OK(msg) })
 				return nil
 			})
 		})

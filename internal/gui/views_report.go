@@ -50,8 +50,8 @@ func (u *ui) compilerFailuresBlock(r *report.Result) fyne.CanvasObject {
 		t.Row(fd.StatusBad, f.Internal, f.Stage, report.FirstLine(f.Detail), strings.Join(f.Mods, ", "))
 	}
 	check := widget.NewButtonWithIcon("Check compatibility", theme.QuestionIcon(), func() { u.toolCheck() })
-	tools := widget.NewButtonWithIcon("Tools", theme.ComputerIcon(), func() { u.selectSection("Tools") })
-	u.gate(check, tools)
+	tools := widget.NewButtonWithIcon("Tools", theme.ComputerIcon(), func() { u.sh.Select("Tools") })
+	u.sh.Gate(check, tools)
 	return container.NewVBox(
 		widgets.Note(fmt.Sprintf("MBINCompiler %s could not handle %d game file(s) on game build %s. "+
 			"These mods are fine; the compiler does not match the game. Run the compatibility check, "+
@@ -205,7 +205,7 @@ func (u *ui) reportActions() fyne.CanvasObject {
 	if !u.archiveOK || len(u.archive.Entries) == 0 {
 		rollBack.Disable()
 	}
-	u.gate(openReport, openOutput, openMods, deploy, rollBack)
+	u.sh.Gate(openReport, openOutput, openMods, deploy, rollBack)
 	return container.NewVBox(widget.NewSeparator(),
 		container.NewHBox(openReport, openOutput, openMods, deploy, rollBack))
 }

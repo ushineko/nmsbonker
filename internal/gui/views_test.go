@@ -137,7 +137,7 @@ disagree about what a valid value is or where it goes.
 This drives the real button on the real form and then reads the file back with
 core, which is the whole contract: the GUI holds no settings of its own. It is
 a synchronous assertion because a window with no content pane runs its
-operations on the calling goroutine -- see perform.
+operations on the calling goroutine -- see shell.Perform.
 */
 func TestSavingTheSettingsFormWritesTheConfigFile(t *testing.T) {
 	u, path := settingsUI(t)
@@ -208,11 +208,11 @@ func TestParallelAutoRoundTrips(t *testing.T) {
 // in for the first few hundred milliseconds of every run.
 func TestTheStatusBarDrawsBeforeAnythingHasLoaded(t *testing.T) {
 	u := testUI(t)
-	require.NotPanics(t, func() { u.statusBar() })
+	require.NotPanics(t, func() { u.statusSegments() })
 
 	u.statusOK = true
 	u.status = core.StatusResult{ModName: "COSMOS COMBINE"}
-	require.NotPanics(t, func() { u.statusBar() })
+	require.NotPanics(t, func() { u.statusSegments() })
 }
 
 // A compatibility verdict core can return but the window cannot rank would be

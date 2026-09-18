@@ -95,16 +95,16 @@ func (u *ui) newSettingsForm() *settingsForm {
 	f.save.Importance = widget.HighImportance
 	f.revert = widget.NewButtonWithIcon("Revert", theme.ContentUndoIcon(), func() {
 		f.set(u.configValues())
-		u.flash("Put the fields back to what "+u.settings.Path+" says. Nothing was written.",
+		u.sh.Flash("Put the fields back to what "+u.settings.Path+" says. Nothing was written.",
 			fd.StatusInfo)
 	})
-	u.gate(f.save, f.revert, auto)
+	u.sh.Gate(f.save, f.revert, auto)
 
 	f.body = container.NewVBox(
 		widget.NewForm(
 			widget.NewFormItem("Game directory",
-				container.NewBorder(nil, nil, nil, auto, dialogs.WithBrowse(u.win, f.gameDir, true))),
-			widget.NewFormItem("Mod library", dialogs.WithBrowse(u.win, f.libraryDir, true)),
+				container.NewBorder(nil, nil, nil, auto, dialogs.WithBrowse(u.sh.Window, f.gameDir, true))),
+			widget.NewFormItem("Mod library", dialogs.WithBrowse(u.sh.Window, f.libraryDir, true)),
 			widget.NewFormItem("Output folder name", f.modName),
 			widget.NewFormItem("Parallel jobs", f.jobs),
 			widget.NewFormItem("Compiler flavor", f.flavor),
@@ -159,10 +159,10 @@ func (u *ui) auditGroup(f *settingsForm) fyne.CanvasObject {
 			for key, value := range defaultAuditValues() {
 				f.limits[key].SetText(value)
 			}
-			u.flash("The audit limits in the form are back to their defaults. "+
+			u.sh.Flash("The audit limits in the form are back to their defaults. "+
 				"Save to write them.", fd.StatusInfo)
 		})
-	u.gate(reset)
+	u.sh.Gate(reset)
 	return widgets.Card("Audit limits",
 		widgets.Note("What counts as a reward amount worth warning about. A build flags an amount "+
 			"over one of these and names the mods that made it; nothing is changed or "+
@@ -292,19 +292,17 @@ func (u *ui) loadConfig() {
 		return
 	}
 	u.configOK = true
-	go func() {
-		done := u.busy("Reading the settings…")
-		defer done()
+	u.load("Reading the settings…", func() {
 		res, err := core.ConfigShow(context.Background(), core.ConfigShowRequest{Request: u.request()})
 		if err != nil {
-			u.report("Read the settings", err)
+			fyne.Do(func() { u.sh.Report("Read the settings", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.settings = res
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 /*
@@ -325,10 +323,10 @@ func (u *ui) saveSettings(want map[string]string) {
 		}
 	}
 	if len(changed) == 0 {
-		u.flash("Nothing changed, so nothing was written.", fd.StatusInfo)
+		u.sh.Flash("Nothing changed, so nothing was written.", fd.StatusInfo)
 		return
 	}
-	u.perform("Saving the settings…", func(ctx context.Context) error {
+	u.sh.Perform("Saving the settings…", func(ctx context.Context) error {
 		var written []string
 		for key, value := range changed {
 			res, err := core.ConfigSet(ctx, core.ConfigSetRequest{
@@ -345,8 +343,10 @@ func (u *ui) saveSettings(want map[string]string) {
 			}
 		}
 		fyne.Do(func() { u.configOK = false })
-		u.ok(fmt.Sprintf("Wrote %d setting(s) to %s: %s.",
-			len(written), u.settings.Path, joinLines(written)))
+		fyne.Do(func() {
+			u.sh.OK(fmt.Sprintf("Wrote %d setting(s) to %s: %s.",
+				len(written), u.settings.Path, joinLines(written)))
+		})
 		return nil
 	})
 }
@@ -354,7 +354,7 @@ func (u *ui) saveSettings(want map[string]string) {
 // setConfig writes one key, for the shortcuts outside the Settings form — the
 // game-directory field on Overview's first-run state.
 func (u *ui) setConfig(key, value, label string) {
-	u.perform("Saving "+label+"…", func(ctx context.Context) error {
+	u.sh.Perform("Saving "+label+"…", func(ctx context.Context) error {
 		res, err := core.ConfigSet(ctx, core.ConfigSetRequest{
 			Request: u.request(), Key: key, Value: value,
 		})
@@ -363,10 +363,12 @@ func (u *ui) setConfig(key, value, label string) {
 		}
 		fyne.Do(func() { u.configOK = false })
 		if res.Unchanged {
-			u.ok(label + " was already " + res.New + ".")
+			fyne.Do(func() { u.sh.OK(label + " was already " + res.New + ".") })
 			return nil
 		}
-		u.ok(label + " is now " + widgets.OrNone(res.New, "auto-detected") + ", written to " + res.Path + ".")
+		fyne.Do(func() {
+			u.sh.OK(label + " is now " + widgets.OrNone(res.New, "auto-detected") + ", written to " + res.Path + ".")
+		})
 		return nil
 	})
 }

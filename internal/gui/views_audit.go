@@ -146,13 +146,13 @@ func (u *ui) auditActions() fyne.CanvasObject {
 		func() { u.recheckAmounts() })
 	copyAudit := widget.NewButtonWithIcon("Copy audit", theme.ContentCopyIcon(), func() {
 		a, _ := u.auditResult()
-		u.app.Clipboard().SetContent(auditText(a))
-		u.flash("The amount audit is on the clipboard.", fd.StatusGood)
+		u.sh.App.Clipboard().SetContent(auditText(a))
+		u.sh.Flash("The amount audit is on the clipboard.", fd.StatusGood)
 	})
 	if a, _ := u.auditResult(); a == nil {
 		copyAudit.Disable()
 	}
-	u.gate(recheck, copyAudit)
+	u.sh.Gate(recheck, copyAudit)
 	return container.NewHBox(recheck, copyAudit)
 }
 
@@ -164,16 +164,16 @@ the pristine cache are both still on disk, so a threshold changed in Settings
 can be tried against this build in about a second.
 */
 func (u *ui) recheckAmounts() {
-	u.perform("Re-checking the reward amounts…", func(ctx context.Context) error {
+	u.sh.Perform("Re-checking the reward amounts…", func(ctx context.Context) error {
 		res, err := core.Audit(ctx, core.AuditRequest{Request: u.request()})
 		if err != nil {
 			return err
 		}
 		fyne.Do(func() {
 			u.freshAudit = &res
-			u.flash("Amount audit: "+res.Run.Result.Summary()+".",
+			u.sh.Flash("Amount audit: "+res.Run.Result.Summary()+".",
 				auditStatus(len(res.Run.Result.Flags)))
-			u.rebuild()
+			u.sh.Rebuild()
 		})
 		return nil
 	})

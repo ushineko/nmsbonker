@@ -3,8 +3,10 @@ package gui
 import (
 	"testing"
 
+	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	"github.com/ushineko/fynedesygn/fynetest"
 	"github.com/ushineko/fynedesygn/steps"
 
 	"github.com/ushineko/nmsbonker/internal/build/report"
@@ -124,37 +126,57 @@ func TestTheStepListEndsAtTheReport(t *testing.T) {
 
 // --- the controls ----------------------------------------------------------
 
+// toolbar builds the Build section headlessly and returns the button named.
+func toolbar(t *testing.T, u *ui, label string) *widget.Button {
+	t.Helper()
+	b := fynetest.FindButton(u.buildBuild(), label)
+	require.NotNilf(t, b, "no %q button in the Build section", label)
+	return b
+}
+
 /*
 R4.2: one operation at a time, and the buttons say so by being disabled rather
 than by disappearing.
 
 Cancel is the mirror image — the only control that is live while a build runs,
 and dead the moment it has been pressed, because pressing it twice does nothing
-and a button that looks live is a button that gets pressed again.
+and a button that looks live is a button that gets pressed again. The section
+is rebuilt from state when work starts and stops, so the test builds it in
+each state.
 */
 func TestTheCancelButtonFollowsTheRunningState(t *testing.T) {
 	u := testUI(t)
-	build := widget.NewButton("Build", nil)
-	cancel := widget.NewButton("Cancel", nil)
-	u.run.controls = []*widget.Button{build}
-	u.run.cancelBtn = cancel
 
-	u.drawControls()
-	require.False(t, build.Disabled(), "an idle window offers to build")
-	require.True(t, cancel.Disabled(), "with nothing to cancel")
+	require.False(t, toolbar(t, u, "Build").Disabled(), "an idle window offers to build")
+	require.True(t, toolbar(t, u, "Cancel").Disabled(), "with nothing to cancel")
 
 	u.run.running = true
-	u.drawControls()
-	require.True(t, build.Disabled(), "a second build must not be startable")
-	require.False(t, cancel.Disabled())
+	require.True(t, toolbar(t, u, "Build").Disabled(), "a second build must not be startable")
+	require.True(t, toolbar(t, u, "Rebuild cache").Disabled())
+	require.False(t, toolbar(t, u, "Cancel").Disabled())
 
 	u.run.cancelled = true
-	u.drawControls()
-	require.True(t, cancel.Disabled(), "cancelling twice does nothing, so it stops offering")
+	require.True(t, toolbar(t, u, "Cancel").Disabled(), "cancelling twice does nothing, so it stops offering")
 
 	u.run.running, u.run.cancelled = false, false
-	u.drawControls()
-	require.False(t, build.Disabled())
+	require.False(t, toolbar(t, u, "Build").Disabled())
+	require.True(t, toolbar(t, u, "Cancel").Disabled())
+}
+
+// Pressing Cancel kills the button in place, without waiting for the rebuild
+// the build's end brings.
+func TestPressingCancelDisablesItAtOnce(t *testing.T) {
+	u := testUI(t)
+	u.run.running = true
+	cancelled := false
+	u.run.cancel = func() { cancelled = true }
+	cancel := toolbar(t, u, "Cancel")
+	require.False(t, cancel.Disabled())
+
+	test.Tap(cancel)
+
+	require.True(t, cancelled, "the run's context is cancelled")
+	require.True(t, u.run.cancelled)
 	require.True(t, cancel.Disabled())
 }
 
@@ -162,10 +184,10 @@ func TestTheCancelButtonFollowsTheRunningState(t *testing.T) {
 // whose only content is "No build yet".
 func TestViewReportNeedsAReport(t *testing.T) {
 	u := testUI(t)
-	u.run.viewBtn = widget.NewButton("View report", nil)
+	require.True(t, toolbar(t, u, "View report").Disabled())
 
-	u.drawControls()
-	require.True(t, u.run.viewBtn.Disabled())
+	u.lastReport = core.ReportResult{Report: &report.Result{}}
+	require.False(t, toolbar(t, u, "View report").Disabled())
 }
 
 // Deploy installs the last build, so it needs one, and a game to put it in. It
@@ -173,27 +195,42 @@ func TestViewReportNeedsAReport(t *testing.T) {
 // the one being rewritten.
 func TestDeployNeedsABuildAndAGame(t *testing.T) {
 	u := testUI(t)
-	u.run.deployBtn = widget.NewButton("Deploy…", nil)
-
-	u.drawControls()
-	require.True(t, u.run.deployBtn.Disabled(), "nothing has been built")
+	require.True(t, toolbar(t, u, "Deploy…").Disabled(), "nothing has been built")
 
 	u.lastReport = core.ReportResult{Report: &report.Result{}}
-	u.drawControls()
-	require.True(t, u.run.deployBtn.Disabled(), "no game install to deploy into")
+	require.True(t, toolbar(t, u, "Deploy…").Disabled(), "no game install to deploy into")
 
 	u.status.Install.Found = true
-	u.drawControls()
-	require.False(t, u.run.deployBtn.Disabled())
+	require.False(t, toolbar(t, u, "Deploy…").Disabled())
 
 	u.run.running = true
-	u.drawControls()
-	require.True(t, u.run.deployBtn.Disabled(), "not while the build is rewriting the folder")
+	require.True(t, toolbar(t, u, "Deploy…").Disabled(), "not while the build is rewriting the folder")
 }
 
-// The totals, the pane and the controls are drawn several times a second from
-// the log pump, including while the section is not on screen and its widgets
-// are nil.
+// Progress events from core's workers land on the step list on the UI thread
+// (spec 012 AC6): the step named runs, the ones before it are done.
+func TestProgressEventsAdvanceTheStepList(t *testing.T) {
+	u := testUI(t)
+	u.run.reset()
+	ev := u.buildEvents()
+
+	ev.Progress(core.Progress{What: "checking compiler compatibility"})
+	all := u.run.steps.Steps()
+	require.Equal(t, steps.Done, all[stepDetect].State)
+	require.Equal(t, steps.Running, all[stepTools].State)
+
+	ev.Progress(core.Progress{What: "building REWARDTABLE.MBIN", Step: 3, Total: 100})
+	all = u.run.steps.Steps()
+	require.Equal(t, steps.Done, all[stepMerge].State)
+	require.Equal(t, steps.Running, all[stepCompile].State)
+	require.Equal(t, "building REWARDTABLE.MBIN (3 of 100)", all[stepCompile].Note)
+
+	ev.Progress(core.Progress{What: "something core does not emit"})
+	require.Equal(t, steps.Running, u.run.steps.Steps()[stepCompile].State, "an unknown message changes nothing")
+}
+
+// The totals and the pane are drawn several times a second from the log pump,
+// including while the section is not on screen and its widgets are nil.
 func TestDrawingWithNoWidgetsIsHarmless(t *testing.T) {
 	u := testUI(t)
 	u.run.reset()
@@ -201,7 +238,6 @@ func TestDrawingWithNoWidgetsIsHarmless(t *testing.T) {
 	require.NotPanics(t, func() {
 		u.drawTotals()
 		u.run.pane.Draw()
-		u.drawControls()
 	})
 }
 

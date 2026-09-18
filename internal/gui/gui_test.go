@@ -1,14 +1,16 @@
 package gui
 
 import (
+	"path/filepath"
 	"testing"
 
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
 	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/fynetest"
 	"github.com/ushineko/fynedesygn/logpane"
+	"github.com/ushineko/fynedesygn/shell"
 	fdtheme "github.com/ushineko/fynedesygn/theme"
 )
 
@@ -26,17 +28,27 @@ itself and breaks on every rearrangement; the tests below pin behaviour instead
 one names the bug it prevents.
 */
 
-// testUI is a window with no window: enough of a *ui for the parts that do not
-// draw. Sections are not built from it unless the test says so, because a
-// section asks the core for its data and a test has no game install.
+/*
+testUI is a window with no window: the program's state over a headless shell,
+with HOME, the XDG directories and the Steam root pointed at throwaway paths
+so nothing touches the developer's install or their real configuration.
+Sections built from it load inline (the shell is not on screen), so a test
+sees finished state when the builder returns.
+*/
 func testUI(t *testing.T) *ui {
 	t.Helper()
+	fynetest.Sandbox(t)
+	t.Setenv("STEAM_ROOT", filepath.Join(t.TempDir(), "no-steam-here"))
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
-	u := &ui{app: app, win: test.NewWindow(widget.NewLabel("")), flashes: container.NewVBox()}
-	u.loadAppearance()
+	u := &ui{version: "test", commit: "0000000"}
 	u.run.init()
-	t.Cleanup(func() { u.win.Close() })
+	u.sh = shell.Headless(app, u.shellOptions(Options{}))
+	// Headless has no window; the dialogs need one to hang off, and the tests
+	// that drive them get this one. OnScreen stays false.
+	win := test.NewWindow(widget.NewLabel(""))
+	u.sh.Window = win
+	t.Cleanup(win.Close)
 	return u
 }
 
@@ -90,47 +102,80 @@ func TestActionsAreUniqueAndNonEmpty(t *testing.T) {
 	require.NotEmpty(t, seen)
 }
 
-// --- flash ---------------------------------------------
+// --- the shell's wiring ----------------------------------------------------
 
-// A failure waits to be dismissed. One that removes itself on a timer is an
-// error nobody read, describing an operation that has already not happened.
-func TestFlashKeepsFailuresUntilDismissed(t *testing.T) {
-	_, fades := flashHold(fd.StatusBad)
-	require.False(t, fades, "a failure must not clear itself")
-
-	warn, fades := flashHold(fd.StatusWarn)
-	require.True(t, fades)
-	good, _ := flashHold(fd.StatusGood)
-	require.Greater(t, warn, good, "a warning names a condition to act on, so it stays longer")
-	require.GreaterOrEqual(t, good.Seconds(), 5.0,
-		"a banner must be up long enough to read, not merely long enough to notice")
-}
-
-// One banner at a time. The slot has a fixed height so nothing reflows when a
-// result arrives, which only works if results replace each other rather than
-// stacking up inside it.
+// The shell's banner slot is wired: a result shows, a newer one replaces it,
+// and dismissing clears it. The timings and the fade are the library's.
 func TestFlashShowsOneBannerAtATime(t *testing.T) {
 	u := testUI(t)
-
-	u.flash("first", fd.StatusGood)
-	require.Len(t, u.flashes.Objects, 1)
-
-	u.flash("second", fd.StatusBad)
-	require.Len(t, u.flashes.Objects, 1, "a newer result replaces the older one")
+	u.sh.Flash("first", fd.StatusGood)
+	require.Equal(t, "first", u.sh.FlashText())
+	u.sh.Flash("second", fd.StatusBad)
+	require.Equal(t, "second", u.sh.FlashText(), "a newer result replaces the older one")
+	u.sh.ClearFlash()
+	require.Empty(t, u.sh.FlashText())
 }
 
-// The fade timer of a banner that has already been replaced must not empty the
-// slot underneath the banner that replaced it.
-func TestClearFlashIgnoresAStaleTimer(t *testing.T) {
+// --section opens the named section, case-insensitively; a typo opens the
+// first rather than a dead window.
+func TestSectionSelectionResolvesNamesAndFallsBackToTheFirst(t *testing.T) {
 	u := testUI(t)
+	require.Equal(t, "Overview", u.sh.Current().Title(), "no --section: the first")
+	u.sh.Select("report")
+	require.Equal(t, "Report", u.sh.Current().Title())
+	u.sh.Select("nope")
+	require.Equal(t, "Overview", u.sh.Current().Title(), "a typo opens the first, not a dead window")
+}
 
-	u.flash("first", fd.StatusGood)
-	stale := u.flashSeq
-	u.flash("second", fd.StatusGood)
+// A saved appearance from the previous build is read unchanged: the keys are
+// the ones that build wrote, so nobody loses their scheme on upgrade (spec
+// 012 AC5).
+func TestASavedAppearanceFromThePreviousBuildIsReadUnchanged(t *testing.T) {
+	u := testUI(t)
+	p := u.sh.App.Preferences()
+	p.SetString("appearance.scheme", "Oxygen Dark")
+	p.SetString("appearance.font", "Fyne default")
+	p.SetFloat("appearance.textSize", 14)
 
-	u.clearFlash(stale)
-	require.Len(t, u.flashes.Objects, 1, "the newer banner still owns the slot")
+	// The next launch: a shell built over the same preference store.
+	u.sh = shell.Headless(u.sh.App, u.shellOptions(Options{}))
+	th := u.sh.Appearance().Theme()
+	require.Equal(t, "Oxygen Dark", th.Palette().Name)
+	require.Equal(t, float32(14), th.TextSize())
+	require.Equal(t, fdtheme.DefaultFontName, u.sh.Appearance().Font)
+}
 
-	u.clearFlash(u.flashSeq)
-	require.Empty(t, u.flashes.Objects, "dismissing the current banner empties the slot")
+/*
+Every section renders headlessly, before anything has loaded and in every
+colour scheme.
+
+The first half is the first few hundred milliseconds of every run: the loads
+are still in flight and every builder must draw from zero values. The second
+is the Appearance section's promise: a component that reads a palette role a
+scheme does not carry would take the window down on the next click there.
+*/
+func TestEverySectionRendersHeadlesslyInEveryScheme(t *testing.T) {
+	u := testUI(t)
+	for _, s := range u.sh.Sections() {
+		require.NotPanicsf(t, func() { _ = s.Build(u.sh) }, "nothing loaded: %s", s.Title())
+	}
+	for _, name := range fdtheme.SchemeNames() {
+		a := u.sh.Appearance()
+		a.Scheme = name
+		u.sh.SetAppearance(a)
+		for _, s := range u.sh.Sections() {
+			require.NotPanicsf(t, func() { _ = s.Build(u.sh) }, "%s: %s", name, s.Title())
+		}
+	}
+}
+
+// The About section carries this program's facts, not the library's defaults.
+func TestAboutNamesTheProgramAndItsFacts(t *testing.T) {
+	u := testUI(t)
+	text := fynetest.Text(u.buildAbout())
+	require.Contains(t, text, "nmsbonker")
+	require.Contains(t, text, "test (0000000)")
+	require.Contains(t, text, "Ship only what compiles")
+	require.Contains(t, text, "MIT")
+	require.Contains(t, text, "no game found")
 }

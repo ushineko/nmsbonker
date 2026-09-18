@@ -75,7 +75,7 @@ func (u *ui) installCard() fyne.CanvasObject {
 	openMods := widget.NewButtonWithIcon("Open", theme.FolderOpenIcon(),
 		func() { u.openModsDir() })
 	openMods.Importance = widget.LowImportance
-	u.gate(openMods)
+	u.sh.Gate(openMods)
 	if !modsDirOpenable(in) {
 		openMods.Disable()
 	}
@@ -98,7 +98,7 @@ func (u *ui) installCard() fyne.CanvasObject {
 				"Replacing the link removes the link only — never what it points at — and "+
 				"creates a real directory in its place.",
 			"Replace symlink and deploy…", true, func() { u.replaceSymlinkAndDeploy() })
-		u.gate(replace)
+		u.sh.Gate(replace)
 		rows = append(rows, block)
 	}
 	if in.ModSettingsOK {
@@ -132,7 +132,7 @@ func (u *ui) noGameBlock(reason string) fyne.CanvasObject {
 	save := widget.NewButtonWithIcon("Use this directory", theme.ConfirmIcon(), func() {
 		u.setConfig("game_dir", dir.Text, "Game directory")
 	})
-	body.Add(container.NewBorder(nil, nil, nil, save, dialogs.WithBrowse(u.win, dir, true)))
+	body.Add(container.NewBorder(nil, nil, nil, save, dialogs.WithBrowse(u.sh.Window, dir, true)))
 
 	if u.detectOK && len(u.detect.Candidates) > 0 {
 		t := table.New()
@@ -173,7 +173,7 @@ func (u *ui) toolsCard() fyne.CanvasObject {
 				"installed system-wide.",
 			"Install", false, func() { u.ensureTools() })
 		install.Importance = widget.HighImportance
-		u.gate(install)
+		u.sh.Gate(install)
 		return widgets.Card("Tools", widgets.FactRow("MBINCompiler", "not installed", fd.StatusBad), block)
 	}
 
@@ -324,7 +324,7 @@ func verdictCounts(mods []report.ModResult) string {
 // (build, then install what was built) and a reload.
 func (u *ui) overviewActions() fyne.CanvasObject {
 	build := widget.NewButtonWithIcon("Build", theme.MediaPlayIcon(), func() {
-		u.selectSection("Build")
+		u.sh.Select("Build")
 		u.startBuild(false)
 	})
 	build.Importance = widget.HighImportance
@@ -332,8 +332,8 @@ func (u *ui) overviewActions() fyne.CanvasObject {
 	deploy := widget.NewButtonWithIcon("Deploy…", theme.DownloadIcon(), func() { u.deployLast() })
 	deploy.Importance = widget.DangerImportance
 
-	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { u.invalidate() })
-	u.gate(build, deploy, refresh)
+	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { u.sh.Invalidate() })
+	u.sh.Gate(build, deploy, refresh)
 	if !u.status.Install.Found || !u.status.Compiler.Installed {
 		// Nothing to build against, or nothing to build with. Disabled rather
 		// than hidden, so the window has the same shape once it is fixed.
@@ -348,16 +348,6 @@ func (u *ui) overviewActions() fyne.CanvasObject {
 }
 
 // --- small helpers shared by the cards --------------------------------------
-
-// gate disables the buttons that start work while something is running (R4.2).
-func (u *ui) gate(buttons ...*widget.Button) {
-	if !u.working() {
-		return
-	}
-	for _, b := range buttons {
-		b.Disable()
-	}
-}
 
 func buildIDStatus(id string) fd.Status {
 	if id == "" {

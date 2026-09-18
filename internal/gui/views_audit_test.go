@@ -93,7 +93,7 @@ func TestCopyAuditPutsTheFindingAndTheLimitsOnTheClipboard(t *testing.T) {
 	u := auditUI(t, flaggedAudit())
 	tapButton(t, u.auditBlock(), "Copy audit")
 
-	got := u.app.Clipboard().Content()
+	got := u.sh.App.Clipboard().Content()
 	require.Contains(t, got, "R_CHEST\tBP_SALVAGE\t2-4\t1250000-2500000\tx625000")
 	require.Contains(t, got, "Limits: product 99999, substance 999999, units 100000000, "+
 		"nanites 1000000, quicksilver 100000, ratio x100")

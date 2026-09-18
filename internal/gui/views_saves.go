@@ -42,9 +42,7 @@ func (u *ui) loadSlots() {
 		return
 	}
 	u.slotsOK = true
-	go func() {
-		done := u.busy("Reading the save slots…")
-		defer done()
+	u.load("Reading the save slots…", func() {
 		res, err := core.ListSaveSlots(context.Background(),
 			core.ListSaveSlotsRequest{Request: u.request()})
 		fyne.Do(func() {
@@ -53,9 +51,9 @@ func (u *ui) loadSlots() {
 			if err != nil {
 				u.slotsErr = err.Error()
 			}
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // buildSaves is the section.
@@ -63,7 +61,7 @@ func (u *ui) buildSaves() fyne.CanvasObject {
 	u.loadStatus()
 	u.loadSlots()
 	u.loadSaves()
-	if sel := u.reinspect; sel != nil && !u.working() {
+	if sel := u.reinspect; sel != nil && !u.sh.Working() {
 		u.reinspect = nil
 		u.selectSlot(*sel)
 	}
@@ -112,7 +110,7 @@ func (u *ui) selectedSaveRow() fyne.CanvasObject {
 	in := u.inspect
 	back := widget.NewButtonWithIcon("Slots", theme.ListIcon(), func() {
 		u.savesTab = savesTabSlots
-		u.refresh()
+		u.sh.Refresh()
 	})
 	return container.NewBorder(nil, nil, nil, back,
 		widgets.PlainRow("Save", fmt.Sprintf("slot %d %s — %s", in.Ref.Slot, in.Ref.Kind, in.File)))
@@ -124,11 +122,11 @@ func (u *ui) slotsCard() fyne.CanvasObject {
 	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() {
 		u.slotsOK = false
 		u.inspect = nil
-		u.refresh()
+		u.sh.Refresh()
 	})
 	openProfile := widget.NewButtonWithIcon("Open save folder", theme.FolderOpenIcon(),
 		func() { u.openPath(u.slots.Profile) })
-	u.gate(refresh, openProfile)
+	u.sh.Gate(refresh, openProfile)
 	if u.slots.Profile == "" {
 		openProfile.Disable()
 	}
@@ -176,7 +174,7 @@ func (u *ui) slotsCard() fyne.CanvasObject {
 
 // selectSlot reads one save for the editor.
 func (u *ui) selectSlot(sel core.SlotSelector) {
-	u.perform(fmt.Sprintf("Reading slot %d %s…", sel.Slot, sel.Kind), func(ctx context.Context) error {
+	u.sh.Perform(fmt.Sprintf("Reading slot %d %s…", sel.Slot, sel.Kind), func(ctx context.Context) error {
 		res, err := core.InspectSave(ctx, core.InspectSaveRequest{Request: u.request(), Slot: sel})
 		if err != nil {
 			return err
@@ -189,7 +187,7 @@ func (u *ui) selectSlot(sel core.SlotSelector) {
 			if u.savesTab == savesTabSlots {
 				u.savesTab = savesTabEditor
 			}
-			u.refresh()
+			u.sh.Refresh()
 		})
 		return nil
 	})
@@ -285,7 +283,7 @@ func (u *ui) saveEditorTab() fyne.CanvasObject {
 	preview := widget.NewButtonWithIcon("Preview changes", theme.SearchIcon(), func() { u.previewEdit(fields) })
 	apply := widget.NewButtonWithIcon("Apply…", theme.DocumentSaveIcon(), func() { u.confirmEdit(fields) })
 	apply.Importance = widget.DangerImportance
-	u.gate(preview, apply)
+	u.sh.Gate(preview, apply)
 	rows = append(rows, widget.NewSeparator(),
 		widgets.Wrapped("Every write copies the whole profile to the backup directory first."),
 		container.NewHBox(preview, apply))
@@ -321,7 +319,7 @@ func (u *ui) shipGroup(s save.Summary) []editGroup {
 		for _, sh := range s.ShipList {
 			if sh.Label() == label && sh.Index != u.shipIndex {
 				u.shipIndex = sh.Index
-				u.refresh()
+				u.sh.Refresh()
 			}
 		}
 	})
@@ -536,15 +534,15 @@ func parseCount(text string, into **int) error {
 func (u *ui) previewEdit(fields []*editField) {
 	cs, err := changeSet(fields)
 	if err != nil {
-		u.flash(err.Error(), fd.StatusWarn)
+		u.sh.Flash(err.Error(), fd.StatusWarn)
 		return
 	}
 	if cs.Empty() {
-		u.flash("Nothing differs from what the save holds.", fd.StatusInfo)
+		u.sh.Flash("Nothing differs from what the save holds.", fd.StatusInfo)
 		return
 	}
 	sel := core.SlotSelector{Slot: u.inspect.Ref.Slot, Kind: u.inspect.Ref.Kind}
-	u.perform("Previewing the edit…", func(ctx context.Context) error {
+	u.sh.Perform("Previewing the edit…", func(ctx context.Context) error {
 		res, err := core.EditSave(ctx, core.EditSaveRequest{
 			Request: u.request(), Slot: sel, Changes: cs, DryRun: true,
 		})
@@ -553,10 +551,10 @@ func (u *ui) previewEdit(fields []*editField) {
 		}
 		fyne.Do(func() {
 			if len(res.Changes) == 0 {
-				u.flash("Every value is already what the save holds.", fd.StatusInfo)
+				u.sh.Flash("Every value is already what the save holds.", fd.StatusInfo)
 				return
 			}
-			dialogs.ShowDetail(u.win, "Planned changes (nothing written)", changesTable(res.Changes), 800, 360)
+			dialogs.ShowDetail(u.sh.Window, "Planned changes (nothing written)", changesTable(res.Changes), 800, 360)
 		})
 		return nil
 	})
@@ -584,11 +582,11 @@ refused unless the box is ticked; the box says why that is unsafe.
 func (u *ui) confirmEdit(fields []*editField) {
 	cs, err := changeSet(fields)
 	if err != nil {
-		u.flash(err.Error(), fd.StatusWarn)
+		u.sh.Flash(err.Error(), fd.StatusWarn)
 		return
 	}
 	if cs.Empty() {
-		u.flash("Nothing differs from what the save holds.", fd.StatusInfo)
+		u.sh.Flash("Nothing differs from what the save holds.", fd.StatusInfo)
 		return
 	}
 	in := u.inspect
@@ -603,8 +601,8 @@ func (u *ui) confirmEdit(fields []*editField) {
 	if u.slots.GameRunning {
 		body.Add(force)
 	}
-	dialogs.ConfirmWithBody(u.win, "Write the edited save?", body, "Write", func() {
-		u.perform("Writing the save…", func(ctx context.Context) error {
+	dialogs.ConfirmWithBody(u.sh.Window, "Write the edited save?", body, "Write", func() {
+		u.sh.Perform("Writing the save…", func(ctx context.Context) error {
 			res, err := core.EditSave(ctx, core.EditSaveRequest{
 				Request: u.request(), Slot: sel, Changes: cs, Force: force.Checked,
 			})
@@ -624,8 +622,8 @@ func (u *ui) wrote(w *core.SaveWriteResult, changes int, sel core.SlotSelector) 
 		u.savesOK = false
 		u.draft = nil // written, so the form starts from what the save now holds
 		if w == nil {
-			u.flash("Every value was already what the save holds; nothing was written.", fd.StatusInfo)
-			u.refresh()
+			u.sh.Flash("Every value was already what the save holds; nothing was written.", fd.StatusInfo)
+			u.sh.Refresh()
 			return
 		}
 		st := fd.StatusGood
@@ -635,7 +633,7 @@ func (u *ui) wrote(w *core.SaveWriteResult, changes int, sel core.SlotSelector) 
 			st = fd.StatusWarn
 			msg += " The game was running: its next autosave may overwrite this."
 		}
-		u.flash(msg, st)
+		u.sh.Flash(msg, st)
 		// Re-read the save once this operation has let go of the busy
 		// indicator; the rebuild that follows picks reinspect up.
 		u.reinspect = &sel
@@ -657,7 +655,7 @@ the editor. Export and Import remain for the whole-file case.
 func (u *ui) rawJSONTab() fyne.CanvasObject {
 	export := widget.NewButtonWithIcon("Export JSON…", theme.UploadIcon(), func() { u.exportDialog() })
 	importBtn := widget.NewButtonWithIcon("Import JSON…", theme.DownloadIcon(), func() { u.importDialog() })
-	u.gate(export, importBtn)
+	u.sh.Gate(export, importBtn)
 	if u.inspect == nil {
 		export.Disable()
 		importBtn.Disable()
@@ -675,7 +673,7 @@ func (u *ui) rawJSONTab() fyne.CanvasObject {
 			u.loadRawNode(strings.Join(segs[:len(segs)-1], "/"))
 		}
 	})
-	u.gate(load, up)
+	u.sh.Gate(load, up)
 	if len(save.SplitPath(u.rawPath)) == 0 {
 		up.Disable()
 	}
@@ -742,7 +740,7 @@ func (u *ui) rawEditor() fyne.CanvasObject {
 	check := widget.NewButtonWithIcon("Check", theme.SearchIcon(), func() { u.applyRawNode(true) })
 	apply := widget.NewButtonWithIcon("Apply…", theme.DocumentSaveIcon(), func() { u.confirmRawNode() })
 	apply.Importance = widget.DangerImportance
-	u.gate(revert, check, apply)
+	u.sh.Gate(revert, check, apply)
 	if len(save.SplitPath(u.rawPath)) == 0 {
 		// The whole save is never edited in the box: that is what Import is for.
 		apply.Disable()
@@ -761,7 +759,7 @@ func (u *ui) loadRawNode(path string) {
 		return
 	}
 	sel := core.SlotSelector{Slot: in.Ref.Slot, Kind: in.Ref.Kind}
-	u.perform("Reading "+widgets.OrNone(path, "the whole save")+"…", func(ctx context.Context) error {
+	u.sh.Perform("Reading "+widgets.OrNone(path, "the whole save")+"…", func(ctx context.Context) error {
 		res, err := core.GetSaveNode(ctx, core.SaveNodeRequest{Request: u.request(), Slot: sel, Path: path})
 		if err != nil {
 			return err
@@ -771,7 +769,7 @@ func (u *ui) loadRawNode(path string) {
 			u.rawNode = &res
 			u.rawText = res.JSON
 			u.savesTab = savesTabRaw
-			u.refresh()
+			u.sh.Refresh()
 		})
 		return nil
 	})
@@ -789,7 +787,7 @@ func (u *ui) applyRawNode(dryRun bool) {
 	if dryRun {
 		what = "Checking "
 	}
-	u.perform(what+path+"…", func(ctx context.Context) error {
+	u.sh.Perform(what+path+"…", func(ctx context.Context) error {
 		res, err := core.SetSaveNode(ctx, core.SetSaveNodeRequest{
 			Request: u.request(), Slot: sel, Path: path, JSON: text, DryRun: dryRun,
 		})
@@ -799,10 +797,10 @@ func (u *ui) applyRawNode(dryRun bool) {
 		if dryRun {
 			fyne.Do(func() {
 				if !res.Changed {
-					u.flash("Valid JSON, and the same value the save already holds.", fd.StatusInfo)
+					u.sh.Flash("Valid JSON, and the same value the save already holds.", fd.StatusInfo)
 					return
 				}
-				u.flash(fmt.Sprintf("Valid: %s would change (%d key(s) turned back). Apply writes it.", res.Path, res.Obfuscated), fd.StatusGood)
+				u.sh.Flash(fmt.Sprintf("Valid: %s would change (%d key(s) turned back). Apply writes it.", res.Path, res.Obfuscated), fd.StatusGood)
 			})
 			return nil
 		}
@@ -822,7 +820,7 @@ func (u *ui) confirmRawNode() {
 		widgets.Wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time."),
 		widgets.Wrapped(core.SteamCloudNote),
 	)
-	dialogs.ConfirmWithBody(u.win, "Write this node into the save?", body, "Write", func() { u.applyRawNode(false) }).Show()
+	dialogs.ConfirmWithBody(u.sh.Window, "Write this node into the save?", body, "Write", func() { u.applyRawNode(false) }).Show()
 }
 
 // exportDialog writes the save's JSON outside the game folder (R5.3).
@@ -838,16 +836,16 @@ func (u *ui) exportDialog() {
 	pretty.Checked = true
 	body := container.NewVBox(
 		widgets.Wrapped("Writes the decoded save as JSON. Nothing in the game folder changes."),
-		dialogs.WithBrowse(u.win, path, true),
+		dialogs.WithBrowse(u.sh.Window, path, true),
 		names, pretty,
 	)
-	dialogs.Prompt(u.win, "Export save JSON", "Export", body, func() {
+	dialogs.Prompt(u.sh.Window, "Export save JSON", "Export", body, func() {
 		out := strings.TrimSpace(path.Text)
 		if fi, err := os.Stat(out); err == nil && fi.IsDir() {
 			out = filepath.Join(out, filepath.Base(filepath.Dir(in.File))+"-"+
 				strings.TrimSuffix(filepath.Base(in.File), ".hg")+".json")
 		}
-		u.perform("Exporting the save…", func(ctx context.Context) error {
+		u.sh.Perform("Exporting the save…", func(ctx context.Context) error {
 			res, err := core.ExportSave(ctx, core.ExportSaveRequest{
 				Request: u.request(), Slot: sel, Out: out, Pretty: pretty.Checked, Names: names.Checked,
 			})
@@ -855,7 +853,7 @@ func (u *ui) exportDialog() {
 				return err
 			}
 			fyne.Do(func() {
-				u.flash(fmt.Sprintf("Exported slot %d %s to %s (%s).", res.Ref.Slot, res.Ref.Kind, res.Out, widgets.HumanSize(res.Bytes)), fd.StatusGood)
+				u.sh.Flash(fmt.Sprintf("Exported slot %d %s to %s (%s).", res.Ref.Slot, res.Ref.Kind, res.Out, widgets.HumanSize(res.Bytes)), fd.StatusGood)
 			})
 			return nil
 		})
@@ -867,7 +865,7 @@ func (u *ui) exportDialog() {
 func (u *ui) importDialog() {
 	in := u.inspect
 	sel := core.SlotSelector{Slot: in.Ref.Slot, Kind: in.Ref.Kind}
-	dialogs.ChooseFile(u.win, "", storage.NewExtensionFileFilter([]string{".json"}), func(file string) {
+	dialogs.ChooseFile(u.sh.Window, "", storage.NewExtensionFileFilter([]string{".json"}), func(file string) {
 		force := widget.NewCheck("Write even though the game is running (unsafe: its next autosave may overwrite the edit)", nil)
 		body := container.NewVBox(
 			widgets.Wrapped(fmt.Sprintf("This replaces the contents of %s with %s and rewrites the manifest to match.", in.File, file)),
@@ -877,8 +875,8 @@ func (u *ui) importDialog() {
 		if u.slots.GameRunning {
 			body.Add(force)
 		}
-		dialogs.ConfirmWithBody(u.win, "Import into this save?", body, "Import", func() {
-			u.perform("Importing the save…", func(ctx context.Context) error {
+		dialogs.ConfirmWithBody(u.sh.Window, "Import into this save?", body, "Import", func() {
+			u.sh.Perform("Importing the save…", func(ctx context.Context) error {
 				res, err := core.ImportSave(ctx, core.ImportSaveRequest{
 					Request: u.request(), Slot: sel, In: file, Force: force.Checked,
 				})
@@ -901,7 +899,7 @@ func (u *ui) backupsTab() fyne.CanvasObject {
 	take := widget.NewButtonWithIcon("Back up now", theme.ContentCopyIcon(),
 		func() { u.backupSaves() })
 	take.Importance = widget.HighImportance
-	u.gate(open, take)
+	u.sh.Gate(open, take)
 	if !u.status.Install.Found {
 		take.Disable()
 	}

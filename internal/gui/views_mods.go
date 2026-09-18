@@ -171,7 +171,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 			open.Disable()
 			remove.Disable()
 		}
-		u.gate(rowActions...)
+		u.sh.Gate(rowActions...)
 	}
 	clearRow := func() {
 		selected = -1
@@ -221,7 +221,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 			// mod than the one highlighted.
 			clearRow()
 			table.Refresh()
-			u.refresh()
+			u.sh.Refresh()
 		}
 	}
 
@@ -253,7 +253,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	check := widget.NewButtonWithIcon("Check", theme.SearchIcon(), func() { u.checkMods() })
 	openLib := widget.NewButtonWithIcon("Open library folder", theme.FolderIcon(),
 		func() { u.openPath(u.mods.LibraryDir) })
-	u.gate(add, imp, check, openLib)
+	u.sh.Gate(add, imp, check, openLib)
 
 	toolbar := container.NewHBox(add, imp, check, openLib)
 
@@ -404,16 +404,18 @@ func luaFilter() storage.FileFilter {
 // takes a list, which is what makes `mods add a.lua b.lua` and this the same
 // operation, and Import folder… is the answer for a directory of them.
 func (u *ui) addModDialog() {
-	dialogs.ChooseFile(u.win, "", luaFilter(), func(path string) {
-		u.perform("Adding "+path+"…", func(ctx context.Context) error {
+	dialogs.ChooseFile(u.sh.Window, "", luaFilter(), func(path string) {
+		u.sh.Perform("Adding "+path+"…", func(ctx context.Context) error {
 			res, err := core.AddMod(ctx, core.AddModRequest{
 				Request: u.request(), Paths: []string{path}, Enabled: true,
 			})
 			if err != nil {
 				return err
 			}
-			u.ok(fmt.Sprintf("Added %s to the library, enabled and last in the build order. "+
-				"The file you chose is untouched.", strings.Join(res.Added, ", ")))
+			fyne.Do(func() {
+				u.sh.OK(fmt.Sprintf("Added %s to the library, enabled and last in the build order. "+
+					"The file you chose is untouched.", strings.Join(res.Added, ", ")))
+			})
 			return nil
 		})
 	})
@@ -421,8 +423,8 @@ func (u *ui) addModDialog() {
 
 // importModsDialog copies a directory of scripts in, in name order.
 func (u *ui) importModsDialog() {
-	dialogs.ChooseFolder(u.win, "", func(dir string) {
-		u.perform("Importing "+dir+"…", func(ctx context.Context) error {
+	dialogs.ChooseFolder(u.sh.Window, "", func(dir string) {
+		u.sh.Perform("Importing "+dir+"…", func(ctx context.Context) error {
 			res, err := core.ImportDir(ctx, core.ImportDirRequest{
 				Request: u.request(), Dir: dir, Enabled: true,
 			})
@@ -435,7 +437,7 @@ func (u *ui) importModsDialog() {
 				msg += fmt.Sprintf(" %d already in the library were left as they were.",
 					len(res.Replaced))
 			}
-			u.ok(msg)
+			fyne.Do(func() { u.sh.OK(msg) })
 			return nil
 		})
 	})
@@ -452,9 +454,9 @@ func (u *ui) removeModDialog(m core.ModInfo) {
 		widgets.Wrapped("Deleting the file cannot be undone from here. If it came from Nexus, "+
 			"downloading it again is the only way back."),
 	)
-	d := dialogs.ConfirmWithBody(u.win, "Remove "+m.Name+"?", body, "Remove", func() {
+	d := dialogs.ConfirmWithBody(u.sh.Window, "Remove "+m.Name+"?", body, "Remove", func() {
 		del := alsoDelete.Checked
-		u.perform("Removing "+m.Name+"…", func(ctx context.Context) error {
+		u.sh.Perform("Removing "+m.Name+"…", func(ctx context.Context) error {
 			res, err := core.RemoveMod(ctx, core.RemoveModRequest{
 				Request: u.request(), Name: m.Name, DeleteFile: del,
 			})
@@ -465,7 +467,7 @@ func (u *ui) removeModDialog(m core.ModInfo) {
 			if res.Deleted != "" {
 				msg += " Deleted " + res.Deleted + "."
 			}
-			u.ok(msg)
+			fyne.Do(func() { u.sh.OK(msg) })
 			return nil
 		})
 	})
@@ -478,7 +480,7 @@ func (u *ui) setModEnabled(names []string, enabled bool) {
 	if !enabled {
 		verb = "Disabling"
 	}
-	u.perform(verb+" "+strings.Join(names, ", ")+"…", func(ctx context.Context) error {
+	u.sh.Perform(verb+" "+strings.Join(names, ", ")+"…", func(ctx context.Context) error {
 		res, err := core.SetModEnabled(ctx, core.SetModEnabledRequest{
 			Request: u.request(), Names: names, Enabled: enabled,
 		})
@@ -489,7 +491,7 @@ func (u *ui) setModEnabled(names []string, enabled bool) {
 		if !enabled {
 			state = "disabled"
 		}
-		u.ok(strings.Join(res.Changed, ", ") + " " + state + ".")
+		fyne.Do(func() { u.sh.OK(strings.Join(res.Changed, ", ") + " " + state + ".") })
 		return nil
 	})
 }
@@ -498,18 +500,20 @@ func (u *ui) setModEnabled(names []string, enabled bool) {
 func (u *ui) moveMod(r modRow, delta int) {
 	to := r.order + delta
 	if to < 1 || to > len(u.mods.Mods) {
-		u.flash(r.info.Name+" is already at the "+edgeName(delta)+" of the build order.", fd.StatusWarn)
+		u.sh.Flash(r.info.Name+" is already at the "+edgeName(delta)+" of the build order.", fd.StatusWarn)
 		return
 	}
-	u.perform("Moving "+r.info.Name+"…", func(ctx context.Context) error {
+	u.sh.Perform("Moving "+r.info.Name+"…", func(ctx context.Context) error {
 		res, err := core.MoveMod(ctx, core.MoveModRequest{
 			Request: u.request(), Name: r.info.Name, To: to,
 		})
 		if err != nil {
 			return err
 		}
-		u.ok(fmt.Sprintf("Moved %s from %d to %d. Lower rows apply later and win on conflicts.",
-			res.Name, res.From, res.To))
+		fyne.Do(func() {
+			u.sh.OK(fmt.Sprintf("Moved %s from %d to %d. Lower rows apply later and win on conflicts.",
+				res.Name, res.From, res.To))
+		})
 		return nil
 	})
 }
@@ -530,14 +534,14 @@ sandbox is rejected by name. It compiles nothing and reads no game files, so it
 costs a hundredth of a second on a library of twenty-seven.
 */
 func (u *ui) checkMods() {
-	u.perform("Checking the mod scripts…", func(ctx context.Context) error {
+	u.sh.Perform("Checking the mod scripts…", func(ctx context.Context) error {
 		res, err := core.CheckMods(ctx, core.CheckModsRequest{Request: u.request(), All: true})
 		if err != nil {
 			return err
 		}
 		fyne.Do(func() {
 			u.setChecks(res)
-			u.refresh()
+			u.sh.Refresh()
 			u.showCheckResults(res)
 		})
 		return nil
@@ -583,7 +587,7 @@ func (u *ui) showCheckResults(res core.CheckModsResult) {
 			widgets.Wrapped("Ignored keys are script directives this engine does not implement. The "+
 				"mod still builds; the edits those keys asked for do not happen."),
 		), nil, nil, nil, widgets.FixedHeight(t.Widget(), 360))
-	dialogs.ShowDetail(u.win, "Mod scripts", body, 900, 560)
+	dialogs.ShowDetail(u.sh.Window, "Mod scripts", body, 900, 560)
 }
 
 /*
@@ -668,7 +672,7 @@ func (u *ui) showModDetails(r modRow) {
 		}
 	}
 
-	dialogs.ShowDetail(u.win, r.info.Name, container.NewVScroll(body), 820, 620)
+	dialogs.ShowDetail(u.sh.Window, r.info.Name, container.NewVScroll(body), 820, 620)
 }
 
 /*
@@ -716,11 +720,11 @@ func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
 	entry.OnSubmitted = func(text string) {
 		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
 		if err != nil {
-			u.flash(p.Name+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
+			u.sh.Flash(p.Name+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
 			entry.SetText(modscript.FormatValue(p.Current, p.Kind))
 			return
 		}
-		u.perform("Setting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
+		u.sh.Perform("Setting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
 			res, err := core.SetTweakParam(ctx, core.SetTweakParamRequest{
 				Request: u.request(), Name: mod, Param: p.Name, Value: v,
 			})
@@ -729,7 +733,7 @@ func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
 			}
 			fyne.Do(func() {
 				entry.SetText(modscript.FormatValue(res.New, p.Kind))
-				u.flash(fmt.Sprintf("%s %s is %s for the next build. The script on disk is "+
+				u.sh.Flash(fmt.Sprintf("%s %s is %s for the next build. The script on disk is "+
 					"unchanged.", mod, p.Name, modscript.FormatValue(res.New, p.Kind)),
 					fd.StatusGood)
 			})
@@ -738,7 +742,7 @@ func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
 	}
 
 	reset := widget.NewButtonWithIcon("Reset", theme.ContentUndoIcon(), func() {
-		u.perform("Resetting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
+		u.sh.Perform("Resetting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
 			if _, err := core.ResetTweak(ctx, core.ResetTweakRequest{
 				Request: u.request(), Name: mod, Param: p.Name,
 			}); err != nil {
@@ -790,7 +794,7 @@ that does not load unless the box is ticked. A built-in tweak opens read-only:
 it is compiled in, and its numbers are parameters in Tweaks.
 */
 func (u *ui) editScriptDialog(m core.ModInfo) {
-	u.perform("Reading "+m.Name+"…", func(ctx context.Context) error {
+	u.sh.Perform("Reading "+m.Name+"…", func(ctx context.Context) error {
 		res, err := core.ReadModScript(ctx, core.ModScriptRequest{Request: u.request(), Name: m.Name})
 		if err != nil {
 			return err
@@ -816,7 +820,7 @@ func (u *ui) showScriptEditor(script core.ModScriptResult) {
 		status.SetText("")
 	})
 	check := widget.NewButtonWithIcon("Check", theme.SearchIcon(), func() {
-		u.perform("Checking "+script.Name+"…", func(ctx context.Context) error {
+		u.sh.Perform("Checking "+script.Name+"…", func(ctx context.Context) error {
 			res, err := core.WriteModScript(ctx, core.WriteModScriptRequest{
 				Request: u.request(), Name: script.Name, Text: text.Text, Check: true,
 			})
@@ -828,7 +832,7 @@ func (u *ui) showScriptEditor(script core.ModScriptResult) {
 		})
 	})
 	save := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), func() {
-		u.perform("Writing "+script.Name+"…", func(ctx context.Context) error {
+		u.sh.Perform("Writing "+script.Name+"…", func(ctx context.Context) error {
 			res, err := core.WriteModScript(ctx, core.WriteModScriptRequest{
 				Request: u.request(), Name: script.Name, Text: text.Text, Force: force.Checked,
 			})
@@ -845,9 +849,9 @@ func (u *ui) showScriptEditor(script core.ModScriptResult) {
 				}
 				d.Hide()
 				u.checksOK = false
-				u.flash(fmt.Sprintf("Wrote %s (%s). The previous text is kept as %s.",
+				u.sh.Flash(fmt.Sprintf("Wrote %s (%s). The previous text is kept as %s.",
 					res.Path, loadsText(res), filepath.Base(res.Backup)), fd.StatusGood)
-				u.invalidate()
+				u.sh.Invalidate()
 			})
 			return nil
 		})
@@ -870,7 +874,7 @@ func (u *ui) showScriptEditor(script core.ModScriptResult) {
 	if script.ReadOnly {
 		body = container.NewBorder(head, status, nil, nil, text)
 	}
-	d = dialog.NewCustomWithoutButtons("Edit "+script.Name, body, u.win)
+	d = dialog.NewCustomWithoutButtons("Edit "+script.Name, body, u.sh.Window)
 	d.SetButtons(buttons)
 	d.Resize(fyne.NewSize(1000, 700))
 	d.Show()

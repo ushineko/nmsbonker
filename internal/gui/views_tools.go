@@ -85,7 +85,7 @@ func (u *ui) compilerCard() fyne.CanvasObject {
 			// so does the button.
 			remove.Disable()
 		}
-		u.gate(rowActions...)
+		u.sh.Gate(rowActions...)
 	}
 	pin.OnTapped = func() { u.pinTool(entries[selected].Tag) }
 	remove.OnTapped = func() { u.removeToolDialog(entries[selected]) }
@@ -100,7 +100,7 @@ func (u *ui) compilerCard() fyne.CanvasObject {
 	if u.tools.Pin == "" {
 		unpin.Disable()
 	}
-	u.gate(check, install, compat, unpin)
+	u.sh.Gate(check, install, compat, unpin)
 
 	rows := []fyne.CanvasObject{}
 	if u.toolsOK && len(entries) == 0 {
@@ -129,7 +129,7 @@ func (u *ui) cacheCard() fyne.CanvasObject {
 	clearBtn := widget.NewButtonWithIcon("Clear cache…", theme.DeleteIcon(),
 		func() { u.clearCacheDialog() })
 	clearBtn.Importance = widget.DangerImportance
-	u.gate(measure, clearBtn)
+	u.sh.Gate(measure, clearBtn)
 
 	rows := []fyne.CanvasObject{widgets.PlainRow("Cache directory", u.status.Paths.Cache)}
 	if !u.cacheOK {
@@ -188,7 +188,7 @@ func (u *ui) archivesCard() fyne.CanvasObject {
 		func() { u.rebuildIndex() })
 	browse := widget.NewButtonWithIcon("Archives…", theme.StorageIcon(), func() { u.browseArchives() })
 	find := widget.NewButtonWithIcon("Find a file…", theme.SearchIcon(), func() { u.findInArchivesDialog() })
-	u.gate(rebuild, browse, find)
+	u.sh.Gate(rebuild, browse, find)
 	if !u.status.Install.Found {
 		rebuild.Disable()
 		browse.Disable()
@@ -210,7 +210,7 @@ func (u *ui) archivesCard() fyne.CanvasObject {
 
 // ensureTools installs the release this game needs.
 func (u *ui) ensureTools() {
-	u.perform("Installing MBINCompiler…", func(ctx context.Context) error {
+	u.sh.Perform("Installing MBINCompiler…", func(ctx context.Context) error {
 		res, err := core.EnsureTools(ctx, core.EnsureToolsRequest{Request: u.request()})
 		if err != nil {
 			// The attempts are worth showing even on failure: "dotnet10 does
@@ -218,7 +218,7 @@ func (u *ui) ensureTools() {
 			// is the whole diagnosis, and it is lost if only the error is shown.
 			if len(res.Attempts) > 0 {
 				fyne.Do(func() {
-					u.flash("Installing MBINCompiler failed: "+err.Error()+" — "+
+					u.sh.Flash("Installing MBINCompiler failed: "+err.Error()+" — "+
 						joinLines(res.Attempts), fd.StatusBad)
 				})
 				return nil
@@ -229,15 +229,17 @@ func (u *ui) ensureTools() {
 		if res.AlreadyPresent {
 			what = "Already had"
 		}
-		u.ok(fmt.Sprintf("%s MBINCompiler %s (%s): %s. Release listing came from %s.",
-			what, res.Tag, res.Flavor, res.Reason, res.ListingSource))
+		fyne.Do(func() {
+			u.sh.OK(fmt.Sprintf("%s MBINCompiler %s (%s): %s. Release listing came from %s.",
+				what, res.Tag, res.Flavor, res.Reason, res.ListingSource))
+		})
 		return nil
 	})
 }
 
 // toolCheck round-trips known game files through the installed compiler.
 func (u *ui) toolCheck() {
-	u.perform("Checking compiler compatibility…", func(ctx context.Context) error {
+	u.sh.Perform("Checking compiler compatibility…", func(ctx context.Context) error {
 		res, err := core.ToolCheck(ctx, core.ToolCheckRequest{Request: u.request()})
 		if err != nil {
 			return err
@@ -284,7 +286,7 @@ func (u *ui) showToolCheck(res core.ToolCheckResult) {
 	body.Add(widgets.Wrapped("A mismatch does not stop a build. It means the compiler and this game " +
 		"install disagree about a file format, so what a build produces is worth doubting — " +
 		"the report says which file proved it."))
-	dialogs.ShowDetail(u.win, "Compiler compatibility", body, 900, 520)
+	dialogs.ShowDetail(u.sh.Window, "Compiler compatibility", body, 900, 520)
 }
 
 // showReleases lists what GitHub offers.
@@ -317,7 +319,7 @@ func (u *ui) showReleases() {
 			widgets.Wrapped(u.releases.Reason),
 		),
 		container.NewHBox(install), nil, nil, widgets.FixedHeight(t.Widget(), 300))
-	dialogs.ShowDetail(u.win, "MBINCompiler releases", body, 780, 580)
+	dialogs.ShowDetail(u.sh.Window, "MBINCompiler releases", body, 780, 580)
 }
 
 // releaseStateText names a release's relationship to this machine in one word.
@@ -341,41 +343,41 @@ func (u *ui) pinTool(tag string) {
 	if tag == "" {
 		what = "Removing the pin…"
 	}
-	u.perform(what, func(ctx context.Context) error {
+	u.sh.Perform(what, func(ctx context.Context) error {
 		res, err := core.PinTool(ctx, core.PinToolRequest{Request: u.request(), Tag: tag})
 		if err != nil {
 			return err
 		}
 		if res.Pin == "" {
-			u.ok("Removed the pin. The newest release that matches this game is chosen again.")
+			fyne.Do(func() { u.sh.OK("Removed the pin. The newest release that matches this game is chosen again.") })
 			return nil
 		}
 		msg := "Pinned " + res.Pin + ". Every build uses it until you unpin."
 		if !res.Installed {
 			msg += " It is not installed yet; Install the newest match will fetch it."
 		}
-		u.ok(msg)
+		fyne.Do(func() { u.sh.OK(msg) })
 		return nil
 	})
 }
 
 // removeToolDialog deletes an installed release that is not in use.
 func (u *ui) removeToolDialog(e core.ToolEntry) {
-	dialogs.ConfirmDestructive(u.win, "Remove MBINCompiler "+e.Tag+"?",
+	dialogs.ConfirmDestructive(u.sh.Window, "Remove MBINCompiler "+e.Tag+"?",
 		"This deletes "+e.Dir+" and nothing else.\n\n"+
 			"The release currently in use is not this one, so builds are unaffected. The "+
 			"pristine cache built with this compiler is kept: it is keyed by the game build, "+
 			"not by the compiler, and it is still correct.\n\n"+
 			"It can be downloaded again from GitHub at any time.",
 		"Remove", func() {
-			u.perform("Removing MBINCompiler "+e.Tag+"…", func(ctx context.Context) error {
+			u.sh.Perform("Removing MBINCompiler "+e.Tag+"…", func(ctx context.Context) error {
 				res, err := core.RemoveTool(ctx, core.RemoveToolRequest{
 					Request: u.request(), Tag: e.Tag,
 				})
 				if err != nil {
 					return err
 				}
-				u.ok(fmt.Sprintf("Removed %s, freeing %s.", res.Tag, widgets.HumanSize(res.Bytes)))
+				fyne.Do(func() { u.sh.OK(fmt.Sprintf("Removed %s, freeing %s.", res.Tag, widgets.HumanSize(res.Bytes))) })
 				return nil
 			})
 		})
@@ -393,9 +395,9 @@ func (u *ui) clearCacheDialog() {
 			"folder installed in the game, and the game's own files."),
 		all, index,
 	)
-	dialogs.ConfirmWithBody(u.win, "Clear the cache?", body, "Clear", func() {
+	dialogs.ConfirmWithBody(u.sh.Window, "Clear the cache?", body, "Clear", func() {
 		everything, withIndex := all.Checked, index.Checked
-		u.perform("Clearing the cache…", func(ctx context.Context) error {
+		u.sh.Perform("Clearing the cache…", func(ctx context.Context) error {
 			res, err := core.ClearCache(ctx, core.ClearCacheRequest{
 				Request: u.request(), All: everything, IncludeIndex: withIndex,
 			})
@@ -403,11 +405,13 @@ func (u *ui) clearCacheDialog() {
 				return err
 			}
 			if len(res.Removed) == 0 {
-				u.ok("Nothing was cached, so nothing was removed.")
+				fyne.Do(func() { u.sh.OK("Nothing was cached, so nothing was removed.") })
 				return nil
 			}
 			fyne.Do(func() { u.cacheOK = false })
-			u.ok(fmt.Sprintf("Cleared %d file(s), freeing %s.", res.Files, widgets.HumanSize(res.Bytes)))
+			fyne.Do(func() {
+				u.sh.OK(fmt.Sprintf("Cleared %d file(s), freeing %s.", res.Files, widgets.HumanSize(res.Bytes)))
+			})
 			return nil
 		})
 	}).Show()
@@ -415,21 +419,23 @@ func (u *ui) clearCacheDialog() {
 
 // rebuildIndex reads every archive again.
 func (u *ui) rebuildIndex() {
-	u.perform("Rebuilding the pak index…", func(ctx context.Context) error {
+	u.sh.Perform("Rebuilding the pak index…", func(ctx context.Context) error {
 		res, err := core.RebuildIndex(ctx, core.RebuildIndexRequest{Request: u.request()})
 		if err != nil {
 			return err
 		}
 		fyne.Do(func() { u.cacheOK = false })
-		u.ok(fmt.Sprintf("Indexed %d archive(s) and %d file(s) in %s.",
-			res.Paks, res.Files, res.Duration.Round(1e6)))
+		fyne.Do(func() {
+			u.sh.OK(fmt.Sprintf("Indexed %d archive(s) and %d file(s) in %s.",
+				res.Paks, res.Files, res.Duration.Round(1e6)))
+		})
 		return nil
 	})
 }
 
 // browseArchives lists the archives, and then one archive's contents.
 func (u *ui) browseArchives() {
-	u.perform("Listing the archives…", func(ctx context.Context) error {
+	u.sh.Perform("Listing the archives…", func(ctx context.Context) error {
 		res, err := core.PakList(ctx, core.PakListRequest{Request: u.request()})
 		if err != nil {
 			return err
@@ -463,7 +469,7 @@ func (u *ui) showArchives(res core.PakListResult) {
 	}
 	list.OnTapped = func() {
 		pak, pattern := res.Paks[selected].Name, glob.Text
-		u.perform("Listing "+pak+"…", func(ctx context.Context) error {
+		u.sh.Perform("Listing "+pak+"…", func(ctx context.Context) error {
 			out, err := core.PakList(ctx, core.PakListRequest{
 				Request: u.request(), Pak: pak, Glob: pattern,
 			})
@@ -478,7 +484,7 @@ func (u *ui) showArchives(res core.PakListResult) {
 	body := container.NewBorder(
 		widgets.PlainRow("PCBANKS", res.PCBanksDir), container.NewBorder(nil, nil, nil, list, glob),
 		nil, nil, widgets.FixedHeight(table, 360))
-	dialogs.ShowDetail(u.win, "Game archives", body, 780, 560)
+	dialogs.ShowDetail(u.sh.Window, "Game archives", body, 780, 560)
 }
 
 func (u *ui) showArchiveFiles(pak string, res core.PakListResult) {
@@ -491,20 +497,20 @@ func (u *ui) showArchiveFiles(pak string, res core.PakListResult) {
 	body := container.NewBorder(
 		widget.NewLabel(fmt.Sprintf("%d file(s) in %s", len(res.Entries), pak)),
 		nil, nil, nil, widgets.FixedHeight(t.Widget(), 420))
-	dialogs.ShowDetail(u.win, pak, body, 860, 600)
+	dialogs.ShowDetail(u.sh.Window, pak, body, 860, 600)
 }
 
 // findInArchivesDialog searches every archive at once through the index.
 func (u *ui) findInArchivesDialog() {
 	glob := widget.NewEntry()
 	glob.SetPlaceHolder("a name or a pattern, for example *rewardtable*")
-	dialogs.Prompt(u.win, "Find a file in the archives", "Find", container.NewVBox(
+	dialogs.Prompt(u.sh.Window, "Find a file in the archives", "Find", container.NewVBox(
 		widget.NewForm(widget.NewFormItem("Pattern", glob)),
 		widgets.Wrapped("A pattern with no wildcard matches anywhere in a path. The search reads the "+
 			"index rather than the archives, so it is instant once the index is warm."),
 	), func() {
 		pattern := glob.Text
-		u.perform("Searching the archives…", func(ctx context.Context) error {
+		u.sh.Perform("Searching the archives…", func(ctx context.Context) error {
 			res, err := core.PakFind(ctx, core.PakFindRequest{Request: u.request(), Glob: pattern})
 			if err != nil {
 				return err
@@ -540,21 +546,21 @@ func (u *ui) showFindResults(res core.PakFindResult) {
 		len(res.Matches), res.Glob, res.IndexedFiles, res.IndexedPaks)
 	body := container.NewBorder(widget.NewLabel(summary), container.NewHBox(extract), nil, nil,
 		widgets.FixedHeight(table, 380))
-	dialogs.ShowDetail(u.win, "Search results", body, 880, 560)
+	dialogs.ShowDetail(u.sh.Window, "Search results", body, 880, 560)
 }
 
 // extractDialog writes one file out of the archives, keeping its internal path.
 func (u *ui) extractDialog(name string) {
 	dest := widget.NewEntry()
 	dest.SetPlaceHolder("directory to write into")
-	dialogs.Prompt(u.win, "Extract "+name, "Extract", container.NewVBox(
-		widget.NewForm(widget.NewFormItem("Destination", dialogs.WithBrowse(u.win, dest, true))),
+	dialogs.Prompt(u.sh.Window, "Extract "+name, "Extract", container.NewVBox(
+		widget.NewForm(widget.NewFormItem("Destination", dialogs.WithBrowse(u.sh.Window, dest, true))),
 		widgets.Wrapped("The file's directory structure inside the archive is recreated under this "+
 			"directory, so what is written can be compared with the archive it came from. "+
 			"The game is not modified — this reads the archives and writes a copy."),
 	), func() {
 		out := dest.Text
-		u.perform("Extracting "+name+"…", func(ctx context.Context) error {
+		u.sh.Perform("Extracting "+name+"…", func(ctx context.Context) error {
 			res, err := core.PakExtract(ctx, core.PakExtractRequest{
 				Request: u.request(), Name: name, OutDir: out,
 			})
@@ -565,7 +571,7 @@ func (u *ui) extractDialog(name string) {
 			if res.ByBasename {
 				msg += " The exact path is in no archive; this matched by basename."
 			}
-			u.ok(msg)
+			fyne.Do(func() { u.sh.OK(msg) })
 			return nil
 		})
 	})

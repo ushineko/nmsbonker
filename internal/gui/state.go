@@ -19,13 +19,13 @@ Talking to the core from a window.
 
 internal/core is synchronous: an operation takes a request struct, does the work
 on the calling goroutine, and returns a result. A cold build is three minutes of
-that. So every call in this file runs on a goroutine of its own and hops back to
-the UI thread with fyne.Do, and nothing here may be called from a widget handler
-without the `go`.
+that. So every call in this file runs on a goroutine of its own, through the
+shell's Perform or the load helper below, and hops back to the UI thread with
+fyne.Do; nothing here may be called from a widget handler without the `go`.
 
 Two things follow from that and are easy to get wrong. The busy indicator has to
-be started before the goroutine can fail, or a failure leaves the strip spinning
-for the life of the window -- hence the deferred done(). And the results a
+be started before the goroutine can fail, or a failure leaves the popup up for
+the life of the window -- hence the deferred done(). And the results a
 section renders are fields on *ui, written only on the UI thread, so a load that
 finishes after the user has navigated away updates state that the next rebuild
 picks up rather than a widget that is no longer on screen.
@@ -37,99 +37,25 @@ func (u *ui) request() core.Request {
 	return core.Request{ConfigPath: u.configPath}
 }
 
-// report puts a failed operation on screen. Cancellation is not a failure: the
-// user asked for it, and the step list already says so.
-func (u *ui) report(what string, err error) {
-	if errors.Is(err, context.Canceled) {
-		return
-	}
-	fyne.Do(func() { u.flash(what+": "+err.Error(), fd.StatusBad) })
-}
-
-// ok reports a completed operation and treats what is on screen as stale.
-//
-// An operation that succeeded has usually changed something a section is
-// showing — the mod list, the installed tools, the report — so invalidating is
-// the safe default. Reloading costs one core call; showing a list that no
-// longer matches the config is how someone removes the wrong mod.
-func (u *ui) ok(msg string) {
-	fyne.Do(func() {
-		u.flash(msg, fd.StatusGood)
-		u.invalidate()
-	})
-}
-
-// invalidate discards everything loaded from the core and rebuilds, which makes
-// the sections fetch again. Called on the UI thread.
-//
-// The build log is deliberately not part of this: F5 while a build is running
-// must not throw away the output it has produced so far.
-func (u *ui) invalidate() {
-	u.statusOK = false
-	u.detectOK = false
-	u.modsOK = false
-	u.tweaksOK = false
-	u.savesOK = false
-	u.slotsOK = false
-	u.archiveOK = false
-	u.toolsOK = false
-	u.releasesOK = false
-	u.cacheOK = false
-	u.configOK = false
-	u.lastReportOK = false
-	u.freshAudit = nil
-	if !u.onScreen() {
-		// No window to redraw. Clearing the flags is the whole of the work:
-		// whatever builds the sections next will fetch. Fetching here anyway
-		// would send a headless test off to read the user's Steam install.
-		return
-	}
-	// The status bar names the game, the compiler and the mod library from every
-	// section, so both are fetched here rather than left to Overview. Left to a
-	// section, the bar read "reading…" and "—" everywhere else.
-	u.loadStatus()
-	u.loadMods()
-	u.rebuild()
-}
-
-// onScreen reports whether there is a window to draw into. False in a headless
-// test, and in the window between a load finishing and the application exiting.
-func (u *ui) onScreen() bool { return u.content != nil }
-
 /*
-perform runs one core operation off the UI thread with the busy indicator up.
+load runs one loader off the UI thread behind the shell's busy indicator, or
+inline when there is no window.
 
-The name is what the status bar shows, so it is a phrase in the present
-participle rather than a command: "Installing MBINCompiler…", not "ensure".
-Every core call from this window goes through here or through startBuild; a raw
-`go func()` reaching into core would be a window that sits still with no
-explanation, and the button that looks like it did nothing is the button that
-gets clicked twice.
+Inline because a headless test wants finished state when the builder returns:
+Fyne's test driver runs fyne.Do on the calling goroutine rather than
+serialising onto a main loop, so a worker refreshing a widget would genuinely
+race the test driving it. Operations the user starts go through the shell's
+Perform, which makes the same choice.
 */
-func (u *ui) perform(what string, fn func(ctx context.Context) error) {
-	if u.working() {
-		u.flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
-		return
-	}
-	if !u.onScreen() {
-		// No window, so there is no render thread to keep free and the
-		// goroutine buys nothing. A headless test gets a finished operation
-		// when the button returns instead of one that lands "soon", which is
-		// the difference between a test and a race: Fyne's test driver runs
-		// fyne.Do inline on the calling goroutine rather than serialising onto
-		// a main loop, so a worker refreshing a widget genuinely does race the
-		// test driving it.
-		if err := fn(context.Background()); err != nil {
-			u.report(what, err)
-		}
+func (u *ui) load(what string, run func()) {
+	if !u.sh.OnScreen() {
+		run()
 		return
 	}
 	go func() {
-		done := u.busy(what)
+		done := u.sh.Busy(what)
 		defer done()
-		if err := fn(context.Background()); err != nil {
-			u.report(what, err)
-		}
+		run()
 	}()
 }
 
@@ -146,19 +72,17 @@ func (u *ui) loadStatus() {
 	// failed load leaves the flag set and the facts empty, which is the state
 	// Overview explains; F5 tries again.
 	u.statusOK = true
-	go func() {
-		done := u.busy("Reading the game install…")
-		defer done()
+	u.load("Reading the game install…", func() {
 		res, err := core.Status(context.Background(), core.StatusRequest{Request: u.request()})
 		if err != nil {
-			u.report("Read the install", err)
+			fyne.Do(func() { u.sh.Report("Read the install", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.status = res
-			u.rebuild()
+			u.sh.Rebuild()
 		})
-	}()
+	})
 }
 
 // loadDetect explains a failed search. Only fetched when there is one to
@@ -169,19 +93,17 @@ func (u *ui) loadDetect() {
 		return
 	}
 	u.detectOK = true
-	go func() {
-		done := u.busy("Looking for the game…")
-		defer done()
+	u.load("Looking for the game…", func() {
 		res, err := core.Detect(context.Background(), core.DetectRequest{Request: u.request()})
 		if err != nil {
-			u.report("Look for the game", err)
+			fyne.Do(func() { u.sh.Report("Look for the game", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.detect = res
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // loadMods fills the build order. ListMods reconciles the config with the
@@ -193,12 +115,10 @@ func (u *ui) loadMods() {
 		return
 	}
 	u.modsOK = true
-	go func() {
-		done := u.busy("Reading the mod library…")
-		defer done()
+	u.load("Reading the mod library…", func() {
 		res, err := core.ListMods(context.Background(), core.ListModsRequest{Request: u.request()})
 		if err != nil {
-			u.report("Read the mod library", err)
+			fyne.Do(func() { u.sh.Report("Read the mod library", err) })
 			return
 		}
 		// The script headers come with the listing rather than on a button.
@@ -213,12 +133,12 @@ func (u *ui) loadMods() {
 			if cerr == nil {
 				u.setChecks(checks)
 			}
-			u.rebuild()
+			u.sh.Rebuild()
 			for _, n := range res.Notices {
-				u.flash(n, fd.StatusInfo)
+				u.sh.Flash(n, fd.StatusInfo)
 			}
 		})
-	}()
+	})
 }
 
 /*
@@ -233,21 +153,19 @@ func (u *ui) loadTweaks() {
 		return
 	}
 	u.tweaksOK = true
-	go func() {
-		done := u.busy("Reading the built-in tweaks…")
-		defer done()
+	u.load("Reading the built-in tweaks…", func() {
 		res, err := core.ListTweaks(context.Background(), core.ListTweaksRequest{
 			Request: u.request(),
 		})
 		if err != nil {
-			u.report("Read the built-in tweaks", err)
+			fyne.Do(func() { u.sh.Report("Read the built-in tweaks", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.tweaks = res
-			u.rebuild()
+			u.sh.Rebuild()
 		})
-	}()
+	})
 }
 
 /*
@@ -258,7 +176,7 @@ they installed can actually read this install's files, and spec 003 left that
 line reading "unknown -- not checked yet" even after a build had measured it.
 The check is the measurement: it decompiles two known game files, recompiles
 them and compares the bytes. Two MBINCompiler processes and about two seconds,
-so it runs in the background behind the busy strip and the card fills in.
+so it runs in the background behind the busy indicator and the card fills in.
 
 Once per process, not once per section: the answer changes when the game or the
 compiler changes, and both of those mean a restart or an explicit action that
@@ -272,9 +190,7 @@ func (u *ui) loadCompat() {
 		return // nothing to check against, or nothing to check with
 	}
 	u.compatOK = true
-	go func() {
-		done := u.busy("Checking compiler compatibility…")
-		defer done()
+	u.load("Checking compiler compatibility…", func() {
 		res, err := core.ToolCheck(context.Background(), core.ToolCheckRequest{
 			Request: u.request(),
 		})
@@ -286,9 +202,9 @@ func (u *ui) loadCompat() {
 			} else {
 				u.compat = res
 			}
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // loadTools fills the installed-compiler table.
@@ -297,19 +213,17 @@ func (u *ui) loadTools() {
 		return
 	}
 	u.toolsOK = true
-	go func() {
-		done := u.busy("Reading the installed compilers…")
-		defer done()
+	u.load("Reading the installed compilers…", func() {
 		res, err := core.ListTools(context.Background(), core.ListToolsRequest{Request: u.request()})
 		if err != nil {
-			u.report("Read the installed compilers", err)
+			fyne.Do(func() { u.sh.Report("Read the installed compilers", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.tools = res
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // loadCache measures the caches. Not loaded on arrival at Tools: it walks the
@@ -317,26 +231,24 @@ func (u *ui) loadTools() {
 // card says "not measured" until asked.
 func (u *ui) loadCache() {
 	u.cacheOK = true
-	go func() {
-		done := u.busy("Measuring the caches…")
-		defer done()
+	u.load("Measuring the caches…", func() {
 		res, err := core.CacheInfo(context.Background(), core.CacheInfoRequest{Request: u.request()})
 		if err != nil {
-			u.report("Measure the caches", err)
+			fyne.Do(func() { u.sh.Report("Measure the caches", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.cache = res
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // loadReleases asks GitHub what exists. Explicit, never on arrival: a window
 // that contacts the network because a section was opened is a window that
 // contacts the network when someone is on a metered connection.
 func (u *ui) loadReleases() {
-	u.perform("Checking for MBINCompiler releases…", func(ctx context.Context) error {
+	u.sh.Perform("Checking for MBINCompiler releases…", func(ctx context.Context) error {
 		res, err := core.ListReleases(ctx, core.ListReleasesRequest{Request: u.request()})
 		if err != nil {
 			return err
@@ -344,10 +256,10 @@ func (u *ui) loadReleases() {
 		fyne.Do(func() {
 			u.releases, u.releasesOK = res, true
 			if res.Warning != "" {
-				u.flash("GitHub could not be reached, so this listing came from the cache: "+
+				u.sh.Flash("GitHub could not be reached, so this listing came from the cache: "+
 					res.Warning, fd.StatusWarn)
 			}
-			u.refresh()
+			u.sh.Refresh()
 			u.showReleases()
 		})
 		return nil
@@ -360,9 +272,7 @@ func (u *ui) loadReport() {
 		return
 	}
 	u.lastReportOK = true
-	go func() {
-		done := u.busy("Reading the last build report…")
-		defer done()
+	u.load("Reading the last build report…", func() {
 		res, err := core.Report(context.Background(), core.ReportRequest{Request: u.request()})
 		if err != nil {
 			// Never having built is the ordinary state of a new install, not a
@@ -370,15 +280,15 @@ func (u *ui) loadReport() {
 			fyne.Do(func() {
 				u.lastReport = core.ReportResult{}
 				u.lastReportErr = err.Error()
-				u.refresh()
+				u.sh.Refresh()
 			})
 			return
 		}
 		fyne.Do(func() {
 			u.lastReport, u.lastReportErr = res, ""
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // --- the build -------------------------------------------------------------
@@ -444,16 +354,18 @@ then once more, so the last lines are on screen even if they arrived between
 ticks.
 */
 func (u *ui) startBuild(recache bool) {
-	if u.working() {
-		u.flash("A build is already running. Cancel it first.", fd.StatusWarn)
+	if u.sh.Working() {
+		u.sh.Flash("A build is already running. Cancel it first.", fd.StatusWarn)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	u.run.reset()
 	u.run.cancel = cancel
+	// The section is rebuilt from state when the busy count changes, which
+	// is what disables Build and enables Cancel; until that lands the totals
+	// and the status bar say the run has started.
 	u.drawTotals()
-	u.drawControls()
-	u.redrawStatus()
+	u.sh.RedrawStatus()
 
 	req := core.BuildRequest{
 		Request: core.Request{ConfigPath: u.configPath, Events: u.buildEvents()},
@@ -461,7 +373,7 @@ func (u *ui) startBuild(recache bool) {
 	}
 
 	go func() {
-		done := u.busy("Building…")
+		done := u.sh.Busy("Building…")
 		defer done()
 		defer cancel()
 
@@ -495,13 +407,13 @@ func (u *ui) finishBuild(res core.BuildResult, err error) {
 		u.lastReportOK = false
 	}
 	u.run.running = false
-	u.flash(u.run.summary, u.run.summarySt)
+	u.sh.Flash(u.run.summary, u.run.summarySt)
 	u.drawTotals()
-	u.drawControls()
 	u.run.pane.Draw()
 	u.statusOK = false
 	u.loadStatus()
-	u.refresh()
+	// Rebuilt from state: Build and Deploy come back, Cancel goes dead.
+	u.sh.Refresh()
 }
 
 // buildSummary is the one line a finished build gets in the banner slot.
@@ -546,9 +458,13 @@ func (u *ui) cancelBuild() {
 	}
 	u.run.cancelled = true
 	u.run.cancel()
-	u.flash("Cancelling. The compiler processes are being stopped and the previous "+
+	u.sh.Flash("Cancelling. The compiler processes are being stopped and the previous "+
 		"output put back; this takes a moment.", fd.StatusInfo)
-	u.drawControls()
+	// Dead the moment it has been pressed: pressing it twice does nothing, and
+	// a button that looks live is a button that gets pressed again.
+	if u.run.cancelBtn != nil {
+		u.run.cancelBtn.Disable()
+	}
 }
 
 // --- the desktop -----------------------------------------------------------
@@ -565,15 +481,15 @@ enough to open it by hand.
 */
 func (u *ui) openPath(path string) {
 	if path == "" {
-		u.flash("There is nothing to open yet.", fd.StatusWarn)
+		u.sh.Flash("There is nothing to open yet.", fd.StatusWarn)
 		return
 	}
 	go func() {
-		done := u.busy("Opening " + filepath.Base(path) + "…")
+		done := u.sh.Busy("Opening " + filepath.Base(path) + "…")
 		defer done()
 		if err := dialogs.OpenPath(path); err != nil {
 			fyne.Do(func() {
-				u.flash("Could not "+err.Error()+". Open it by hand; nothing else was affected.",
+				u.sh.Flash("Could not "+err.Error()+". Open it by hand; nothing else was affected.",
 					fd.StatusWarn)
 			})
 		}

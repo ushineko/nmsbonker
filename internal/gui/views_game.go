@@ -36,20 +36,18 @@ func (u *ui) loadSaves() {
 		return
 	}
 	u.savesOK = true
-	go func() {
-		done := u.busy("Reading the save backups…")
-		defer done()
+	u.load("Reading the save backups…", func() {
 		res, err := core.ListSaveBackups(context.Background(),
 			core.ListSaveBackupsRequest{Request: u.request()})
 		if err != nil {
-			u.report("Read the save backups", err)
+			fyne.Do(func() { u.sh.Report("Read the save backups", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.saves = res
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 // saveBackupText is the Overview's one line about the saves: when the last copy
@@ -78,7 +76,7 @@ and there is no state it can damage. The banner says where the copy went,
 because the only thing a user can do with a backup is find it again.
 */
 func (u *ui) backupSaves() {
-	u.perform("Backing up the game's saves…", func(ctx context.Context) error {
+	u.sh.Perform("Backing up the game's saves…", func(ctx context.Context) error {
 		res, err := core.BackupSaves(ctx, core.BackupSavesRequest{Request: u.request()})
 		if err != nil {
 			return err
@@ -86,8 +84,8 @@ func (u *ui) backupSaves() {
 		fyne.Do(func() {
 			u.savesOK = false
 			if res.Skipped != "" {
-				u.flash("No saves were copied: "+res.Skipped, fd.StatusWarn)
-				u.invalidate()
+				u.sh.Flash("No saves were copied: "+res.Skipped, fd.StatusWarn)
+				u.sh.Invalidate()
 				return
 			}
 			msg := fmt.Sprintf("Copied %d save profile(s), %d file(s), to %s.",
@@ -96,8 +94,8 @@ func (u *ui) backupSaves() {
 				msg += fmt.Sprintf(" %d older backup(s) were deleted to keep the newest %d.",
 					len(res.Pruned), core.SaveRetention)
 			}
-			u.flash(msg, fd.StatusGood)
-			u.invalidate()
+			u.sh.Flash(msg, fd.StatusGood)
+			u.sh.Invalidate()
 		})
 		return nil
 	})
@@ -146,7 +144,7 @@ func (u *ui) toggleAllMods(off bool) {
 	if off {
 		verb, past = "Disabling all mods", "Every mod is switched off"
 	}
-	u.perform(verb+"…", func(ctx context.Context) error {
+	u.sh.Perform(verb+"…", func(ctx context.Context) error {
 		res, err := core.ModsToggle(ctx, core.ModsToggleRequest{
 			Request: u.request(), DisableAll: off,
 		})
@@ -155,20 +153,22 @@ func (u *ui) toggleAllMods(off bool) {
 		}
 		if !res.Changed {
 			fyne.Do(func() {
-				u.flash("The game's switch was already set that way; nothing was written.",
+				u.sh.Flash("The game's switch was already set that way; nothing was written.",
 					fd.StatusInfo)
 			})
 			return nil
 		}
-		u.ok(past + " in the game's own settings. Nothing was removed: every mod folder is " +
-			"still installed and every per-mod switch keeps its state.")
+		fyne.Do(func() {
+			u.sh.OK(past + " in the game's own settings. Nothing was removed: every mod folder is " +
+				"still installed and every per-mod switch keeps its state.")
+		})
 		return nil
 	})
 }
 
 // confirmDisableAllMods says what the switch does before flipping it.
 func (u *ui) confirmDisableAllMods() {
-	dialogs.ConfirmDestructive(u.win, "Stop the game loading any mod?",
+	dialogs.ConfirmDestructive(u.sh.Window, "Stop the game loading any mod?",
 		"This sets DisableAllMods in the game's own GCMODSETTINGS.MXML and changes nothing "+
 			"else. Every mod folder stays where it is, every per-mod switch keeps its state, "+
 			"and Enable mods puts it back exactly as it was. It is the cheapest thing to try "+
@@ -200,8 +200,8 @@ func (u *ui) replaceSymlinkAndDeploy() {
 		widgets.Wrapped("This is reversible by hand — the link can be re-made with ln -sfn — and "+
 			"Steam's \"verify integrity of game files\" restores the stock layout."),
 	)
-	dialogs.ConfirmWithBody(u.win, "Replace the symlink and deploy?", body, "Replace and deploy", func() {
-		u.perform("Replacing the symlink and installing…", func(ctx context.Context) error {
+	dialogs.ConfirmWithBody(u.sh.Window, "Replace the symlink and deploy?", body, "Replace and deploy", func() {
+		u.sh.Perform("Replacing the symlink and installing…", func(ctx context.Context) error {
 			res, err := core.Deploy(ctx, core.DeployRequest{
 				Request: u.request(), ReplaceSymlink: true,
 			})
@@ -224,13 +224,13 @@ func (u *ui) deployed(res core.DeployResult, msg string) {
 	if len(res.Warnings) > 0 {
 		fyne.Do(func() {
 			u.savesOK = false
-			u.flash(msg+" "+res.Warnings[0], fd.StatusWarn)
-			u.invalidate()
+			u.sh.Flash(msg+" "+res.Warnings[0], fd.StatusWarn)
+			u.sh.Invalidate()
 		})
 		return
 	}
 	fyne.Do(func() { u.savesOK = false })
-	u.ok(msg)
+	fyne.Do(func() { u.sh.OK(msg) })
 }
 
 // --- taking it back out (R4.2, R4.3) ----------------------------------------
@@ -238,19 +238,21 @@ func (u *ui) deployed(res core.DeployResult, msg string) {
 // confirmUndeploy removes the installed mod folder, keeping a copy.
 func (u *ui) confirmUndeploy() {
 	dest := u.status.Install.ModsDir + "/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
-	dialogs.ConfirmDestructive(u.win, "Remove the deployed mod?",
+	dialogs.ConfirmDestructive(u.sh.Window, "Remove the deployed mod?",
 		"The folder at "+dest+" is moved into "+u.status.Paths.Archive+" under a timestamp, "+
 			"so it can be rolled back. The game's own mod settings are left alone, and so is "+
 			"the build in the workspace — this removes what is installed, not what would be "+
 			"installed next. Your saves and every other mod folder are untouched.",
 		"Remove", func() {
-			u.perform("Removing the deployed mod…", func(ctx context.Context) error {
+			u.sh.Perform("Removing the deployed mod…", func(ctx context.Context) error {
 				res, err := core.Undeploy(ctx, core.UndeployRequest{Request: u.request()})
 				if err != nil {
 					return err
 				}
-				u.ok(fmt.Sprintf("Removed %s. Its %d file(s) are in %s and `Roll back…` "+
-					"puts them back.", res.Dest, res.Files, res.Archived))
+				fyne.Do(func() {
+					u.sh.OK(fmt.Sprintf("Removed %s. Its %d file(s) are in %s and `Roll back…` "+
+						"puts them back.", res.Dest, res.Files, res.Archived))
+				})
 				return nil
 			})
 		})
@@ -262,20 +264,18 @@ func (u *ui) loadArchive() {
 		return
 	}
 	u.archiveOK = true
-	go func() {
-		done := u.busy("Reading the archive…")
-		defer done()
+	u.load("Reading the archive…", func() {
 		res, err := core.ListArchive(context.Background(),
 			core.ListArchiveRequest{Request: u.request()})
 		if err != nil {
-			u.report("Read the archive", err)
+			fyne.Do(func() { u.sh.Report("Read the archive", err) })
 			return
 		}
 		fyne.Do(func() {
 			u.archive = res
-			u.refresh()
+			u.sh.Refresh()
 		})
-	}()
+	})
 }
 
 /*
@@ -287,7 +287,7 @@ button that can only undo one step is a button that cannot reach it.
 */
 func (u *ui) showRollback() {
 	if !u.archiveOK || len(u.archive.Entries) == 0 {
-		u.flash("Nothing has been deployed yet, so there is nothing to roll back to.",
+		u.sh.Flash("Nothing has been deployed yet, so there is nothing to roll back to.",
 			fd.StatusInfo)
 		return
 	}
@@ -321,7 +321,7 @@ func (u *ui) showRollback() {
 	)
 	body := container.NewBorder(head, nil, nil, nil, widgets.FixedHeight(table, 240))
 
-	d := dialogs.ConfirmWithBody(u.win, "Roll back to an earlier deployment?", body, "Roll back", func() {
+	d := dialogs.ConfirmWithBody(u.sh.Window, "Roll back to an earlier deployment?", body, "Roll back", func() {
 		entry := u.archive.Entries[selected]
 		u.rollback(entry)
 	})
@@ -343,7 +343,7 @@ func archiveHolds(e core.ArchiveEntry) string {
 
 // rollback restores one archive entry.
 func (u *ui) rollback(entry core.ArchiveEntry) {
-	u.perform("Rolling back to "+entry.Timestamp+"…", func(ctx context.Context) error {
+	u.sh.Perform("Rolling back to "+entry.Timestamp+"…", func(ctx context.Context) error {
 		res, err := core.Rollback(ctx, core.RollbackRequest{
 			Request: u.request(), Timestamp: entry.Timestamp,
 		})
@@ -364,8 +364,8 @@ func (u *ui) rollback(entry core.ArchiveEntry) {
 		msg += " What was installed is now in " + res.Archived + "."
 		fyne.Do(func() {
 			u.archiveOK = false
-			u.flash(msg, st)
-			u.invalidate()
+			u.sh.Flash(msg, st)
+			u.sh.Invalidate()
 		})
 		return nil
 	})
@@ -394,14 +394,14 @@ func (u *ui) gameActions() fyne.CanvasObject {
 	}
 
 	saves := widget.NewButtonWithIcon("Saves…", theme.StorageIcon(),
-		func() { u.selectSection("Saves") })
+		func() { u.sh.Select("Saves") })
 	openMods := widget.NewButtonWithIcon("Open mods folder", theme.FolderIcon(),
 		func() { u.openModsDir() })
 	remove := widget.NewButtonWithIcon("Remove deployed mod…", theme.DeleteIcon(),
 		func() { u.confirmUndeploy() })
 	remove.Importance = widget.DangerImportance
 
-	u.gate(switchMods, saves, openMods, remove)
+	u.sh.Gate(switchMods, saves, openMods, remove)
 	if !in.Found {
 		switchMods.Disable()
 		saves.Disable()

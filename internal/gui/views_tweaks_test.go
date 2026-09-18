@@ -17,24 +17,17 @@ import (
 )
 
 /*
-tweaksUI is a window pointed at a throwaway settings file and a throwaway
-library, with the built-ins loaded through core exactly as the section loads
-them.
+tweaksUI is a window pointed at a throwaway settings file, with the built-ins
+loaded through core exactly as the section loads them.
 
-The XDG directories are redirected as well as the config path. Without that the
-library the section reconciles against is whatever this machine happens to
-have, and a test whose result depends on the developer's mod collection is not
-a test.
+testUI already redirects the XDG directories, so the library the section
+reconciles against is a throwaway one: a test whose result depends on the
+developer's mod collection is not a test.
 */
 func tweaksUI(t *testing.T) (*ui, string) {
 	t.Helper()
-	root := t.TempDir()
-	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
-	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
-	t.Setenv("STEAM_ROOT", filepath.Join(root, "no-steam-here"))
-
 	u := testUI(t)
-	path := filepath.Join(root, "config.json")
+	path := filepath.Join(t.TempDir(), "config.json")
 	u.configPath = path
 
 	res, err := core.ListTweaks(t.Context(), core.ListTweaksRequest{
@@ -51,7 +44,7 @@ Dragging a slider writes the value through core, and the script is untouched.
 The whole point of the section: a control on screen and a number in config.json,
 with the .lua the number belongs to never modified. Driven synchronously because
 a window with no content pane runs its operations on the calling goroutine --
-see perform.
+see shell.Perform.
 */
 func TestReleasingASliderWritesTheParameter(t *testing.T) {
 	u, path := tweaksUI(t)

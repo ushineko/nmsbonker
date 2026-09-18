@@ -152,7 +152,7 @@ func (u *ui) paramRow(mod string, p core.TweakParam, unbuilt *widget.Label) fyne
 			Format: format,
 			Commit: func(v float64) { u.applyParam(mod, p, v, unbuilt, pair.Set) },
 			OnInvalid: func(text string) {
-				u.flash(p.Label+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
+				u.sh.Flash(p.Label+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
 			},
 		})
 		control, show = pair.Widget(), pair.Set
@@ -167,7 +167,7 @@ func (u *ui) paramRow(mod string, p core.TweakParam, unbuilt *widget.Label) fyne
 		entry.OnSubmitted = func(text string) {
 			v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
 			if err != nil {
-				u.flash(p.Label+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
+				u.sh.Flash(p.Label+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
 				entry.SetText(format(p.Current))
 				return
 			}
@@ -191,7 +191,7 @@ func (u *ui) paramRow(mod string, p core.TweakParam, unbuilt *widget.Label) fyne
 func (u *ui) applyParam(mod string, p core.TweakParam, v float64,
 	unbuilt *widget.Label, show func(float64),
 ) {
-	u.perform(fmt.Sprintf("Setting %s %s…", mod, p.Name), func(ctx context.Context) error {
+	u.sh.Perform(fmt.Sprintf("Setting %s %s…", mod, p.Name), func(ctx context.Context) error {
 		res, err := core.SetTweakParam(ctx, core.SetTweakParamRequest{
 			Request: u.request(), Name: mod, Param: p.Name, Value: v,
 		})
@@ -203,7 +203,7 @@ func (u *ui) applyParam(mod string, p core.TweakParam, v float64,
 			u.noteParam(mod, p.Name, res.New, true)
 			unbuilt.SetText("changed since the last build — build to apply")
 			if res.Clamped {
-				u.flash(fmt.Sprintf("%s only takes %s to %s, so %s was used.",
+				u.sh.Flash(fmt.Sprintf("%s only takes %s to %s, so %s was used.",
 					p.Label, modscript.FormatValue(p.Min, p.Kind),
 					modscript.FormatValue(p.Max, p.Kind),
 					modscript.FormatValue(res.New, p.Kind)), fd.StatusWarn)
@@ -215,7 +215,7 @@ func (u *ui) applyParam(mod string, p core.TweakParam, v float64,
 
 // resetParam restores one parameter to the script's own value.
 func (u *ui) resetParam(mod string, p core.TweakParam, unbuilt *widget.Label, show func(float64)) {
-	u.perform("Resetting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
+	u.sh.Perform("Resetting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
 		if _, err := core.ResetTweak(ctx, core.ResetTweakRequest{
 			Request: u.request(), Name: mod, Param: p.Name,
 		}); err != nil {
@@ -253,15 +253,15 @@ func (u *ui) noteParam(mod, param string, value float64, overridden bool) {
 // and a way back to the script's own numbers.
 func (u *ui) tweaksActions() fyne.CanvasObject {
 	build := widget.NewButtonWithIcon("Apply and build", theme.MediaPlayIcon(), func() {
-		u.selectSection("Build")
+		u.sh.Select("Build")
 		u.startBuild(false)
 	})
 	build.Importance = widget.HighImportance
 
 	resetAll := widget.NewButtonWithIcon("Reset all to defaults", theme.ContentUndoIcon(),
 		func() { u.resetAllTweaks() })
-	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { u.invalidate() })
-	u.gate(build, resetAll, refresh)
+	refresh := widget.NewButtonWithIcon("Refresh", theme.ViewRefreshIcon(), func() { u.sh.Invalidate() })
+	u.sh.Gate(build, resetAll, refresh)
 	if !u.status.Install.Found || !u.status.Compiler.Installed {
 		build.Disable()
 	}
@@ -297,15 +297,15 @@ func (u *ui) resetAllTweaks() {
 		}
 	}
 	if changed == 0 {
-		u.flash("Every tweak is already at the values its script carries.", fd.StatusInfo)
+		u.sh.Flash("Every tweak is already at the values its script carries.", fd.StatusInfo)
 		return
 	}
-	dialogs.ConfirmDestructive(u.win, "Reset every tweak?",
+	dialogs.ConfirmDestructive(u.sh.Window, "Reset every tweak?",
 		fmt.Sprintf("%d parameter(s) you have changed go back to the values the scripts "+
 			"carry. Nothing installed in the game changes until the next build and deploy, "+
 			"and which tweaks are switched on is not affected.", changed),
 		"Reset", func() {
-			u.perform("Resetting every tweak…", func(ctx context.Context) error {
+			u.sh.Perform("Resetting every tweak…", func(ctx context.Context) error {
 				for _, tw := range u.tweaks.Tweaks {
 					if _, err := core.ResetTweak(ctx, core.ResetTweakRequest{
 						Request: u.request(), Name: tw.Name,
@@ -313,7 +313,7 @@ func (u *ui) resetAllTweaks() {
 						return err
 					}
 				}
-				u.ok(fmt.Sprintf("Reset %d parameter(s) to the values the scripts carry.", changed))
+				fyne.Do(func() { u.sh.OK(fmt.Sprintf("Reset %d parameter(s) to the values the scripts carry.", changed)) })
 				return nil
 			})
 		})
