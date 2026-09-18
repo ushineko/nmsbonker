@@ -1,7 +1,3 @@
-// Copied from angou (same author) — keep in sync by hand. The shell, the flash
-// slot, the busy strip and the small shared widgets are angou's; the sections,
-// the status bar's contents and the build log are this project's.
-
 /*
 Package gui is the desktop front end of spec 003.
 
@@ -31,6 +27,9 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	fdtheme "github.com/ushineko/fynedesygn/theme"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
@@ -53,11 +52,8 @@ type ui struct {
 	// that the window and `nmsbonker --config …` read the same document.
 	configPath string
 
-	// appearance, persisted across runs. Held here so a change in one control
-	// can rebuild the theme with the other two unchanged.
-	scheme   string
-	fontName string
-	textSize float32
+	// appearance, persisted across runs through the library's preference keys.
+	appearance fdtheme.Appearance
 
 	content *container.Scroll
 	nav     *widget.List
@@ -177,37 +173,15 @@ type ui struct {
 	flashSeq int // identifies the banner that owns the slot, so a stale timer cannot clear a newer one
 }
 
-// Preference keys. Namespaced so a later setting cannot collide with one of
-// these by accident.
-const (
-	prefScheme = "appearance.scheme"
-	prefFont   = "appearance.font"
-	prefSize   = "appearance.textSize"
-)
-
 // loadAppearance reads the saved appearance, falling back to the defaults. A
-// stale value — a scheme that was renamed, a font since uninstalled — falls back
-// rather than failing: paletteByName and loadFont both tolerate an unknown name.
+// stale value (a scheme that was renamed, a font since uninstalled) falls back
+// rather than failing: the library tolerates an unknown name.
 func (u *ui) loadAppearance() {
-	p := u.app.Preferences()
-	u.scheme = p.StringWithFallback(prefScheme, palettes[0].name)
-	u.fontName = p.StringWithFallback(prefFont, defaultFontName)
-	u.textSize = float32(p.FloatWithFallback(prefSize, float64(defaultTextSize)))
+	u.appearance = fdtheme.LoadAppearance(u.app.Preferences())
 }
 
 // applyAppearance rebuilds the theme from the current settings and saves them.
-func (u *ui) applyAppearance() {
-	p := u.app.Preferences()
-	p.SetString(prefScheme, u.scheme)
-	p.SetString(prefFont, u.fontName)
-	p.SetFloat(prefSize, float64(u.textSize))
-
-	u.app.Settings().SetTheme(kdeTheme{
-		p:    paletteByName(u.scheme),
-		font: loadFont(u.fontName),
-		text: u.textSize,
-	})
-}
+func (u *ui) applyAppearance() { u.appearance.Apply(u.app) }
 
 // sectionTitles is the navigation in order.
 //
@@ -275,7 +249,7 @@ func sections() []section {
 func SectionNames() []string { return append([]string(nil), sectionTitles...) }
 
 // SchemeNames lists the colour schemes, for the same reason.
-func SchemeNames() []string { return paletteNames() }
+func SchemeNames() []string { return fdtheme.SchemeNames() }
 
 // Options configure a run. Section and Scheme exist so a capture script can
 // deep-link into the window: refreshing the README set otherwise means clicking
@@ -295,7 +269,7 @@ type Options struct {
 func Run(o Options) {
 	// Before the toolkit starts: GLFW reads the cursor theme from the
 	// environment at init, and there is no second chance once the window is up.
-	applyCursorTheme()
+	fdtheme.ApplyCursorTheme()
 
 	// The ID gives the app a preferences store, which Fyne writes under the
 	// user's config directory. That file holds the appearance settings and
@@ -311,10 +285,8 @@ func Run(o Options) {
 	if o.Scheme != "" {
 		// Forced for this run only, so a capture does not overwrite whatever
 		// the user had chosen.
-		u.scheme = paletteByName(o.Scheme).name
-		u.app.Settings().SetTheme(kdeTheme{
-			p: paletteByName(u.scheme), font: loadFont(u.fontName), text: u.textSize,
-		})
+		u.appearance.Scheme = fdtheme.SchemeByName(o.Scheme).Name
+		u.app.Settings().SetTheme(u.appearance.Theme())
 	} else {
 		u.applyAppearance()
 	}
@@ -474,18 +446,18 @@ func (u *ui) header() fyne.CanvasObject {
 // statusBar is R3: the game, the compiler, the library and the output folder,
 // then the busy strip at the right-hand end.
 func (u *ui) statusBar() fyne.CanvasObject {
-	game := statusText("not found", StatusBad)
+	game := widgets.StatusText("not found", fd.StatusBad)
 	if !u.statusOK {
-		game = statusText("reading…", StatusInfo)
+		game = widgets.StatusText("reading…", fd.StatusInfo)
 	} else if u.status.Install.Found {
-		game = statusText(orNone(u.status.Install.BuildID, "no buildid"), StatusGood)
+		game = widgets.StatusText(widgets.OrNone(u.status.Install.BuildID, "no buildid"), fd.StatusGood)
 	}
 
-	compiler := statusText("none", StatusBad)
+	compiler := widgets.StatusText("none", fd.StatusBad)
 	if !u.statusOK {
-		compiler = statusText("reading…", StatusInfo)
+		compiler = widgets.StatusText("reading…", fd.StatusInfo)
 	} else if u.status.Compiler.Installed {
-		compiler = statusText(u.status.Compiler.Tag, compatStatus(u.status.Compatibility))
+		compiler = widgets.StatusText(u.status.Compiler.Tag, compatStatus(u.status.Compatibility))
 	}
 
 	enabled, total := 0, len(u.mods.Mods)
@@ -505,10 +477,10 @@ func (u *ui) statusBar() fyne.CanvasObject {
 	}
 
 	bar := container.NewHBox(
-		dim("game"), game, sep(),
-		dim("compiler"), compiler, sep(),
-		dim("mods"), widget.NewLabel(modsText), sep(),
-		dim("output"), widget.NewLabel(output),
+		widgets.Dim("game"), game, widgets.Sep(),
+		widgets.Dim("compiler"), compiler, widgets.Sep(),
+		widgets.Dim("mods"), widget.NewLabel(modsText), widgets.Sep(),
+		widgets.Dim("output"), widget.NewLabel(output),
 	)
 	return container.NewVBox(widget.NewSeparator(), container.NewPadded(bar))
 }
@@ -590,7 +562,7 @@ func (u *ui) showBusy() {
 			u.busyLabel = widget.NewLabel(u.busyWhat)
 			u.busyLabel.Alignment = fyne.TextAlignCenter
 			bar := widget.NewProgressBarInfinite()
-			body := container.NewPadded(container.NewVBox(u.busyLabel, fixedWidth(bar, 320)))
+			body := container.NewPadded(container.NewVBox(u.busyLabel, widgets.FixedWidth(bar, 320)))
 			u.busyPop = widget.NewModalPopUp(body, u.win.Canvas())
 			u.busyPop.Show()
 		})
@@ -666,11 +638,11 @@ const (
 // A failure does not: it waits to be dismissed, or until another operation
 // replaces it. An error that removes itself on a timer is an error nobody read,
 // and the operation it describes has already not happened.
-func flashHold(st Status) (time.Duration, bool) {
+func flashHold(st fd.Status) (time.Duration, bool) {
 	switch st {
-	case StatusBad:
+	case fd.StatusBad:
 		return 0, false
-	case StatusWarn:
+	case fd.StatusWarn:
 		return flashHoldWarn, true
 	default:
 		return flashHoldGood, true
@@ -692,7 +664,7 @@ Build output does not come through here. A build emits hundreds of lines and one
 banner per warning would be a slot flickering for three minutes; the log pane is
 where those go, and one banner summarises the result (R4.1).
 */
-func (u *ui) flash(text string, st Status) {
+func (u *ui) flash(text string, st fd.Status) {
 	u.flashSeq++
 	seq := u.flashSeq
 
@@ -710,7 +682,7 @@ func (u *ui) flash(text string, st Status) {
 	dismiss.Importance = widget.LowImportance
 
 	banner := container.NewStack(bg, container.NewPadded(
-		container.NewBorder(nil, nil, marker(st), dismiss, label)))
+		container.NewBorder(nil, nil, widgets.Marker(st), dismiss, label)))
 	u.flashes.Objects = []fyne.CanvasObject{banner}
 	u.flashes.Refresh()
 	u.showFlashPop()
@@ -765,179 +737,33 @@ func (u *ui) showFlashPop() {
 	}
 	c := u.win.Canvas()
 	if u.flashPop == nil {
-		u.flashPop = widget.NewPopUp(fixedWidth(u.flashes, flashWidth), c)
+		u.flashPop = widget.NewPopUp(widgets.FixedWidth(u.flashes, flashWidth), c)
 	}
 	cs := c.Size()
 	width := min(float32(flashWidth), cs.Width-40)
-	u.flashPop.Content = fixedWidth(u.flashes, width)
+	u.flashPop.Content = widgets.FixedWidth(u.flashes, width)
 	size := u.flashPop.Content.MinSize()
 	pos := fyne.NewPos((cs.Width-size.Width)/2, cs.Height-size.Height-56)
 	u.flashPop.ShowAtPosition(pos)
 }
 
 // flashTint is the banner's starting colour: the status role from the active
-// scheme, at low alpha so text stays readable over it in all five schemes.
-func (u *ui) flashTint(st Status) color.NRGBA {
-	p := paletteByName(u.scheme)
+// scheme, at low alpha so text stays readable over it in every scheme.
+func (u *ui) flashTint(st fd.Status) color.NRGBA {
+	p := fdtheme.SchemeByName(u.appearance.Scheme)
 	var c color.Color
 	switch st {
-	case StatusGood:
-		c = p.positive
-	case StatusWarn:
-		c = p.neutral
-	case StatusBad:
-		c = p.negative
-	default:
-		c = p.selectionBG
+	case fd.StatusGood:
+		c = p.Positive
+	case fd.StatusWarn:
+		c = p.Neutral
+	case fd.StatusBad:
+		c = p.Negative
+	case fd.StatusInfo:
+		c = p.SelectionBG
 	}
-	r, g, b, _ := c.RGBA()
-	return color.NRGBA{R: uint8(r >> 8), G: uint8(g >> 8), B: uint8(b >> 8), A: 0x4d} //nolint:gosec // 16-bit channels; >>8 fits a byte
-}
-
-// --- small shared widgets -------------------------------------------------
-
-func dim(s string) fyne.CanvasObject {
-	l := widget.NewLabel(s)
-	l.Importance = widget.LowImportance
-	return l
-}
-
-func sep() fyne.CanvasObject { return widget.NewLabel("·") }
-
-// statusText colours a value by its status. The colour is drawn from the active
-// scheme's negative/positive/neutral roles, so it stays legible in all five.
-func statusText(s string, st Status) fyne.CanvasObject {
-	l := widget.NewLabel(s)
-	switch st {
-	case StatusGood:
-		l.Importance = widget.SuccessImportance
-	case StatusWarn:
-		l.Importance = widget.WarningImportance
-	case StatusBad:
-		l.Importance = widget.DangerImportance
-	}
-	return l
-}
-
-// marker is the icon that ranks a row at a glance.
-func marker(s Status) fyne.CanvasObject {
-	switch s {
-	case StatusGood:
-		return widget.NewIcon(theme.ConfirmIcon())
-	case StatusWarn:
-		return widget.NewIcon(theme.WarningIcon())
-	case StatusBad:
-		return widget.NewIcon(theme.ErrorIcon())
-	}
-	return widget.NewIcon(theme.InfoIcon())
-}
-
-// wrapped is a paragraph that reflows rather than running off the edge. Used
-// for the sentences in dialogs, which are the ones that state consequences.
-func wrapped(text string) fyne.CanvasObject {
-	l := widget.NewLabel(text)
-	l.Wrapping = fyne.TextWrapWord
-	return l
-}
-
-func heading(title, blurb string) fyne.CanvasObject {
-	h := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	b := widget.NewLabel(blurb)
-	b.Wrapping = fyne.TextWrapWord
-	b.Importance = widget.LowImportance
-	return container.NewVBox(h, b, widget.NewSeparator())
-}
-
-// action renders one operation as a titled block with its consequences stated,
-// rather than as a bare button. The GUI has room the flag list does not.
-func action(title, blurb, button string, danger bool, tapped func()) (fyne.CanvasObject, *widget.Button) {
-	t := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	b := widget.NewLabel(blurb)
-	b.Wrapping = fyne.TextWrapWord
-	b.Importance = widget.LowImportance
-	btn := widget.NewButton(button, tapped)
-	if danger {
-		btn.Importance = widget.DangerImportance
-	}
-	// Padded so the button does not sit flush against the window edge; the
-	// border layout gives the trailing object exactly its minimum width.
-	row := container.NewBorder(nil, nil, nil, container.NewPadded(container.NewVBox(btn)),
-		container.NewVBox(t, b))
-	return row, btn
-}
-
-// card is a titled block of facts with a rule under the title. Overview and
-// Tools are both made of these.
-func card(title string, body ...fyne.CanvasObject) fyne.CanvasObject {
-	head := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	return container.NewVBox(append([]fyne.CanvasObject{head, widget.NewSeparator()}, body...)...)
-}
-
-// factRow is one "label   value" line with an optional status marker, the shape
-// the CLI prints as `label: value`.
-func factRow(label, value string, st Status) fyne.CanvasObject {
-	l := widget.NewLabel(label)
-	l.Importance = widget.LowImportance
-	return container.NewBorder(nil, nil, fixedWidth(l, 190), nil,
-		container.NewHBox(marker(st), statusText(value, st)))
-}
-
-// rowWithAction puts one button on a fact row's trailing edge, for a fact that
-// names a place the desktop can open. The button is always drawn and disables
-// with the fact behind it rather than appearing and disappearing, so the card
-// keeps its shape when the state changes.
-func rowWithAction(row fyne.CanvasObject, btn *widget.Button) fyne.CanvasObject {
-	return container.NewBorder(nil, nil, nil,
-		container.NewPadded(container.NewVBox(btn)), row)
-}
-
-// plainRow is factRow without the marker, for facts that carry no verdict. The
-// marker column is still reserved so the values line up with the ranked rows
-// above and below them.
-func plainRow(label, value string) fyne.CanvasObject {
-	l := widget.NewLabel(label)
-	l.Importance = widget.LowImportance
-	v := widget.NewLabel(value)
-	v.Truncation = fyne.TextTruncateEllipsis
-	return container.NewBorder(nil, nil, fixedWidth(l, 190), nil,
-		container.NewBorder(nil, nil, fixedWidth(widget.NewLabel(""), 26), nil, v))
-}
-
-func humanSize(n int64) string {
-	switch {
-	case n >= 1<<30:
-		return fmt.Sprintf("%.1f GiB", float64(n)/(1<<30))
-	case n >= 1<<20:
-		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
-	case n >= 1<<10:
-		return fmt.Sprintf("%.1f KiB", float64(n)/(1<<10))
-	}
-	return fmt.Sprintf("%d B", n)
-}
-
-func humanAgo(t time.Time) string {
-	if t.IsZero() {
-		return "never"
-	}
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 48*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	}
-	return fmt.Sprintf("%dd ago", int(d.Hours()/24))
-}
-
-// orNone substitutes a stand-in for an empty value, so a blank cell never reads
-// as a rendering fault.
-func orNone(s, fallback string) string {
-	if strings.TrimSpace(s) == "" {
-		return fallback
-	}
-	return s
+	tint, _ := fdtheme.Alpha(c, 0x4d).(color.NRGBA)
+	return tint
 }
 
 /*

@@ -1,5 +1,3 @@
-// Copied from angou (same author) — keep in sync by hand.
-
 package gui
 
 import (

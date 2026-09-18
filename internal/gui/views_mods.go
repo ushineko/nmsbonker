@@ -11,8 +11,13 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/modscript"
@@ -252,9 +257,9 @@ func (u *ui) buildMods() fyne.CanvasObject {
 
 	toolbar := container.NewHBox(add, imp, check, openLib)
 
-	head := heading("Mods", "Every script in the library, in the order they are applied.")
+	head := widgets.Heading("Mods", "Every script in the library, in the order they are applied.")
 	if u.modsOK && len(rows) == 0 {
-		head = heading("Mods",
+		head = widgets.Heading("Mods",
 			"The library is empty. Add a .lua mod script, or import a folder of them; "+
 				"they are copied into the library and start out enabled.")
 	}
@@ -265,7 +270,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 		widget.NewSeparator(),
 		container.NewHBox(enable, disable, up, down, details, open, remove),
 	)
-	return container.NewBorder(top, bottom, nil, nil, fixedHeight(table, 380))
+	return container.NewBorder(top, bottom, nil, nil, widgets.FixedHeight(table, 380))
 }
 
 // modsFooter states what the order means, and stops claiming it when the table
@@ -344,7 +349,7 @@ func modCell(r modRow, col int) (string, widget.Importance) {
 		}
 		return r.info.Source, widget.LowImportance
 	case modColAuthor:
-		return orNone(r.author, "—"), widget.LowImportance
+		return widgets.OrNone(r.author, "—"), widget.LowImportance
 	case modColTargets:
 		if r.info.Status == core.ModMissing {
 			return "missing", widget.WarningImportance
@@ -354,7 +359,7 @@ func modCell(r modRow, col int) (string, widget.Importance) {
 		if r.verdict == "" {
 			return "—", widget.LowImportance
 		}
-		return r.verdict, importanceFor(verdictStatus(r.verdict))
+		return r.verdict, widgets.ImportanceFor(verdictStatus(r.verdict))
 	}
 	return "", widget.MediumImportance
 }
@@ -386,13 +391,20 @@ func boolLess(a, b bool) bool { return !a && b }
 
 // --- mod operations --------------------------------------------------------
 
+// luaFilter limits the file chooser to mod scripts. A library that has
+// collected a stray .txt is a mod that will not load, reported an hour later by
+// a build; refusing it at the chooser is cheaper for everyone.
+func luaFilter() storage.FileFilter {
+	return storage.NewExtensionFileFilter([]string{".lua"})
+}
+
 // addModDialog copies one script into the library.
 //
 // One at a time because Fyne 2.8.1 has no multi-select file chooser; core.AddMod
 // takes a list, which is what makes `mods add a.lua b.lua` and this the same
 // operation, and Import folder… is the answer for a directory of them.
 func (u *ui) addModDialog() {
-	u.chooseFile(luaFilter(), func(path string) {
+	dialogs.ChooseFile(u.win, "", luaFilter(), func(path string) {
 		u.perform("Adding "+path+"…", func(ctx context.Context) error {
 			res, err := core.AddMod(ctx, core.AddModRequest{
 				Request: u.request(), Paths: []string{path}, Enabled: true,
@@ -409,7 +421,7 @@ func (u *ui) addModDialog() {
 
 // importModsDialog copies a directory of scripts in, in name order.
 func (u *ui) importModsDialog() {
-	u.chooseFolder("", func(dir string) {
+	dialogs.ChooseFolder(u.win, "", func(dir string) {
 		u.perform("Importing "+dir+"…", func(ctx context.Context) error {
 			res, err := core.ImportDir(ctx, core.ImportDirRequest{
 				Request: u.request(), Dir: dir, Enabled: true,
@@ -433,14 +445,14 @@ func (u *ui) importModsDialog() {
 func (u *ui) removeModDialog(m core.ModInfo) {
 	alsoDelete := widget.NewCheck("Also delete "+m.Name+".lua from the library", nil)
 	body := container.NewVBox(
-		wrapped("Removing "+m.Name+" takes it out of the build order. The other mods keep "+
+		widgets.Wrapped("Removing "+m.Name+" takes it out of the build order. The other mods keep "+
 			"their positions, and the mod folder already installed in the game is not "+
 			"touched until the next deploy."),
 		alsoDelete,
-		wrapped("Deleting the file cannot be undone from here. If it came from Nexus, "+
+		widgets.Wrapped("Deleting the file cannot be undone from here. If it came from Nexus, "+
 			"downloading it again is the only way back."),
 	)
-	d := u.confirmWithBody("Remove "+m.Name+"?", body, "Remove", func() {
+	d := dialogs.ConfirmWithBody(u.win, "Remove "+m.Name+"?", body, "Remove", func() {
 		del := alsoDelete.Checked
 		u.perform("Removing "+m.Name+"…", func(ctx context.Context) error {
 			res, err := core.RemoveMod(ctx, core.RemoveModRequest{
@@ -486,7 +498,7 @@ func (u *ui) setModEnabled(names []string, enabled bool) {
 func (u *ui) moveMod(r modRow, delta int) {
 	to := r.order + delta
 	if to < 1 || to > len(u.mods.Mods) {
-		u.flash(r.info.Name+" is already at the "+edgeName(delta)+" of the build order.", StatusWarn)
+		u.flash(r.info.Name+" is already at the "+edgeName(delta)+" of the build order.", fd.StatusWarn)
 		return
 	}
 	u.perform("Moving "+r.info.Name+"…", func(ctx context.Context) error {
@@ -544,34 +556,34 @@ func (u *ui) setChecks(res core.CheckModsResult) {
 
 // showCheckResults puts the per-script problems on screen (R2.2).
 func (u *ui) showCheckResults(res core.CheckModsResult) {
-	var t detailTable
-	t.header("Mod", "Files", "Edits", "Note")
-	t.setWidths(280, 60, 60, 460)
+	t := table.New()
+	t.Header("Mod", "Files", "Edits", "Note")
+	t.SetWidths(280, 60, 60, 460)
 	for _, m := range res.Mods {
-		st, note := StatusGood, ""
+		st, note := fd.StatusGood, ""
 		switch {
 		case !m.OK:
-			st, note = StatusBad, m.Error
+			st, note = fd.StatusBad, m.Error
 		case len(m.Unsupported) > 0:
-			st = StatusWarn
+			st = fd.StatusWarn
 			note = "ignored keys: " + strings.Join(m.Unsupported, ", ")
 		}
-		t.row(st, m.Name, strconv.Itoa(len(m.Targets)), strconv.Itoa(m.Blocks), note)
+		t.Row(st, m.Name, strconv.Itoa(len(m.Targets)), strconv.Itoa(m.Blocks), note)
 	}
 
 	summary := fmt.Sprintf("%d loaded, %d failed.", res.OK, res.Failed)
-	st := StatusGood
+	st := fd.StatusGood
 	if res.Failed > 0 {
-		st = StatusBad
+		st = fd.StatusBad
 		summary += " A mod that does not load contributes nothing to a build; the others still do."
 	}
 	body := container.NewBorder(
 		container.NewVBox(
-			container.NewHBox(marker(st), statusText(summary, st)),
-			wrapped("Ignored keys are script directives this engine does not implement. The "+
+			container.NewHBox(widgets.Marker(st), widgets.StatusText(summary, st)),
+			widgets.Wrapped("Ignored keys are script directives this engine does not implement. The "+
 				"mod still builds; the edits those keys asked for do not happen."),
-		), nil, nil, nil, fixedHeight(t.widget(), 360))
-	u.showDetail("Mod scripts", body, 900, 560)
+		), nil, nil, nil, widgets.FixedHeight(t.Widget(), 360))
+	dialogs.ShowDetail(u.win, "Mod scripts", body, 900, 560)
 }
 
 /*
@@ -588,45 +600,45 @@ func (u *ui) showModDetails(r modRow) {
 	check, haveCheck := u.checks[r.info.Name]
 
 	facts := container.NewVBox(
-		plainRow("Source", modSourceText(r.info)),
-		plainRow("Author", orNone(check.Author, "—")),
-		plainRow("Pak name", orNone(check.ModFilename, "—")),
-		plainRow("Written for", orNone(check.NMSVersion, "—")),
-		plainRow("Position", fmt.Sprintf("%d in the build order", r.order)),
-		factRow("Enabled", yesNoText(r.info.Enabled), enabledRowStatus(r.info.Enabled)),
+		widgets.PlainRow("Source", modSourceText(r.info)),
+		widgets.PlainRow("Author", widgets.OrNone(check.Author, "—")),
+		widgets.PlainRow("Pak name", widgets.OrNone(check.ModFilename, "—")),
+		widgets.PlainRow("Written for", widgets.OrNone(check.NMSVersion, "—")),
+		widgets.PlainRow("Position", fmt.Sprintf("%d in the build order", r.order)),
+		widgets.FactRow("Enabled", yesNoText(r.info.Enabled), enabledRowStatus(r.info.Enabled)),
 	)
 	if r.info.Path != "" {
-		facts.Add(plainRow("File", r.info.Path))
+		facts.Add(widgets.PlainRow("File", r.info.Path))
 	}
 	// What the last build made of it, and the one-line reading of that (R4.1).
 	if check.Verdict != "" {
-		facts.Add(factRow("Last build", fmt.Sprintf("%s — %d edit(s) applied, %d skipped",
+		facts.Add(widgets.FactRow("Last build", fmt.Sprintf("%s — %d edit(s) applied, %d skipped",
 			check.Verdict, check.Applied, check.Skipped), verdictStatus(check.Verdict)))
 	}
 	if check.Effect != "" {
-		facts.Add(note(effectBlurb(check), effectStatus(check)))
+		facts.Add(widgets.Note(effectBlurb(check), effectStatus(check)))
 	}
 	if len(check.NotFound) > 0 {
-		facts.Add(note("Keys the last build could not find, usually because a game update "+
-			"renamed or removed them: "+strings.Join(check.NotFound, ", ")+".", StatusWarn))
+		facts.Add(widgets.Note("Keys the last build could not find, usually because a game update "+
+			"renamed or removed them: "+strings.Join(check.NotFound, ", ")+".", fd.StatusWarn))
 	}
 	if r.info.Shadowed {
-		facts.Add(note("A library script of this name is present and is ignored: the built-in "+
+		facts.Add(widgets.Note("A library script of this name is present and is ignored: the built-in "+
 			"is what builds. Remove takes the library copy out; the built-in stays.",
-			StatusWarn))
+			fd.StatusWarn))
 	}
 	if haveCheck && !check.OK {
-		facts.Add(note("This script does not load: "+check.Error+
-			". It contributes nothing to a build until that is fixed.", StatusBad))
+		facts.Add(widgets.Note("This script does not load: "+check.Error+
+			". It contributes nothing to a build until that is fixed.", fd.StatusBad))
 	}
 	if len(check.Unsupported) > 0 {
-		facts.Add(note("Directives this engine ignores, so the edits they ask for do not "+
-			"happen: "+strings.Join(check.Unsupported, ", ")+".", StatusWarn))
+		facts.Add(widgets.Note("Directives this engine ignores, so the edits they ask for do not "+
+			"happen: "+strings.Join(check.Unsupported, ", ")+".", fd.StatusWarn))
 	}
 	if len(check.Duplicates) > 0 {
-		facts.Add(note("These parameters are assigned more than once at the top of the "+
+		facts.Add(widgets.Note("These parameters are assigned more than once at the top of the "+
 			"script, so a value set here would be overwritten by the script itself and "+
-			"quietly ignored: "+strings.Join(check.Duplicates, ", ")+".", StatusWarn))
+			"quietly ignored: "+strings.Join(check.Duplicates, ", ")+".", fd.StatusWarn))
 	}
 
 	body := container.NewVBox(facts)
@@ -637,26 +649,26 @@ func (u *ui) showModDetails(r modRow) {
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 		files := widget.NewLabel(strings.Join(check.Targets, "\n"))
 		files.Importance = widget.LowImportance
-		body.Add(fixedHeight(container.NewVScroll(files), 120))
+		body.Add(widgets.FixedHeight(container.NewVScroll(files), 120))
 	}
 	if len(check.Params) > 0 {
 		body.Add(widget.NewSeparator())
 		body.Add(widget.NewLabelWithStyle("Parameters",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 		if r.info.Source == core.SourceBuiltin {
-			body.Add(note("These are also in the Tweaks section, with a slider each.",
-				StatusInfo))
+			body.Add(widgets.Note("These are also in the Tweaks section, with a slider each.",
+				fd.StatusInfo))
 		} else {
-			body.Add(note("Numbers this script declares at the top of the file. It says "+
+			body.Add(widgets.Note("Numbers this script declares at the top of the file. It says "+
 				"nothing about what they may be set to, so there is no range here — the "+
-				"script itself, and whoever wrote it, is the documentation.", StatusInfo))
+				"script itself, and whoever wrote it, is the documentation.", fd.StatusInfo))
 		}
 		for _, p := range check.Params {
 			body.Add(u.libraryParamRow(r.info.Name, p))
 		}
 	}
 
-	u.showDetail(r.info.Name, container.NewVScroll(body), 820, 620)
+	dialogs.ShowDetail(u.win, r.info.Name, container.NewVScroll(body), 820, 620)
 }
 
 /*
@@ -687,11 +699,11 @@ func effectBlurb(c core.ModCheck) string {
 
 // effectStatus ranks the note. A script that applied nothing is a real problem;
 // an overlap on its own is a fact about the library.
-func effectStatus(c core.ModCheck) Status {
+func effectStatus(c core.ModCheck) fd.Status {
 	if strings.Contains(c.Effect, core.EffectNoEdits) {
-		return StatusBad
+		return fd.StatusBad
 	}
-	return StatusWarn
+	return fd.StatusWarn
 }
 
 // libraryParamRow is one undeclared parameter: a field and a Reset, no slider.
@@ -704,7 +716,7 @@ func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
 	entry.OnSubmitted = func(text string) {
 		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
 		if err != nil {
-			u.flash(p.Name+": "+strconv.Quote(text)+" is not a number.", StatusWarn)
+			u.flash(p.Name+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
 			entry.SetText(modscript.FormatValue(p.Current, p.Kind))
 			return
 		}
@@ -719,7 +731,7 @@ func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
 				entry.SetText(modscript.FormatValue(res.New, p.Kind))
 				u.flash(fmt.Sprintf("%s %s is %s for the next build. The script on disk is "+
 					"unchanged.", mod, p.Name, modscript.FormatValue(res.New, p.Kind)),
-					StatusGood)
+					fd.StatusGood)
 			})
 			return nil
 		})
@@ -737,8 +749,8 @@ func (u *ui) libraryParamRow(mod string, p modscript.Param) fyne.CanvasObject {
 		})
 	})
 
-	return container.NewBorder(nil, nil, fixedWidth(label, 220),
-		container.NewHBox(fixedWidth(dim("script value "+
+	return container.NewBorder(nil, nil, widgets.FixedWidth(label, 220),
+		container.NewHBox(widgets.FixedWidth(widgets.Dim("script value "+
 			modscript.FormatValue(p.Default, p.Kind)), 190), reset), entry)
 }
 
@@ -760,11 +772,11 @@ func yesNoText(b bool) string {
 	return "no"
 }
 
-func enabledRowStatus(enabled bool) Status {
+func enabledRowStatus(enabled bool) fd.Status {
 	if enabled {
-		return StatusGood
+		return fd.StatusGood
 	}
-	return StatusInfo
+	return fd.StatusInfo
 }
 
 // --- editing a script in place (spec 010) ------------------------------------
@@ -834,7 +846,7 @@ func (u *ui) showScriptEditor(script core.ModScriptResult) {
 				d.Hide()
 				u.checksOK = false
 				u.flash(fmt.Sprintf("Wrote %s (%s). The previous text is kept as %s.",
-					res.Path, loadsText(res), filepath.Base(res.Backup)), StatusGood)
+					res.Path, loadsText(res), filepath.Base(res.Backup)), fd.StatusGood)
 				u.invalidate()
 			})
 			return nil
@@ -843,14 +855,14 @@ func (u *ui) showScriptEditor(script core.ModScriptResult) {
 	save.Importance = widget.HighImportance
 	closeBtn := widget.NewButton("Close", func() { d.Hide() })
 
-	head := container.NewVBox(plainRow("Script", orNone(script.Path, "compiled into nmsbonker")))
+	head := container.NewVBox(widgets.PlainRow("Script", widgets.OrNone(script.Path, "compiled into nmsbonker")))
 	buttons := []fyne.CanvasObject{closeBtn, revert, check}
 	if script.ReadOnly {
-		head.Add(note("A built-in tweak is compiled in and cannot be edited here; its numbers are "+
-			"parameters in Tweaks. This is the text as shipped.", StatusInfo))
+		head.Add(widgets.Note("A built-in tweak is compiled in and cannot be edited here; its numbers are "+
+			"parameters in Tweaks. This is the text as shipped.", fd.StatusInfo))
 		text.Disable()
 	} else {
-		head.Add(wrapped("Check loads the text through the sandbox the build uses. Save keeps the previous " +
+		head.Add(widgets.Wrapped("Check loads the text through the sandbox the build uses. Save keeps the previous " +
 			"text beside the file as .bak and takes effect on the next build."))
 		buttons = append(buttons, save)
 	}

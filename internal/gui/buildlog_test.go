@@ -1,95 +1,20 @@
 package gui
 
 import (
-	"fmt"
 	"testing"
 
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	"github.com/ushineko/fynedesygn/steps"
 
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/core"
 )
 
-// --- the log model ---------------------------------------------------------
-
-/*
-A build's log is bounded, and the end of it is the part worth keeping.
-
-A cold build of a large library emits thousands of lines and a pathological one
-could emit far more. Without a cap the window's memory grows with the build; with
-a cap that dropped from the wrong end, the pane would show the beginning of a
-build and hide the verdicts, which are the reason anyone is reading it.
-*/
-func TestTheBuildLogKeepsTheTailWithinItsCap(t *testing.T) {
-	m := newLogModel()
-	const written = maxLogLines + 1500
-	for i := range written {
-		m.append(core.LevelDebug, fmt.Sprintf("line %d", i))
-	}
-
-	require.LessOrEqual(t, m.len(), maxLogLines, "the log must not grow without bound")
-	require.Positive(t, m.droppedCount(), "and it must admit that it dropped something")
-	require.Equal(t, fmt.Sprintf("line %d", written-1), m.at(m.len()-1).text,
-		"the newest line must survive: it is the one being watched")
-	require.Equal(t, written, m.len()+m.droppedCount(),
-		"every line is either kept or counted as dropped")
-}
-
-// The copied log says so when it is not the whole log. A user pasting it into a
-// bug report should not have to work out that the first half is missing.
-func TestTheCopiedLogAdmitsWhatWasDropped(t *testing.T) {
-	m := newLogModel()
-	for i := range maxLogLines + 10 {
-		m.append(core.LevelInfo, fmt.Sprintf("line %d", i))
-	}
-	require.Contains(t, m.text(), "earlier line(s) were dropped")
-
-	m.reset()
-	m.append(core.LevelInfo, "only line")
-	require.Equal(t, "only line\n", m.text(), "a short log is copied verbatim")
-}
-
-// An index the widget asks for after a drop must not panic: the item count and
-// the update callback are read at different moments, so the list can ask for a
-// row that has just gone.
-func TestTheLogToleratesAnIndexThatHasGone(t *testing.T) {
-	m := newLogModel()
-	m.append(core.LevelInfo, "one")
-	require.NotPanics(t, func() {
-		require.Empty(t, m.at(-1).text)
-		require.Empty(t, m.at(99).text)
-	})
-}
-
-// The pump redraws only when something arrived, so a build that is thinking
-// costs nothing.
-func TestTheLogReportsWhetherItChanged(t *testing.T) {
-	m := newLogModel()
-	require.False(t, m.takeDirty(), "an untouched log has nothing to redraw")
-	m.append(core.LevelInfo, "x")
-	require.True(t, m.takeDirty())
-	require.False(t, m.takeDirty(), "and the flag is cleared by reading it")
-}
-
-// --- auto-scroll -----------------------------------------------------------
-
-/*
-The pane stops following the tail when the user scrolls up to read something.
-
-Fyne's list has no scroll callback, so the only evidence is the offset: lower
-than where the last automatic scroll left it means the user dragged it. A pane
-that yanked itself back to the bottom half a second later would make the log
-unreadable during exactly the three minutes it is worth reading.
-*/
-func TestTheLogStopsFollowingWhenTheUserScrollsUp(t *testing.T) {
-	require.True(t, followTail(true, 500, 500), "sitting at the end keeps following")
-	require.True(t, followTail(true, 498, 500),
-		"a couple of pixels is the list re-measuring itself, not a user")
-	require.False(t, followTail(true, 200, 500), "scrolling up stops the follow")
-	require.False(t, followTail(false, 500, 500),
-		"and it does not resume by itself: the checkbox is how it comes back")
-}
+// The log model, the follow-tail rule and the pane's drawing are the
+// library's and are tested there. What is pinned here is this program's own:
+// the mapping from core's progress messages onto steps, the run's state, and
+// the controls.
 
 // --- the step list ---------------------------------------------------------
 
@@ -118,19 +43,20 @@ func TestEveryBuildProgressMessageMapsToAStep(t *testing.T) {
 
 // Progress arrives from several worker goroutines and is not ordered, so the
 // step list must never walk backwards: a late "decompiling" after the compile
-// has started would otherwise un-tick two steps.
+// has started would otherwise un-tick two steps. The library's Advance would
+// reopen the step; the guard is this program's.
 func TestTheStepListNeverGoesBackwards(t *testing.T) {
 	var r buildRun
 	r.init()
 	r.reset()
 
 	r.advance(stepCompile, "building")
-	require.Equal(t, stepDone, r.steps[stepCache].state)
+	require.Equal(t, steps.Done, r.steps.Steps()[stepCache].State)
 
 	r.advance(stepCache, "a straggler from the cache")
-	require.Equal(t, stepDone, r.steps[stepCache].state,
+	require.Equal(t, steps.Done, r.steps.Steps()[stepCache].State,
 		"a late message must not reopen a finished step")
-	require.Equal(t, stepRunning, r.steps[stepCompile].state)
+	require.Equal(t, steps.Running, r.steps.Steps()[stepCompile].State)
 }
 
 // A cancelled run marks the step that was running and leaves the ones that
@@ -142,21 +68,58 @@ func TestCancellingMarksOnlyTheRunningStep(t *testing.T) {
 	r.reset()
 	r.advance(stepCache, "preparing pristine game files")
 
-	r.stop(stepCancelled, "cancelled")
+	r.stop(steps.Cancelled, "cancelled")
 
-	require.Equal(t, stepDone, r.steps[stepTools].state)
-	require.Equal(t, stepCancelled, r.steps[stepCache].state)
-	require.Equal(t, stepPending, r.steps[stepCompile].state)
+	all := r.steps.Steps()
+	require.Equal(t, steps.Done, all[stepTools].State)
+	require.Equal(t, steps.Cancelled, all[stepCache].State)
+	require.Equal(t, steps.Pending, all[stepCompile].State)
 	require.False(t, r.running)
 	require.True(t, r.finished)
+}
+
+// A finished run marks every step through the report done, including the
+// ones core never announced by name.
+func TestFinishingMarksEveryStepThroughTheReportDone(t *testing.T) {
+	var r buildRun
+	r.init()
+	r.reset()
+	r.advance(stepCache, "indexing")
+
+	r.finish(stepReport, "written")
+
+	for i, s := range r.steps.Steps() {
+		require.Equalf(t, steps.Done, s.State, "step %d (%s) is not done", i, s.Name)
+	}
+	require.Equal(t, "written", r.steps.Steps()[stepReport].Note)
+}
+
+// A new run starts from pending steps carrying their standing notes, with
+// Detect already running: the list must not open blank.
+func TestResetPutsTheStandingNotesBack(t *testing.T) {
+	var r buildRun
+	r.init()
+	r.reset()
+	r.advance(stepCompile, "building X")
+	r.reset()
+
+	all := r.steps.Steps()
+	require.Equal(t, steps.Running, all[stepDetect].State)
+	require.Equal(t, "the game install and the mod library", all[stepDetect].Note)
+	require.Equal(t, steps.Pending, all[stepCompile].State)
+	require.Equal(t, "recompile each merged file", all[stepCompile].Note)
+	require.Zero(t, r.pane.Model().Len(), "the previous run's output is gone")
 }
 
 // Deploy is not a step. It is a separate button, pressed once the report has
 // been read, so the step list ends where the build does.
 func TestTheStepListEndsAtTheReport(t *testing.T) {
-	steps := newSteps()
-	require.Len(t, steps, 6)
-	require.Equal(t, "Report", steps[len(steps)-1].name)
+	all := buildSteps()
+	require.Len(t, all, 6)
+	require.Equal(t, "Report", all[len(all)-1].name)
+	var r buildRun
+	r.init()
+	require.Len(t, r.steps.Steps(), len(all))
 }
 
 // --- the controls ----------------------------------------------------------
@@ -228,28 +191,34 @@ func TestDeployNeedsABuildAndAGame(t *testing.T) {
 	require.True(t, u.run.deployBtn.Disabled(), "not while the build is rewriting the folder")
 }
 
-// drawSteps and drawLog run several times a second from the log pump, including
-// while the section is not on screen and its widgets are nil.
+// The totals, the pane and the controls are drawn several times a second from
+// the log pump, including while the section is not on screen and its widgets
+// are nil.
 func TestDrawingWithNoWidgetsIsHarmless(t *testing.T) {
 	u := testUI(t)
 	u.run.reset()
 	u.run.detach()
 	require.NotPanics(t, func() {
-		u.drawSteps()
-		u.drawLog()
+		u.drawTotals()
+		u.run.pane.Draw()
 		u.drawControls()
 	})
 }
 
-// A message carrying newlines becomes one row per line: the list draws rows at
-// one line's height, and a multi-line label painted over the rows beneath it.
-func TestLogSplitsMultiLineMessagesIntoRows(t *testing.T) {
-	m := newLogModel()
-	m.append(core.LevelWarn, "no game file for X: compiler said\n[INFO]: one\n[INFO]: two\n")
-	m.append(core.LevelInfo, "single")
-	require.Equal(t, 4, m.len())
-	require.Equal(t, "no game file for X: compiler said", m.at(0).text)
-	require.Equal(t, "[INFO]: one", m.at(1).text)
-	require.Equal(t, core.LevelWarn, m.at(2).level, "every row keeps the message's level")
-	require.Equal(t, "single", m.at(3).text)
+// The build's log lines are coloured by core's level and nothing else is added
+// to them: the line is the product, and a timestamp in front of every edit
+// would push the file names off the right edge of the pane.
+func TestBuildLinesKeepCoresWordingAndLevel(t *testing.T) {
+	u := testUI(t)
+	ev := u.buildEvents()
+	ev.Log(core.LevelWarn, "no game file for X: compiler said\n[INFO]: one\n")
+	ev.Log(core.LevelDebug, "   OK  Mod: detail")
+
+	m := u.run.pane.Model()
+	require.Equal(t, 3, m.Len(), "a message with newlines is one row per line")
+	require.Equal(t, "no game file for X: compiler said", m.At(0).Text)
+	require.Equal(t, "[INFO]: one", m.At(1).Text)
+	require.Equal(t, "   OK  Mod: detail", m.At(2).Text)
+	require.Equal(t, logLevelWarn(), m.At(0).Level)
+	require.Equal(t, logLevelDebug(), m.At(2).Level)
 }

@@ -8,6 +8,10 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/logpane"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/steam"
@@ -28,13 +32,14 @@ const (
 buildBuild is the build, while it runs.
 
 The left column is the step list, the right is the log. Both are built once per
-visit to the section and then written to in place — drawSteps, drawLog and
-drawControls below — because rebuilding the section on every line is exactly the
-reflow the project forbids, and because a rebuild would throw away the user's
-scroll position in the middle of the thing they were reading.
+visit to the section and then written to in place — the step list and the pane
+by the library, the totals and the controls by drawTotals and drawControls
+below — because rebuilding the section on every line is exactly the reflow the
+project forbids, and because a rebuild would throw away the user's scroll
+position in the middle of the thing they were reading.
 */
 func (u *ui) buildBuild() fyne.CanvasObject {
-	head := heading("Build",
+	head := widgets.Heading("Build",
 		"Merge every enabled mod into one folder, recompile each file, and write the report. "+
 			"Nothing reaches the game until you press Deploy.")
 
@@ -67,93 +72,35 @@ func (u *ui) buildBuild() fyne.CanvasObject {
 
 	toolbar := container.NewHBox(build, recache, cancel, deploy, view)
 
-	left := container.NewVBox()
-	u.run.rows = nil
-	for range u.run.steps {
-		icon := widget.NewIcon(theme.RadioButtonIcon())
-		name := widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-		note := widget.NewLabel("")
-		note.Truncation = fyne.TextTruncateEllipsis
-		u.run.rows = append(u.run.rows, stepRowWidgets{icon: icon, name: name, note: note})
-		left.Add(container.NewBorder(nil, nil, container.NewHBox(icon, fixedWidth(name, 90)), nil, note))
-	}
-
 	totals := widget.NewLabel("")
 	totals.Wrapping = fyne.TextWrapWord
 	u.run.totals = totals
 
 	steps := container.NewBorder(
 		widget.NewLabelWithStyle("Steps", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		fixedHeight(totals, totalsHeight), nil, nil, left)
+		widgets.FixedHeight(totals, totalsHeight), nil, nil, u.run.steps.Widget())
 
+	u.drawTotals()
+	u.drawControls()
 	return container.NewBorder(container.NewVBox(head, toolbar), nil, nil, nil,
-		container.NewBorder(nil, nil, fixedWidth(steps, stepColumnWidth), nil, u.logPane()))
+		container.NewBorder(nil, nil, widgets.FixedWidth(steps, stepColumnWidth), nil, u.logPane()))
 }
 
 // logPane is the live output: a list of monospace lines that scrolls itself to
-// the end unless the user has scrolled up to read something.
+// the end unless the user has scrolled up to read something. The pane is the
+// library's; Copy reports into this window's banner slot.
 func (u *ui) logPane() fyne.CanvasObject {
-	log := u.run.log
-	list := widget.NewList(
-		func() int { return log.len() },
-		func() fyne.CanvasObject {
-			l := widget.NewLabel("")
-			l.TextStyle = fyne.TextStyle{Monospace: true}
-			l.Truncation = fyne.TextTruncateEllipsis
-			return l
-		},
-		func(i widget.ListItemID, o fyne.CanvasObject) {
-			line := log.at(i)
-			l := o.(*widget.Label)
-			// Importance first: SetText refreshes, and the refresh is what
-			// applies it. See the note in views_table.go.
-			l.Importance = importanceFor(levelStatus(line.level))
-			l.SetText(line.text)
-		},
-	)
-	u.run.list = list
-
-	counter := widget.NewLabel("")
-	counter.Importance = widget.LowImportance
-	u.run.counter = counter
-
-	follow := widget.NewCheck("Follow the tail", func(b bool) {
-		u.run.follow = b
-		if b {
-			u.drawLog()
-		}
+	return u.run.pane.Widget(logpane.Options{
+		Title:     "Output",
+		Height:    logPaneHeight,
+		Clipboard: u.app.Clipboard(),
+		Flash:     u.flash,
 	})
-	follow.SetChecked(u.run.follow)
-	u.run.followBox = follow
-
-	copyLog := widget.NewButtonWithIcon("Copy log", theme.ContentCopyIcon(), func() {
-		u.app.Clipboard().SetContent(log.text())
-		u.flash(fmt.Sprintf("Copied %d line(s) to the clipboard.", log.len()), StatusGood)
-	})
-
-	bar := container.NewBorder(nil, nil,
-		widget.NewLabelWithStyle("Output", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewHBox(counter, follow, copyLog), widget.NewLabel(""))
-
-	u.drawSteps()
-	u.drawLog()
-	u.drawControls()
-	return container.NewBorder(bar, nil, nil, nil, fixedHeight(list, logPaneHeight))
 }
 
-// drawSteps writes the step list's current state into the widgets. Called on
-// the UI thread, several times a second while a build runs.
-func (u *ui) drawSteps() {
-	if len(u.run.rows) != len(u.run.steps) {
-		return // the section is not on screen, or is mid-rebuild
-	}
-	for i, s := range u.run.steps {
-		row := u.run.rows[i]
-		row.icon.SetResource(stepIcon(s.state))
-		row.name.SetText(s.name)
-		row.note.SetText(s.note)
-		row.note.Importance = importanceFor(stepStatus(s.state))
-	}
+// drawTotals writes the step column's footer. Called on the UI thread, several
+// times a second while a build runs.
+func (u *ui) drawTotals() {
 	if u.run.totals != nil {
 		u.run.totals.SetText(u.buildTotals())
 	}
@@ -164,49 +111,15 @@ func (u *ui) drawSteps() {
 func (u *ui) buildTotals() string {
 	switch {
 	case u.run.running:
-		return fmt.Sprintf("Running. %d line(s) of output so far.", u.run.log.len())
+		return fmt.Sprintf("Running. %d line(s) of output so far.", u.run.pane.Model().Len())
 	case u.run.finished:
 		return u.run.summary
 	case u.lastReport.Report != nil:
 		r := u.lastReport.Report
 		return fmt.Sprintf("Last build %s: %d built, %d dropped, %d edit(s) applied, %d skipped.",
-			humanAgo(r.Generated), r.Built, r.Dropped, r.Applied, r.Skipped)
+			widgets.HumanAgo(r.Generated), r.Built, r.Dropped, r.Applied, r.Skipped)
 	}
 	return "Nothing has been built yet in this session."
-}
-
-/*
-drawLog refreshes the log pane and decides whether to stay at the end.
-
-The offset dance is the whole of the auto-scroll rule. Fyne's list has no
-"the user scrolled" callback, so the only way to tell a user dragging the pane
-up from the list re-measuring itself is to remember where the last automatic
-scroll left it. See followTail.
-*/
-func (u *ui) drawLog() {
-	if u.run.list == nil {
-		return
-	}
-	if u.run.counter != nil {
-		text := fmt.Sprintf("%d line(s)", u.run.log.len())
-		if d := u.run.log.droppedCount(); d > 0 {
-			text = fmt.Sprintf("%d line(s), %d older dropped", u.run.log.len(), d)
-		}
-		u.run.counter.SetText(text)
-	}
-	u.run.follow = followTail(u.run.follow, u.run.list.GetScrollOffset(), u.run.wantOffset)
-	// The box is the state, so it has to say what the state is. Left alone it
-	// stays ticked while the pane has quietly stopped following, and the way
-	// back — untick, retick — is not one anybody would guess at.
-	if u.run.followBox != nil && u.run.followBox.Checked != u.run.follow {
-		u.run.followBox.SetChecked(u.run.follow)
-	}
-	u.run.list.Refresh()
-	if !u.run.follow {
-		return
-	}
-	u.run.list.ScrollToBottom()
-	u.run.wantOffset = u.run.list.GetScrollOffset()
 }
 
 // drawControls applies R4.2: while a run is in flight the buttons that would
@@ -264,19 +177,19 @@ before pressing this button.
 */
 func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 	in := u.status.Install
-	dest := "GAMEDATA/MODS/" + orNone(u.status.ModName, "COSMOS COMBINE")
+	dest := "GAMEDATA/MODS/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
 	if in.ModsDir != "" {
-		dest = in.ModsDir + "/" + orNone(u.status.ModName, "COSMOS COMBINE")
+		dest = in.ModsDir + "/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
 	}
 
 	body := container.NewVBox(
-		wrapped(lead),
-		plainRow("Installs to", dest),
-		plainRow("Archive", u.status.Paths.Archive),
-		wrapped("A folder of that name already in the game is moved into the archive "+
+		widgets.Wrapped(lead),
+		widgets.PlainRow("Installs to", dest),
+		widgets.PlainRow("Archive", u.status.Paths.Archive),
+		widgets.Wrapped("A folder of that name already in the game is moved into the archive "+
 			"directory under a timestamp before the new one is put in place, so the "+
 			"build you had is recoverable."),
-		wrapped("Not touched: your saves, the game's own .pak archives, every other mod "+
+		widgets.Wrapped("Not touched: your saves, the game's own .pak archives, every other mod "+
 			"folder in GAMEDATA/MODS, and the scripts in your library."),
 	)
 
@@ -285,19 +198,19 @@ func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 		nil)
 	if in.ModsState == steam.ModsSymlink {
 		body.Add(widget.NewSeparator())
-		body.Add(note("GAMEDATA/MODS is a symlink to "+in.ModsTarget+". Installing through it "+
+		body.Add(widgets.Note("GAMEDATA/MODS is a symlink to "+in.ModsTarget+". Installing through it "+
 			"would write into that directory instead of into the game. Ticking this removes "+
 			"the link and creates a real directory; what the link pointed at is left exactly "+
-			"as it is.", StatusWarn))
+			"as it is.", fd.StatusWarn))
 		body.Add(replace)
 	}
 	if in.ModSettingsOK && in.DisableAllMods {
-		body.Add(note("The game currently has DisableAllMods=true, so nothing will load until "+
+		body.Add(widgets.Note("The game currently has DisableAllMods=true, so nothing will load until "+
 			"you accept the mod warning at the title screen. nmsbonker reports that switch "+
-			"and does not write it.", StatusWarn))
+			"and does not write it.", fd.StatusWarn))
 	}
 
-	u.confirmWithBody(title, container.NewVScroll(body), "Deploy",
+	dialogs.ConfirmWithBody(u.win, title, container.NewVScroll(body), "Deploy",
 		func() { do(replace.Checked) }).Show()
 }
 
@@ -319,12 +232,12 @@ func (u *ui) deployLast() {
 			u.perform("Installing under GAMEDATA/MODS…", func(ctx context.Context) error {
 				req := u.request()
 				req.Events = core.Events{Log: func(level core.Level, msg string) {
-					u.run.log.append(level, msg)
+					u.run.pane.Model().Append(logLevel(level), msg)
 				}}
 				res, err := core.Deploy(ctx, core.DeployRequest{
 					Request: req, ReplaceSymlink: replaceSymlink,
 				})
-				fyne.Do(u.drawLog)
+				fyne.Do(u.run.pane.Draw)
 				if err != nil {
 					return err
 				}
@@ -338,7 +251,7 @@ func (u *ui) deployLast() {
 				}
 				if len(res.Warnings) > 0 {
 					fyne.Do(func() {
-						u.flash(msg+" "+res.Warnings[0], StatusWarn)
+						u.flash(msg+" "+res.Warnings[0], fd.StatusWarn)
 						u.invalidate()
 					})
 					return nil

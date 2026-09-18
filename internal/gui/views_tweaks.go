@@ -12,6 +12,10 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/forms"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/modscript"
@@ -45,10 +49,10 @@ func (u *ui) buildTweaks() fyne.CanvasObject {
 
 	if !u.tweaksOK {
 		return container.NewVScroll(container.NewVBox(
-			heading("Tweaks", "Reading the built-in tweaks…")))
+			widgets.Heading("Tweaks", "Reading the built-in tweaks…")))
 	}
 
-	body := container.NewVBox(heading("Tweaks",
+	body := container.NewVBox(widgets.Heading("Tweaks",
 		"The mods that come with nmsbonker. Turn one on, set what it does, and build."))
 
 	for i, tw := range u.tweaksInBuildOrder() {
@@ -100,7 +104,7 @@ func (u *ui) tweakCard(tw core.TweakInfo) fyne.CanvasObject {
 	}
 
 	head := container.NewBorder(nil, nil,
-		container.NewHBox(on, dim(tweakTag(tw))), nil, unbuilt)
+		container.NewHBox(on, widgets.Dim(tweakTag(tw))), nil, unbuilt)
 
 	desc := widget.NewLabel(tw.Desc)
 	desc.Wrapping = fyne.TextWrapWord
@@ -108,9 +112,9 @@ func (u *ui) tweakCard(tw core.TweakInfo) fyne.CanvasObject {
 
 	rows := []fyne.CanvasObject{head, desc}
 	if tw.Shadowed {
-		rows = append(rows, note("A script of this name is also in your library. The built-in "+
+		rows = append(rows, widgets.Note("A script of this name is also in your library. The built-in "+
 			"is the one that builds; the library copy is ignored. Remove it from the Mods "+
-			"section to stop it showing up there.", StatusWarn))
+			"section to stop it showing up there.", fd.StatusWarn))
 	}
 	for _, p := range tw.Params {
 		rows = append(rows, u.paramRow(tw.Name, p, unbuilt))
@@ -123,61 +127,59 @@ paramRow is one parameter: a slider, a field that agrees with it, and Reset.
 
 Both controls, not one. The slider is how you find a value you like by feel; the
 field is how you type 250000 into a range that goes to a million without
-dragging across nine hundred thousand of it. They are kept in step, and only one
-of them commits: the slider on release, the field on Enter, so a drag is one
-write to the settings rather than four hundred.
+dragging across nine hundred thousand of it. The pair is the library's
+forms.SliderEntry: kept in step, and only one of them commits, the slider on
+release and the field on Enter, so a drag is one write to the settings rather
+than four hundred. A parameter with no declared range gets the field alone: a
+slider from nowhere to nowhere is a guess with a handle.
 */
 func (u *ui) paramRow(mod string, p core.TweakParam, unbuilt *widget.Label) fyne.CanvasObject {
 	label := widget.NewLabel(p.Label)
 	label.Importance = widget.LowImportance
+	format := func(v float64) string { return modscript.FormatValue(v, p.Kind) }
 
-	entry := widget.NewEntry()
-	entry.SetText(modscript.FormatValue(p.Current, p.Kind))
-
-	def := dim("default " + modscript.FormatValue(p.Default, p.Kind))
+	def := widgets.Dim("default " + format(p.Default))
 	reset := widget.NewButtonWithIcon("Reset", theme.ContentUndoIcon(), nil)
 
-	var slider *widget.Slider
-	commit := func(v float64) {
-		u.applyParam(mod, p, v, unbuilt, func(applied float64) {
-			text := modscript.FormatValue(applied, p.Kind)
-			if entry.Text != text {
+	var (
+		control fyne.CanvasObject
+		show    func(float64)
+	)
+	if p.Bounded {
+		var pair *forms.SliderEntry
+		pair = forms.NewSliderEntry(forms.SliderOptions{
+			Min: p.Min, Max: p.Max, Step: p.Step, Value: p.Current,
+			Format: format,
+			Commit: func(v float64) { u.applyParam(mod, p, v, unbuilt, pair.Set) },
+			OnInvalid: func(text string) {
+				u.flash(p.Label+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
+			},
+		})
+		control, show = pair.Widget(), pair.Set
+	} else {
+		entry := widget.NewEntry()
+		entry.SetText(format(p.Current))
+		show = func(v float64) {
+			if text := format(v); entry.Text != text {
 				entry.SetText(text)
 			}
-			if slider != nil && slider.Value != applied {
-				slider.Value = applied
-				slider.Refresh()
-			}
-		})
-	}
-
-	entry.OnSubmitted = func(text string) {
-		v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
-		if err != nil {
-			u.flash(p.Label+": "+strconv.Quote(text)+" is not a number.", StatusWarn)
-			entry.SetText(modscript.FormatValue(p.Current, p.Kind))
-			return
 		}
-		commit(v)
+		entry.OnSubmitted = func(text string) {
+			v, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+			if err != nil {
+				u.flash(p.Label+": "+strconv.Quote(text)+" is not a number.", fd.StatusWarn)
+				entry.SetText(format(p.Current))
+				return
+			}
+			u.applyParam(mod, p, v, unbuilt, show)
+		}
+		control = entry
 	}
-	reset.OnTapped = func() { u.resetParam(mod, p, unbuilt, entry, slider) }
-
-	control := fyne.CanvasObject(entry)
-	if p.Bounded {
-		slider = widget.NewSlider(p.Min, p.Max)
-		slider.Step = p.Step
-		slider.Value = p.Current
-		// Live text while dragging, one write on release. OnChanged fires per
-		// pixel, and a settings file written per pixel is a settings file
-		// written four hundred times to move one multiplier.
-		slider.OnChanged = func(v float64) { entry.SetText(modscript.FormatValue(v, p.Kind)) }
-		slider.OnChangeEnded = commit
-		control = container.NewBorder(nil, nil, nil, fixedWidth(entry, 120), slider)
-	}
+	reset.OnTapped = func() { u.resetParam(mod, p, unbuilt, show) }
 
 	return container.NewBorder(nil, nil,
-		fixedWidth(label, 220),
-		container.NewHBox(fixedWidth(def, 140), reset),
+		widgets.FixedWidth(label, 220),
+		container.NewHBox(widgets.FixedWidth(def, 140), reset),
 		control)
 }
 
@@ -204,7 +206,7 @@ func (u *ui) applyParam(mod string, p core.TweakParam, v float64,
 				u.flash(fmt.Sprintf("%s only takes %s to %s, so %s was used.",
 					p.Label, modscript.FormatValue(p.Min, p.Kind),
 					modscript.FormatValue(p.Max, p.Kind),
-					modscript.FormatValue(res.New, p.Kind)), StatusWarn)
+					modscript.FormatValue(res.New, p.Kind)), fd.StatusWarn)
 			}
 		})
 		return nil
@@ -212,9 +214,7 @@ func (u *ui) applyParam(mod string, p core.TweakParam, v float64,
 }
 
 // resetParam restores one parameter to the script's own value.
-func (u *ui) resetParam(mod string, p core.TweakParam, unbuilt *widget.Label,
-	entry *widget.Entry, slider *widget.Slider,
-) {
+func (u *ui) resetParam(mod string, p core.TweakParam, unbuilt *widget.Label, show func(float64)) {
 	u.perform("Resetting "+mod+" "+p.Name+"…", func(ctx context.Context) error {
 		if _, err := core.ResetTweak(ctx, core.ResetTweakRequest{
 			Request: u.request(), Name: mod, Param: p.Name,
@@ -222,11 +222,7 @@ func (u *ui) resetParam(mod string, p core.TweakParam, unbuilt *widget.Label,
 			return err
 		}
 		fyne.Do(func() {
-			entry.SetText(modscript.FormatValue(p.Default, p.Kind))
-			if slider != nil {
-				slider.Value = p.Default
-				slider.Refresh()
-			}
+			show(p.Default)
 			u.noteParam(mod, p.Name, p.Default, false)
 			unbuilt.SetText("changed since the last build — build to apply")
 		})
@@ -301,10 +297,10 @@ func (u *ui) resetAllTweaks() {
 		}
 	}
 	if changed == 0 {
-		u.flash("Every tweak is already at the values its script carries.", StatusInfo)
+		u.flash("Every tweak is already at the values its script carries.", fd.StatusInfo)
 		return
 	}
-	u.confirmDestructive("Reset every tweak?",
+	dialogs.ConfirmDestructive(u.win, "Reset every tweak?",
 		fmt.Sprintf("%d parameter(s) you have changed go back to the values the scripts "+
 			"carry. Nothing installed in the game changes until the next build and deploy, "+
 			"and which tweaks are switched on is not affected.", changed),

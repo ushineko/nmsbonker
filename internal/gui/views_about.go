@@ -1,6 +1,3 @@
-// Copied from angou (same author) — keep in sync by hand; the text is this
-// project's.
-
 package gui
 
 import (
@@ -10,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"github.com/ushineko/fynedesygn/widgets"
 )
 
 // --- About (R2.8) ----------------------------------------------------------
@@ -44,22 +42,22 @@ func (u *ui) buildAbout(version, commit string) fyne.CanvasObject {
 		container.NewVBox(name, ver, blurb))
 
 	can := container.NewVBox(
-		aboutNote("Build",
+		widgets.AboutNote("Build",
 			"Every enabled script edits the same pristine game files, in your order. Two mods "+
 				"touching one file yield one merged file, not two that fight."),
-		aboutNote("Ship only what compiles",
+		widgets.AboutNote("Ship only what compiles",
 			"A merged file ships only if MBINCompiler recompiles it cleanly. A rejected edit is "+
 				"retried without its structural changes, then dropped and named in the report."),
-		aboutNote("Touch little",
+		widgets.AboutNote("Touch little",
 			"Deploy writes one folder under GAMEDATA/MODS and archives what it replaces. The "+
 				"save editor writes one save and its manifest, after copying the whole profile "+
 				"to the backup directory. Nothing else in the game is written; the .pak archives "+
 				"never are."),
-		aboutNote("Keep files where you expect",
+		widgets.AboutNote("Keep files where you expect",
 			"Scripts in the library, compilers in tools, extracted game files in the cache, "+
 				"merged output in the workspace, replaced deployments in the archive, save "+
 				"copies in save-backup. All under your XDG directories; all listed in Settings."),
-		aboutNote("Survive a game update",
+		widgets.AboutNote("Survive a game update",
 			"After an update, the build report is your re-download list: a mod whose keys the "+
 				"update renamed comes out WORKING~ or NOT BUILT, with the keys it could not find."),
 	)
@@ -95,7 +93,7 @@ func gameFact(u *ui) string {
 	if !u.statusOK || !u.status.Install.Found {
 		return "no game found"
 	}
-	return orNone(u.status.Install.BuildID, "unknown")
+	return widgets.OrNone(u.status.Install.BuildID, "unknown")
 }
 
 func configFact(u *ui) string {
@@ -116,12 +114,4 @@ func aboutLink() fyne.CanvasObject {
 		return widget.NewLabel(projectURL)
 	}
 	return widget.NewHyperlink("Project documentation", link)
-}
-
-func aboutNote(title, detail string) fyne.CanvasObject {
-	t := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	d := widget.NewLabel(detail)
-	d.Wrapping = fyne.TextWrapWord
-	d.Importance = widget.LowImportance
-	return container.NewVBox(t, d)
 }

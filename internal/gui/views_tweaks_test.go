@@ -7,7 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/fynetest"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/modscript"
@@ -55,12 +58,12 @@ func TestReleasingASliderWritesTheParameter(t *testing.T) {
 	tw := findTweak(t, u, "MaterialYield10x")
 	p := tw.Params[0]
 
-	row := u.paramRow(tw.Name, p, testLabel())
+	row := u.paramRow(tw.Name, p, widget.NewLabel(""))
 	require.NotNil(t, row)
 
 	// The row's slider is the control the value is committed from.
-	slider := findSlider(t, row)
-	require.NotNil(t, slider)
+	slider := fynetest.FindSlider(row)
+	require.NotNil(t, slider, "no slider in this row")
 	require.Equal(t, p.Min, slider.Min)
 	require.Equal(t, p.Max, slider.Max)
 	require.Equal(t, p.Current, slider.Value)
@@ -88,9 +91,9 @@ func TestTypingRubbishIntoAParameterIsRefused(t *testing.T) {
 	tw := findTweak(t, u, "LearnMoreWords")
 	p := tw.Params[0]
 
-	row := u.paramRow(tw.Name, p, testLabel())
-	entry := findEntry(t, row)
-	require.NotNil(t, entry)
+	row := u.paramRow(tw.Name, p, widget.NewLabel(""))
+	entry := fynetest.FindEntry(row)
+	require.NotNil(t, entry, "no entry in this row")
 
 	entry.OnSubmitted("banana")
 	require.Equal(t, modscript.FormatValue(p.Current, p.Kind), entry.Text)
@@ -109,8 +112,9 @@ func TestTypingAnOutOfRangeValueShowsWhatWasStored(t *testing.T) {
 	tw := findTweak(t, u, "LearnMoreWords")
 	p := tw.Params[0]
 
-	row := u.paramRow(tw.Name, p, testLabel())
-	entry := findEntry(t, row)
+	row := u.paramRow(tw.Name, p, widget.NewLabel(""))
+	entry := fynetest.FindEntry(row)
+	require.NotNil(t, entry, "no entry in this row")
 	entry.OnSubmitted("5000")
 
 	require.Equal(t, "50", entry.Text, "the field shows the value that was stored")
@@ -124,8 +128,8 @@ func TestALibraryScriptsParametersHaveNoSlider(t *testing.T) {
 		Name: "PULSE_SPEED", Label: "PULSE_SPEED", Default: 4, Current: 4,
 		Kind: modscript.ParamInt, Bounded: false,
 	})
-	require.Nil(t, findSliderMaybe(row))
-	require.NotNil(t, findEntry(t, row))
+	require.Nil(t, fynetest.FindSlider(row))
+	require.NotNil(t, fynetest.FindEntry(row))
 }
 
 /*
@@ -142,7 +146,7 @@ func TestTheOrderBadgeSaysBuildOrderRatherThanAnUnexplainedNumber(t *testing.T) 
 	tw := findTweak(t, u, "MaterialYield10x")
 	require.Positive(t, tw.Order)
 
-	text := cardText(u.tweakCard(tw))
+	text := fynetest.Text(u.tweakCard(tw))
 	require.Contains(t, text, "build order "+strconv.Itoa(tw.Order))
 	require.Contains(t, text, tw.Group+" · build order "+strconv.Itoa(tw.Order),
 		"the group stays visible as a dim tag after the name")
@@ -177,7 +181,7 @@ func TestTheTweaksSectionListsEveryTweakInBuildOrder(t *testing.T) {
 	u.tweaks.Tweaks[len(u.tweaks.Tweaks)/2].Enabled = false
 	slices.Reverse(u.tweaks.Tweaks)
 
-	got := orderTags(cardText(u.buildTweaks()))
+	got := orderTags(fynetest.Text(u.buildTweaks()))
 	require.Equal(t, want, got)
 
 	for _, g := range u.tweaks.Groups {
@@ -200,18 +204,18 @@ func TestTheCompatibilityRowReportsTheRoundTripCheck(t *testing.T) {
 
 	text, st := u.compatLine()
 	require.Contains(t, text, "checking")
-	require.Equal(t, StatusInfo, st)
+	require.Equal(t, fd.StatusInfo, st)
 
 	u.compat = core.ToolCheckResult{Status: core.CompatOK, Detail: "2 file(s) round-tripped"}
 	text, st = u.compatLine()
-	require.Equal(t, StatusGood, st)
+	require.Equal(t, fd.StatusGood, st)
 	require.Contains(t, text, "2 file(s) round-tripped")
 
 	u.compat = core.ToolCheckResult{}
 	u.compatError = "the compiler did not run"
 	text, st = u.compatLine()
 	require.Contains(t, text, "the compiler did not run")
-	require.Equal(t, StatusInfo, st, "a check that could not run is not a bad verdict")
+	require.Equal(t, fd.StatusInfo, st, "a check that could not run is not a bad verdict")
 }
 
 // The Overview no longer claims a game data version. Spec 002 R3.4 retired the
@@ -223,7 +227,7 @@ func TestTheOverviewDoesNotReportAGameDataVersion(t *testing.T) {
 	u.status = core.StatusResult{
 		Install: core.InstallSummary{Found: true, Dir: "/somewhere", ModsState: "dir"},
 	}
-	require.NotContains(t, cardText(u.installCard()), "Game data version")
+	require.NotContains(t, fynetest.Text(u.installCard()), "Game data version")
 }
 
 // --- helpers ---------------------------------------------------------------

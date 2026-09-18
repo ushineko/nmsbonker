@@ -7,6 +7,10 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
@@ -36,7 +40,7 @@ func (u *ui) buildOverview() fyne.CanvasObject {
 	u.loadCompat()
 
 	body := container.NewVBox(
-		heading("Overview", "What this machine has, and what a build would produce."),
+		widgets.Heading("Overview", "What this machine has, and what a build would produce."),
 		u.installCard(),
 		widget.NewSeparator(),
 		u.toolsCard(),
@@ -51,10 +55,10 @@ func (u *ui) buildOverview() fyne.CanvasObject {
 func (u *ui) installCard() fyne.CanvasObject {
 	in := u.status.Install
 	if !u.statusOK {
-		return card("Game", widget.NewLabel("Reading the install…"))
+		return widgets.Card("Game", widget.NewLabel("Reading the install…"))
 	}
 	if !in.Found {
-		return card("Game", u.noGameBlock(in.Error))
+		return widgets.Card("Game", u.noGameBlock(in.Error))
 	}
 
 	mods := in.ModsState
@@ -77,18 +81,18 @@ func (u *ui) installCard() fyne.CanvasObject {
 	}
 
 	rows := []fyne.CanvasObject{
-		plainRow("Directory", in.Dir),
-		plainRow("Found by", in.Source),
-		factRow("Steam buildid", orNone(in.BuildID, "no appmanifest"), buildIDStatus(in.BuildID)),
-		plainRow("Archives", fmt.Sprintf("%d .pak in %s", in.PakCount, in.PCBanksDir)),
-		rowWithAction(factRow("GAMEDATA/MODS", mods, modsStateStatus(in.ModsState)), openMods),
+		widgets.PlainRow("Directory", in.Dir),
+		widgets.PlainRow("Found by", in.Source),
+		widgets.FactRow("Steam buildid", widgets.OrNone(in.BuildID, "no appmanifest"), buildIDStatus(in.BuildID)),
+		widgets.PlainRow("Archives", fmt.Sprintf("%d .pak in %s", in.PakCount, in.PCBanksDir)),
+		widgets.RowWithAction(widgets.FactRow("GAMEDATA/MODS", mods, modsStateStatus(in.ModsState)), openMods),
 	}
 	if in.ModsState == steam.ModsSymlink {
 		// R6.2: the fact, the consequence, and the action, in that order. The
 		// text describes the symlink and nothing else -- whatever put it there
 		// is not this tool's business and naming a guess would be worse than
 		// saying nothing.
-		block, replace := action("GAMEDATA/MODS is a symlink",
+		block, replace := widgets.Action("GAMEDATA/MODS is a symlink",
 			"It points at "+in.ModsTarget+". The game reads mods through the link, so "+
 				"installing here would write into that directory rather than into the game. "+
 				"Replacing the link removes the link only — never what it points at — and "+
@@ -98,18 +102,18 @@ func (u *ui) installCard() fyne.CanvasObject {
 		rows = append(rows, block)
 	}
 	if in.ModSettingsOK {
-		rows = append(rows, factRow("DisableAllMods", fmt.Sprintf("%t", in.DisableAllMods),
+		rows = append(rows, widgets.FactRow("DisableAllMods", fmt.Sprintf("%t", in.DisableAllMods),
 			disableAllStatus(in.DisableAllMods)))
 		if in.DisableAllMods {
-			rows = append(rows, note(
+			rows = append(rows, widgets.Note(
 				"The game's own switch is off, so nothing under GAMEDATA/MODS will load until you "+
 					"accept the mod warning at the title screen. nmsbonker reports this switch and "+
-					"does not write it.", StatusWarn))
+					"does not write it.", fd.StatusWarn))
 		}
 	} else {
-		rows = append(rows, plainRow("Mod settings", "absent ("+in.ModSettingsPath+")"))
+		rows = append(rows, widgets.PlainRow("Mod settings", "absent ("+in.ModSettingsPath+")"))
 	}
-	return card("Game", rows...)
+	return widgets.Card("Game", rows...)
 }
 
 // noGameBlock is the first-run state: no install, and what to do about it.
@@ -117,10 +121,10 @@ func (u *ui) noGameBlock(reason string) fyne.CanvasObject {
 	u.loadDetect()
 
 	body := container.NewVBox(
-		factRow("Game", "not found", StatusBad),
-		note(reason+". Steam's own manifests were read; the game may be on a drive Steam no "+
+		widgets.FactRow("Game", "not found", fd.StatusBad),
+		widgets.Note(reason+". Steam's own manifests were read; the game may be on a drive Steam no "+
 			"longer lists, or installed outside Steam. Set the directory below and it is "+
-			"remembered in config.json, where the command line reads it too.", StatusInfo),
+			"remembered in config.json, where the command line reads it too.", fd.StatusInfo),
 	)
 
 	dir := widget.NewEntry()
@@ -128,11 +132,11 @@ func (u *ui) noGameBlock(reason string) fyne.CanvasObject {
 	save := widget.NewButtonWithIcon("Use this directory", theme.ConfirmIcon(), func() {
 		u.setConfig("game_dir", dir.Text, "Game directory")
 	})
-	body.Add(container.NewBorder(nil, nil, nil, save, u.withBrowse(dir, true)))
+	body.Add(container.NewBorder(nil, nil, nil, save, dialogs.WithBrowse(u.win, dir, true)))
 
 	if u.detectOK && len(u.detect.Candidates) > 0 {
-		var t detailTable
-		t.header("Steam library", "Game directory", "Verdict")
+		t := table.New()
+		t.Header("Steam library", "Game directory", "Verdict")
 		for _, c := range u.detect.Candidates {
 			lib := c.LibraryDir
 			if lib == "" {
@@ -141,16 +145,16 @@ func (u *ui) noGameBlock(reason string) fyne.CanvasObject {
 			if lib == "" {
 				lib = "(explicit game directory)"
 			}
-			verdict, st := "ok", StatusGood
+			verdict, st := "ok", fd.StatusGood
 			if c.Reason != "" {
-				verdict, st = "rejected: "+c.Reason, StatusWarn
+				verdict, st = "rejected: "+c.Reason, fd.StatusWarn
 			}
-			t.row(st, lib, c.GameDir, verdict)
+			t.Row(st, lib, c.GameDir, verdict)
 		}
 		body.Add(widget.NewSeparator())
 		body.Add(widget.NewLabelWithStyle("Where nmsbonker looked",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		body.Add(fixedHeight(t.widget(), 160))
+		body.Add(widgets.FixedHeight(t.Widget(), 160))
 	}
 	return body
 }
@@ -160,40 +164,40 @@ func (u *ui) noGameBlock(reason string) fyne.CanvasObject {
 func (u *ui) toolsCard() fyne.CanvasObject {
 	c := u.status.Compiler
 	if !u.statusOK {
-		return card("Tools", widget.NewLabel("Reading the installed tools…"))
+		return widgets.Card("Tools", widget.NewLabel("Reading the installed tools…"))
 	}
 	if !c.Installed {
-		block, install := action("Install MBINCompiler",
+		block, install := widgets.Action("Install MBINCompiler",
 			"Nothing can be built without it. It is downloaded from the MBINCompiler releases "+
 				"on GitHub into the tools directory; the game is not touched, and nothing is "+
 				"installed system-wide.",
 			"Install", false, func() { u.ensureTools() })
 		install.Importance = widget.HighImportance
 		u.gate(install)
-		return card("Tools", factRow("MBINCompiler", "not installed", StatusBad), block)
+		return widgets.Card("Tools", widgets.FactRow("MBINCompiler", "not installed", fd.StatusBad), block)
 	}
 
 	idx := u.status.PakIndex
-	indexText, indexStatus := "not built yet", StatusInfo
+	indexText, indexStatus := "not built yet", fd.StatusInfo
 	switch {
 	case !idx.Exists:
 	case idx.Stale == 0 && idx.Missing == 0:
 		indexText = fmt.Sprintf("current: %d paks, %d files, %s",
-			idx.Paks, idx.Files, humanAgo(idx.Written))
-		indexStatus = StatusGood
+			idx.Paks, idx.Files, widgets.HumanAgo(idx.Written))
+		indexStatus = fd.StatusGood
 	default:
 		indexText = fmt.Sprintf("stale: %d pak(s) changed, %d gone, %s",
-			idx.Stale, idx.Missing, humanAgo(idx.Written))
-		indexStatus = StatusWarn
+			idx.Stale, idx.Missing, widgets.HumanAgo(idx.Written))
+		indexStatus = fd.StatusWarn
 	}
 
 	compat, compatSt := u.compatLine()
-	return card("Tools",
-		factRow("MBINCompiler", c.Tag+" ("+c.Flavor+")", StatusGood),
-		plainRow("Reports", c.Version),
-		factRow("Compatibility", compat, compatSt),
-		factRow(".NET 10 runtime", dotnetText(c.Dotnet10, c.Flavor), dotnetStatus(c.Dotnet10, c.Flavor)),
-		factRow("Pak index", indexText, indexStatus),
+	return widgets.Card("Tools",
+		widgets.FactRow("MBINCompiler", c.Tag+" ("+c.Flavor+")", fd.StatusGood),
+		widgets.PlainRow("Reports", c.Version),
+		widgets.FactRow("Compatibility", compat, compatSt),
+		widgets.FactRow(".NET 10 runtime", dotnetText(c.Dotnet10, c.Flavor), dotnetStatus(c.Dotnet10, c.Flavor)),
+		widgets.FactRow("Pak index", indexText, indexStatus),
 	)
 }
 
@@ -208,12 +212,12 @@ running the row says so, because "checking" and "unknown" are different states
 and a card that says "unknown" for two seconds and then changes its mind reads
 as a card that was wrong.
 */
-func (u *ui) compatLine() (string, Status) {
+func (u *ui) compatLine() (string, fd.Status) {
 	switch {
 	case u.compatError != "":
-		return "could not be checked: " + u.compatError, StatusInfo
+		return "could not be checked: " + u.compatError, fd.StatusInfo
 	case u.compat.Status == "":
-		return "checking…", StatusInfo
+		return "checking…", fd.StatusInfo
 	}
 	text := compatText(u.compat.Status)
 	if u.compat.Detail != "" {
@@ -235,41 +239,41 @@ func (u *ui) libraryCard() fyne.CanvasObject {
 		}
 	}
 	rows := []fyne.CanvasObject{
-		plainRow("Library", u.status.Paths.Library),
-		factRow("Enabled", fmt.Sprintf("%d of %d mod(s)", enabled, len(u.mods.Mods)),
+		widgets.PlainRow("Library", u.status.Paths.Library),
+		widgets.FactRow("Enabled", fmt.Sprintf("%d of %d mod(s)", enabled, len(u.mods.Mods)),
 			enabledStatus(enabled, len(u.mods.Mods))),
 	}
 	if missing > 0 {
-		rows = append(rows, factRow("Missing scripts", fmt.Sprintf("%d", missing), StatusWarn))
+		rows = append(rows, widgets.FactRow("Missing scripts", fmt.Sprintf("%d", missing), fd.StatusWarn))
 	}
-	rows = append(rows, plainRow("Output folder", orNone(u.status.ModName, "COSMOS COMBINE")))
-	rows = append(rows, plainRow("Save backup", u.saveBackupText()))
+	rows = append(rows, widgets.PlainRow("Output folder", widgets.OrNone(u.status.ModName, "COSMOS COMBINE")))
+	rows = append(rows, widgets.PlainRow("Save backup", u.saveBackupText()))
 
 	switch {
 	case !u.lastReportOK:
-		rows = append(rows, plainRow("Last build", "reading…"))
+		rows = append(rows, widgets.PlainRow("Last build", "reading…"))
 	case u.lastReport.Report == nil:
-		rows = append(rows, factRow("Last build", "never", StatusInfo))
-		rows = append(rows, note("Nothing has been built yet. Build merges every enabled mod "+
+		rows = append(rows, widgets.FactRow("Last build", "never", fd.StatusInfo))
+		rows = append(rows, widgets.Note("Nothing has been built yet. Build merges every enabled mod "+
 			"into one folder in the workspace; it does not touch the game until you deploy.",
-			StatusInfo))
+			fd.StatusInfo))
 	default:
 		r := u.lastReport.Report
 		rows = append(rows,
-			plainRow("Last build", humanAgo(r.Generated)+" ("+r.Generated.Format("2006-01-02 15:04")+")"),
-			factRow("Result", fmt.Sprintf("%d built, %d dropped, %d edits applied, %d skipped",
+			widgets.PlainRow("Last build", widgets.HumanAgo(r.Generated)+" ("+r.Generated.Format("2006-01-02 15:04")+")"),
+			widgets.FactRow("Result", fmt.Sprintf("%d built, %d dropped, %d edits applied, %d skipped",
 				r.Built, r.Dropped, r.Applied, r.Skipped), builtStatus(r.Dropped)),
 		)
 		if n := len(r.CompilerFailures); n > 0 {
-			rows = append(rows, factRow("Compiler failures",
-				fmt.Sprintf("%d file(s) MBINCompiler could not handle — see the Report", n), StatusBad))
+			rows = append(rows, widgets.FactRow("Compiler failures",
+				fmt.Sprintf("%d file(s) MBINCompiler could not handle — see the Report", n), fd.StatusBad))
 		}
 		rows = append(rows,
-			plainRow("Verdicts", verdictCounts(r.Mods)),
+			widgets.PlainRow("Verdicts", verdictCounts(r.Mods)),
 			amountFlagsRow(r.Audit),
 		)
 	}
-	return card("Mod library", rows...)
+	return widgets.Card("Mod library", rows...)
 }
 
 /*
@@ -283,11 +287,11 @@ and the reward table still be wrong.
 func amountFlagsRow(a *audit.Result) fyne.CanvasObject {
 	switch {
 	case a == nil:
-		return plainRow("Amount audit", "no reward table in that build")
+		return widgets.PlainRow("Amount audit", "no reward table in that build")
 	case len(a.Flags) == 0:
-		return factRow("Amount audit", "no amount flags", StatusGood)
+		return widgets.FactRow("Amount audit", "no amount flags", fd.StatusGood)
 	default:
-		return factRow("Amount audit", fmt.Sprintf("%d amount flag(s) — see Report", len(a.Flags)),
+		return widgets.FactRow("Amount audit", fmt.Sprintf("%d amount flag(s) — see Report", len(a.Flags)),
 			auditStatus(len(a.Flags)))
 	}
 }
@@ -345,22 +349,6 @@ func (u *ui) overviewActions() fyne.CanvasObject {
 
 // --- small helpers shared by the cards --------------------------------------
 
-// note is a wrapped paragraph under a row, for the things a value cannot say on
-// its own.
-func note(text string, st Status) fyne.CanvasObject {
-	l := widget.NewLabel(text)
-	l.Wrapping = fyne.TextWrapWord
-	switch st {
-	case StatusWarn:
-		l.Importance = widget.WarningImportance
-	case StatusBad:
-		l.Importance = widget.DangerImportance
-	case StatusGood, StatusInfo:
-		l.Importance = widget.LowImportance
-	}
-	return container.NewBorder(nil, nil, fixedWidth(widget.NewLabel(""), 190), nil, l)
-}
-
 // gate disables the buttons that start work while something is running (R4.2).
 func (u *ui) gate(buttons ...*widget.Button) {
 	if !u.working() {
@@ -371,35 +359,35 @@ func (u *ui) gate(buttons ...*widget.Button) {
 	}
 }
 
-func buildIDStatus(id string) Status {
+func buildIDStatus(id string) fd.Status {
 	if id == "" {
-		return StatusWarn
+		return fd.StatusWarn
 	}
-	return StatusGood
+	return fd.StatusGood
 }
 
-func disableAllStatus(disabled bool) Status {
+func disableAllStatus(disabled bool) fd.Status {
 	if disabled {
-		return StatusWarn
+		return fd.StatusWarn
 	}
-	return StatusGood
+	return fd.StatusGood
 }
 
-func enabledStatus(enabled, total int) Status {
+func enabledStatus(enabled, total int) fd.Status {
 	switch {
 	case total == 0:
-		return StatusWarn
+		return fd.StatusWarn
 	case enabled == 0:
-		return StatusWarn
+		return fd.StatusWarn
 	}
-	return StatusGood
+	return fd.StatusGood
 }
 
-func builtStatus(dropped int) Status {
+func builtStatus(dropped int) fd.Status {
 	if dropped > 0 {
-		return StatusBad
+		return fd.StatusBad
 	}
-	return StatusGood
+	return fd.StatusGood
 }
 
 // compatText spells out the verdict the round-trip check produced. The bare
@@ -426,12 +414,12 @@ func dotnetText(present bool, flavor string) string {
 	return "absent — the dotnet10 flavor will not start without it"
 }
 
-func dotnetStatus(present bool, flavor string) Status {
+func dotnetStatus(present bool, flavor string) fd.Status {
 	switch {
 	case present:
-		return StatusGood
+		return fd.StatusGood
 	case flavor == "self-contained":
-		return StatusInfo
+		return fd.StatusInfo
 	}
-	return StatusBad
+	return fd.StatusBad
 }

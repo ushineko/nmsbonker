@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
-	"time"
+	"path/filepath"
 
 	"fyne.io/fyne/v2"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/steps"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 )
@@ -41,7 +43,7 @@ func (u *ui) report(what string, err error) {
 	if errors.Is(err, context.Canceled) {
 		return
 	}
-	fyne.Do(func() { u.flash(what+": "+err.Error(), StatusBad) })
+	fyne.Do(func() { u.flash(what+": "+err.Error(), fd.StatusBad) })
 }
 
 // ok reports a completed operation and treats what is on screen as stale.
@@ -52,7 +54,7 @@ func (u *ui) report(what string, err error) {
 // longer matches the config is how someone removes the wrong mod.
 func (u *ui) ok(msg string) {
 	fyne.Do(func() {
-		u.flash(msg, StatusGood)
+		u.flash(msg, fd.StatusGood)
 		u.invalidate()
 	})
 }
@@ -106,7 +108,7 @@ gets clicked twice.
 */
 func (u *ui) perform(what string, fn func(ctx context.Context) error) {
 	if u.working() {
-		u.flash("Something is already running. Wait for it to finish, or cancel it.", StatusWarn)
+		u.flash("Something is already running. Wait for it to finish, or cancel it.", fd.StatusWarn)
 		return
 	}
 	if !u.onScreen() {
@@ -213,7 +215,7 @@ func (u *ui) loadMods() {
 			}
 			u.rebuild()
 			for _, n := range res.Notices {
-				u.flash(n, StatusInfo)
+				u.flash(n, fd.StatusInfo)
 			}
 		})
 	}()
@@ -343,7 +345,7 @@ func (u *ui) loadReleases() {
 			u.releases, u.releasesOK = res, true
 			if res.Warning != "" {
 				u.flash("GitHub could not be reached, so this listing came from the cache: "+
-					res.Warning, StatusWarn)
+					res.Warning, fd.StatusWarn)
 			}
 			u.refresh()
 			u.showReleases()
@@ -381,13 +383,6 @@ func (u *ui) loadReport() {
 
 // --- the build -------------------------------------------------------------
 
-// logPumpInterval is how often the log pane redraws while a build runs.
-//
-// Per line would be a hundred fyne.Do calls a second on a cold build and a
-// window slower than the thing it is watching. A tenth of a second is faster
-// than anyone reads and slow enough to cost nothing.
-const logPumpInterval = 100 * time.Millisecond
-
 /*
 buildEvents bridges core.Events into the Build section (R4.1).
 
@@ -400,12 +395,13 @@ the result when it finishes.
 
 Called from core's worker goroutines. The log model takes its own lock; the step
 list is touched on the UI thread through fyne.Do, because it is read by the
-widgets.
+widgets. Lines go in as core words them, with no timestamp or level prefix: the
+level is the row's colour.
 */
 func (u *ui) buildEvents() core.Events {
 	return core.Events{
 		Log: func(level core.Level, msg string) {
-			u.run.log.append(level, msg)
+			u.run.pane.Model().Append(logLevel(level), msg)
 		},
 		Progress: func(p core.Progress) {
 			step, ok := stepFor(p.What)
@@ -418,7 +414,7 @@ func (u *ui) buildEvents() core.Events {
 			}
 			fyne.Do(func() {
 				u.run.advance(step, note)
-				u.drawSteps()
+				u.drawTotals()
 			})
 		},
 	}
@@ -442,16 +438,20 @@ The whole run is one goroutine and one context. Cancel closes the context, the
 compiler runner kills the MBINCompiler processes it started, and build.Run
 restores the previous output before returning — so a cancelled build leaves the
 workspace holding the mod folder that was there before, not a half-built one.
+
+The log pane is redrawn by the library's pump on a timer until the build ends,
+then once more, so the last lines are on screen even if they arrived between
+ticks.
 */
 func (u *ui) startBuild(recache bool) {
 	if u.working() {
-		u.flash("A build is already running. Cancel it first.", StatusWarn)
+		u.flash("A build is already running. Cancel it first.", fd.StatusWarn)
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	u.run.reset()
 	u.run.cancel = cancel
-	u.drawSteps()
+	u.drawTotals()
 	u.drawControls()
 	u.redrawStatus()
 
@@ -465,56 +465,12 @@ func (u *ui) startBuild(recache bool) {
 		defer done()
 		defer cancel()
 
-		stop := u.startLogPump(ctx)
+		stop := u.run.pane.Pump()
 		res, err := core.Build(ctx, req)
 		stop()
 
 		fyne.Do(func() { u.finishBuild(res, err) })
 	}()
-}
-
-/*
-startLogPump redraws the log pane on a timer until the build ends.
-
-The returned function stops the pump, waits for it, and draws once more, so the
-last lines of a build are on screen even if it finished between ticks.
-
-The quit channel is what makes that wait terminate. Stopping the ticker does not
-close its channel, so a pump woken only by the ticker and the build's context
-would sit in its select for ever and the caller would block on it -- which it
-did: the build finished, the goroutine waiting to report it never returned, and
-the window sat there with the progress bar still going.
-*/
-func (u *ui) startLogPump(ctx context.Context) func() {
-	ticker := time.NewTicker(logPumpInterval)
-	quit := make(chan struct{})
-	stopped := make(chan struct{})
-	go func() {
-		defer close(stopped)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-quit:
-				return
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if !u.run.log.takeDirty() {
-					continue
-				}
-				fyne.Do(u.drawLog)
-			}
-		}
-	}()
-
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			close(quit)
-			<-stopped
-			fyne.Do(u.drawLog)
-		})
-	}
 }
 
 // finishBuild records the outcome and reports it in one banner (R4.1). Called
@@ -524,14 +480,14 @@ func (u *ui) finishBuild(res core.BuildResult, err error) {
 	switch {
 	case u.run.cancelled || errors.Is(err, context.Canceled):
 		u.run.cancelled = true
-		u.run.stop(stepCancelled, "cancelled; the previous output was put back")
+		u.run.stop(steps.Cancelled, "cancelled; the previous output was put back")
 		u.run.summary = "The build was cancelled. Nothing was installed, and the mod folder from " +
 			"the previous build is back in the workspace."
-		u.run.summarySt = StatusWarn
+		u.run.summarySt = fd.StatusWarn
 	case err != nil:
-		u.run.stop(stepFailed, err.Error())
+		u.run.stop(steps.Failed, err.Error())
 		u.run.summary = "The build failed: " + err.Error()
-		u.run.summarySt = StatusBad
+		u.run.summarySt = fd.StatusBad
 	default:
 		u.run.finish(stepReport, "written")
 		u.run.running, u.run.finished = false, true
@@ -540,9 +496,9 @@ func (u *ui) finishBuild(res core.BuildResult, err error) {
 	}
 	u.run.running = false
 	u.flash(u.run.summary, u.run.summarySt)
-	u.drawSteps()
+	u.drawTotals()
 	u.drawControls()
-	u.drawLog()
+	u.run.pane.Draw()
 	u.statusOK = false
 	u.loadStatus()
 	u.refresh()
@@ -553,17 +509,17 @@ func (u *ui) finishBuild(res core.BuildResult, err error) {
 // Bad when a target was dropped, because a dropped target is a game file this
 // build could not ship and the mod that wanted it is not doing what it says.
 // Warn when everything shipped but a mod came out PARTIAL or NOT BUILT.
-func buildSummary(res core.BuildResult) (string, Status) {
+func buildSummary(res core.BuildResult) (string, fd.Status) {
 	if res.Report == nil {
-		return "The build finished, but wrote no report.", StatusWarn
+		return "The build finished, but wrote no report.", fd.StatusWarn
 	}
 	r := res.Report
 	partial := 0
 	for _, m := range r.Mods {
 		switch verdictStatus(m.Verdict) {
-		case StatusBad, StatusWarn:
+		case fd.StatusBad, fd.StatusWarn:
 			partial++
-		case StatusGood, StatusInfo:
+		case fd.StatusGood, fd.StatusInfo:
 		}
 	}
 	msg := fmt.Sprintf("Built %d file(s) from %d mod(s); %d edit(s) applied, %d skipped.",
@@ -574,13 +530,13 @@ func buildSummary(res core.BuildResult) (string, Status) {
 	switch {
 	case len(r.CompilerFailures) > 0:
 		return msg + fmt.Sprintf(" MBINCompiler could not handle %d file(s) — the compiler may not match "+
-			"this game build; see the report.", len(r.CompilerFailures)), StatusBad
+			"this game build; see the report.", len(r.CompilerFailures)), fd.StatusBad
 	case r.Dropped > 0:
-		return msg + fmt.Sprintf(" %d target(s) were dropped — see the report.", r.Dropped), StatusBad
+		return msg + fmt.Sprintf(" %d target(s) were dropped — see the report.", r.Dropped), fd.StatusBad
 	case partial > 0:
-		return msg + fmt.Sprintf(" %d mod(s) need checking — see the report.", partial), StatusWarn
+		return msg + fmt.Sprintf(" %d mod(s) need checking — see the report.", partial), fd.StatusWarn
 	}
-	return msg, StatusGood
+	return msg, fd.StatusGood
 }
 
 // cancelBuild asks the running build to stop.
@@ -591,6 +547,35 @@ func (u *ui) cancelBuild() {
 	u.run.cancelled = true
 	u.run.cancel()
 	u.flash("Cancelling. The compiler processes are being stopped and the previous "+
-		"output put back; this takes a moment.", StatusInfo)
+		"output put back; this takes a moment.", fd.StatusInfo)
 	u.drawControls()
+}
+
+// --- the desktop -----------------------------------------------------------
+
+/*
+openPath hands a file or directory to the desktop.
+
+This is the one place the window starts a process that is not MBINCompiler, and
+the library keeps it the smallest possible one: the desktop's opener decides
+what a .lua is worth opening in, because it already knows and this program has
+no business having an opinion. A machine without an opener — a bare window
+manager, a container — gets a warning banner naming the path, which is still
+enough to open it by hand.
+*/
+func (u *ui) openPath(path string) {
+	if path == "" {
+		u.flash("There is nothing to open yet.", fd.StatusWarn)
+		return
+	}
+	go func() {
+		done := u.busy("Opening " + filepath.Base(path) + "…")
+		defer done()
+		if err := dialogs.OpenPath(path); err != nil {
+			fyne.Do(func() {
+				u.flash("Could not "+err.Error()+". Open it by hand; nothing else was affected.",
+					fd.StatusWarn)
+			})
+		}
+	}()
 }

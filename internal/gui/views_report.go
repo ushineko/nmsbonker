@@ -10,6 +10,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/build/report"
 )
@@ -40,21 +43,21 @@ func (u *ui) compilerFailuresBlock(r *report.Result) fyne.CanvasObject {
 	if len(r.CompilerFailures) == 0 {
 		return container.NewVBox()
 	}
-	var t detailTable
-	t.header("File", "Stage", "Compiler said", "Wanted by")
-	t.setWidths(300, 90, 420, 200)
+	t := table.New()
+	t.Header("File", "Stage", "Compiler said", "Wanted by")
+	t.SetWidths(300, 90, 420, 200)
 	for _, f := range r.CompilerFailures {
-		t.row(StatusBad, f.Internal, f.Stage, report.FirstLine(f.Detail), strings.Join(f.Mods, ", "))
+		t.Row(fd.StatusBad, f.Internal, f.Stage, report.FirstLine(f.Detail), strings.Join(f.Mods, ", "))
 	}
 	check := widget.NewButtonWithIcon("Check compatibility", theme.QuestionIcon(), func() { u.toolCheck() })
 	tools := widget.NewButtonWithIcon("Tools", theme.ComputerIcon(), func() { u.selectSection("Tools") })
 	u.gate(check, tools)
 	return container.NewVBox(
-		note(fmt.Sprintf("MBINCompiler %s could not handle %d game file(s) on game build %s. "+
+		widgets.Note(fmt.Sprintf("MBINCompiler %s could not handle %d game file(s) on game build %s. "+
 			"These mods are fine; the compiler does not match the game. Run the compatibility check, "+
 			"and pin a release that passes it in Tools.",
-			orNone(r.CompilerVersion, "(unknown)"), len(r.CompilerFailures), orNone(r.GameBuildID, "unknown")), StatusBad),
-		fixedHeight(t.widget(), min(60+float32(len(r.CompilerFailures))*36, 240)),
+			widgets.OrNone(r.CompilerVersion, "(unknown)"), len(r.CompilerFailures), widgets.OrNone(r.GameBuildID, "unknown")), fd.StatusBad),
+		widgets.FixedHeight(t.Widget(), min(60+float32(len(r.CompilerFailures))*36, 240)),
 		container.NewHBox(check, tools),
 		widget.NewSeparator(),
 	)
@@ -66,16 +69,16 @@ func (u *ui) buildReport() fyne.CanvasObject {
 
 	if !u.lastReportOK {
 		return container.NewVScroll(container.NewVBox(
-			heading("Report", "Reading the last build report…")))
+			widgets.Heading("Report", "Reading the last build report…")))
 	}
 	r := u.lastReport.Report
 	if r == nil {
 		return container.NewVScroll(container.NewVBox(
-			heading("Report", "No build yet."),
-			note("Nothing has been built, so there is nothing to report. A build merges every "+
+			widgets.Heading("Report", "No build yet."),
+			widgets.Note("Nothing has been built, so there is nothing to report. A build merges every "+
 				"enabled mod into one folder in the workspace and writes the report beside it; "+
 				"the game is not touched until you deploy. "+
-				trimReason(u.lastReportErr), StatusInfo),
+				trimReason(u.lastReportErr), fd.StatusInfo),
 		))
 	}
 
@@ -83,28 +86,28 @@ func (u *ui) buildReport() fyne.CanvasObject {
 	if r.CompatibilityDetail != "" {
 		compat += " (" + r.CompatibilityDetail + ")"
 	}
-	facts := card("Last build",
-		plainRow("Generated", r.Generated.Format("2006-01-02 15:04")+" · "+humanAgo(r.Generated)),
-		plainRow("Output folder", r.ModName),
-		plainRow("Output directory", r.OutputDir),
-		plainRow("Game buildid", orNone(r.GameBuildID, "unknown")),
-		plainRow("Compiler", orNone(r.CompilerVersion, "unknown")),
-		factRow("Compatibility", compat, compatStatus(r.Compatibility)),
-		factRow("MBINs", fmt.Sprintf("%d built, %d dropped", r.Built, r.Dropped),
+	facts := widgets.Card("Last build",
+		widgets.PlainRow("Generated", r.Generated.Format("2006-01-02 15:04")+" · "+widgets.HumanAgo(r.Generated)),
+		widgets.PlainRow("Output folder", r.ModName),
+		widgets.PlainRow("Output directory", r.OutputDir),
+		widgets.PlainRow("Game buildid", widgets.OrNone(r.GameBuildID, "unknown")),
+		widgets.PlainRow("Compiler", widgets.OrNone(r.CompilerVersion, "unknown")),
+		widgets.FactRow("Compatibility", compat, compatStatus(r.Compatibility)),
+		widgets.FactRow("MBINs", fmt.Sprintf("%d built, %d dropped", r.Built, r.Dropped),
 			builtStatus(r.Dropped)),
-		plainRow("Edits", fmt.Sprintf("%d applied, %d skipped", r.Applied, r.Skipped)),
-		plainRow("Capped values", cappedText(r.Capped)),
-		plainRow("Timings", fmt.Sprintf(
+		widgets.PlainRow("Edits", fmt.Sprintf("%d applied, %d skipped", r.Applied, r.Skipped)),
+		widgets.PlainRow("Capped values", cappedText(r.Capped)),
+		widgets.PlainRow("Timings", fmt.Sprintf(
 			"%s wall clock; cache %s, merge %s and compile %s summed across %d worker(s)",
 			r.Timings.Total.Round(1e6), r.Timings.Cache.Round(1e6),
 			r.Timings.Merge.Round(1e6), r.Timings.Compile.Round(1e6), r.Workers)),
 	)
 
-	var t detailTable
-	t.header("Mod", "Status", "Edits", "Skipped", "Notes")
-	t.setWidths(280, 110, 70, 80, 420)
+	t := table.New()
+	t.Header("Mod", "Status", "Edits", "Skipped", "Notes")
+	t.SetWidths(280, 110, 70, 80, 420)
 	for _, m := range r.Mods {
-		t.row(verdictStatus(m.Verdict), m.Name, m.Verdict,
+		t.Row(verdictStatus(m.Verdict), m.Name, m.Verdict,
 			strconv.Itoa(m.Applied), strconv.Itoa(m.Skipped), modNote(m))
 	}
 
@@ -113,12 +116,12 @@ func (u *ui) buildReport() fyne.CanvasObject {
 	// with the header facts above it a default-sized window opened on two rows
 	// of it and a page of numbers.
 	body := container.NewVBox(
-		heading("Report", "What the last build made of each mod."),
+		widgets.Heading("Report", "What the last build made of each mod."),
 		u.compilerFailuresBlock(r),
 		u.auditBlock(),
 		widget.NewSeparator(),
-		fixedHeight(t.widget(), 320),
-		note(reportLegend, StatusInfo),
+		widgets.FixedHeight(t.Widget(), 320),
+		widgets.Note(reportLegend, fd.StatusInfo),
 		widget.NewSeparator(),
 		facts,
 	)
@@ -127,32 +130,32 @@ func (u *ui) buildReport() fyne.CanvasObject {
 		body.Add(widget.NewSeparator())
 		body.Add(widget.NewLabelWithStyle("Ignored script keys",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		body.Add(note("These directives appear in the scripts and this engine does not "+
+		body.Add(widgets.Note("These directives appear in the scripts and this engine does not "+
 			"implement them, so the edits they asked for did not happen: "+
-			strings.Join(r.UnsupportedKeys, ", ")+".", StatusWarn))
+			strings.Join(r.UnsupportedKeys, ", ")+".", fd.StatusWarn))
 	}
 	if len(r.CacheMisses) > 0 {
 		body.Add(widget.NewSeparator())
 		body.Add(widget.NewLabelWithStyle("Game files not found",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		body.Add(note("A mod asked to edit a file that is in none of this install's archives, "+
+		body.Add(widgets.Note("A mod asked to edit a file that is in none of this install's archives, "+
 			"usually because a game update moved or removed it: "+
-			strings.Join(r.CacheMisses, ", ")+".", StatusWarn))
+			strings.Join(r.CacheMisses, ", ")+".", fd.StatusWarn))
 	}
 	if len(r.Degraded) > 0 {
 		body.Add(widget.NewSeparator())
 		body.Add(widget.NewLabelWithStyle("Files that shipped without their structural edits",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		var d detailTable
-		d.header("File", "Mods whose add/remove was skipped")
-		d.setWidths(460, 400)
+		d := table.New()
+		d.Header("File", "Mods whose add/remove was skipped")
+		d.SetWidths(460, 400)
 		for _, f := range r.Degraded {
-			d.row(StatusWarn, f.Internal, strings.Join(f.Mods, ", "))
+			d.Row(fd.StatusWarn, f.Internal, strings.Join(f.Mods, ", "))
 		}
-		body.Add(fixedHeight(d.widget(), 140))
-		body.Add(note("The merged file would not recompile with those entries, so it was built "+
+		body.Add(widgets.FixedHeight(d.Widget(), 140))
+		body.Add(widgets.Note("The merged file would not recompile with those entries, so it was built "+
 			"again without them. Every value edit is in it; the added or removed entries are "+
-			"not.", StatusWarn))
+			"not.", fd.StatusWarn))
 	}
 
 	return container.NewBorder(nil, u.reportActions(), nil, nil, container.NewVScroll(body))

@@ -10,6 +10,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
@@ -93,15 +96,15 @@ func (u *ui) newSettingsForm() *settingsForm {
 	f.revert = widget.NewButtonWithIcon("Revert", theme.ContentUndoIcon(), func() {
 		f.set(u.configValues())
 		u.flash("Put the fields back to what "+u.settings.Path+" says. Nothing was written.",
-			StatusInfo)
+			fd.StatusInfo)
 	})
 	u.gate(f.save, f.revert, auto)
 
 	f.body = container.NewVBox(
 		widget.NewForm(
 			widget.NewFormItem("Game directory",
-				container.NewBorder(nil, nil, nil, auto, u.withBrowse(f.gameDir, true))),
-			widget.NewFormItem("Mod library", u.withBrowse(f.libraryDir, true)),
+				container.NewBorder(nil, nil, nil, auto, dialogs.WithBrowse(u.win, f.gameDir, true))),
+			widget.NewFormItem("Mod library", dialogs.WithBrowse(u.win, f.libraryDir, true)),
 			widget.NewFormItem("Output folder name", f.modName),
 			widget.NewFormItem("Parallel jobs", f.jobs),
 			widget.NewFormItem("Compiler flavor", f.flavor),
@@ -117,7 +120,7 @@ func (f *settingsForm) set(values map[string]string) {
 	f.libraryDir.SetText(values["library_dir"])
 	f.modName.SetText(values["mod_name"])
 	f.jobs.SetSelected(parallelValue(values["parallel"]))
-	f.flavor.SetSelected(orNone(values["mbincompiler.flavor"], config.FlavorAuto))
+	f.flavor.SetSelected(widgets.OrNone(values["mbincompiler.flavor"], config.FlavorAuto))
 	for key, entry := range f.limits {
 		entry.SetText(values[key])
 	}
@@ -157,15 +160,15 @@ func (u *ui) auditGroup(f *settingsForm) fyne.CanvasObject {
 				f.limits[key].SetText(value)
 			}
 			u.flash("The audit limits in the form are back to their defaults. "+
-				"Save to write them.", StatusInfo)
+				"Save to write them.", fd.StatusInfo)
 		})
 	u.gate(reset)
-	return card("Audit limits",
-		note("What counts as a reward amount worth warning about. A build flags an amount "+
+	return widgets.Card("Audit limits",
+		widgets.Note("What counts as a reward amount worth warning about. A build flags an amount "+
 			"over one of these and names the mods that made it; nothing is changed or "+
 			"disabled. The first five are absolute; the last is how many times the "+
 			"game's own value an amount may reach. Re-check in the Report section "+
-			"applies a new limit to the last build without rebuilding.", StatusInfo),
+			"applies a new limit to the last build without rebuilding.", fd.StatusInfo),
 		widget.NewForm(items...),
 		container.NewHBox(reset),
 	)
@@ -205,43 +208,43 @@ func (u *ui) buildSettings() fyne.CanvasObject {
 	u.loadConfig()
 	if !u.configOK {
 		return container.NewVScroll(container.NewVBox(
-			heading("Settings", "Reading the settings…")))
+			widgets.Heading("Settings", "Reading the settings…")))
 	}
 
 	f := u.newSettingsForm()
 
-	resolved := card("Where these resolve to",
-		plainRow("Game directory", orNone(u.settings.GameDir, "not found")+
+	resolved := widgets.Card("Where these resolve to",
+		widgets.PlainRow("Game directory", widgets.OrNone(u.settings.GameDir, "not found")+
 			" ["+u.settings.GameDirSource+"]"),
-		plainRow("Mod library", u.settings.Paths.Library),
-		plainRow("Tools", u.settings.Paths.Tools),
-		plainRow("Cache", u.settings.Paths.Cache),
-		plainRow("Workspace", u.settings.Paths.Workspace),
-		plainRow("Deploy archive", u.settings.Paths.Archive),
+		widgets.PlainRow("Mod library", u.settings.Paths.Library),
+		widgets.PlainRow("Tools", u.settings.Paths.Tools),
+		widgets.PlainRow("Cache", u.settings.Paths.Cache),
+		widgets.PlainRow("Workspace", u.settings.Paths.Workspace),
+		widgets.PlainRow("Deploy archive", u.settings.Paths.Archive),
 	)
 
 	body := container.NewVBox(
-		heading("Settings", "What nmsbonker uses, and where it keeps things."),
+		widgets.Heading("Settings", "What nmsbonker uses, and where it keeps things."),
 		f.body,
-		note("Saving writes "+u.settings.Path+". That file is the settings: `nmsbonker "+
+		widgets.Note("Saving writes "+u.settings.Path+". That file is the settings: `nmsbonker "+
 			"config show` in a terminal reads the same one, and this window was started "+
-			"against it.", StatusInfo),
-		note("Parallel jobs at "+parallelAuto+" is half this machine's CPUs ("+
+			"against it.", fd.StatusInfo),
+		widgets.Note("Parallel jobs at "+parallelAuto+" is half this machine's CPUs ("+
 			strconv.Itoa(max(1, runtime.NumCPU()/2))+" here). MBINCompiler is one .NET process "+
 			"per file, and the machine running the build is also running the desktop you are "+
-			"looking at.", StatusInfo),
-		note("The colour scheme, the font and the text size are not in this file. They are the "+
+			"looking at.", fd.StatusInfo),
+		widgets.Note("The colour scheme, the font and the text size are not in this file. They are the "+
 			"only thing this application keeps in Fyne's own preference store, because the "+
-			"command line has no use for them — see Appearance.", StatusInfo),
+			"command line has no use for them — see Appearance.", fd.StatusInfo),
 		widget.NewSeparator(),
 		u.auditGroup(f),
 		widget.NewSeparator(),
 		resolved,
 	)
 	if u.settings.GameDirSource == "env "+config.GameDirEnv {
-		body.Add(note("$"+config.GameDirEnv+" is set and outranks the setting above, so the "+
+		body.Add(widgets.Note("$"+config.GameDirEnv+" is set and outranks the setting above, so the "+
 			"game directory in this form is not the one being used. Unset it to go back to "+
-			"the saved value.", StatusWarn))
+			"the saved value.", fd.StatusWarn))
 	}
 	return container.NewVScroll(body)
 }
@@ -322,7 +325,7 @@ func (u *ui) saveSettings(want map[string]string) {
 		}
 	}
 	if len(changed) == 0 {
-		u.flash("Nothing changed, so nothing was written.", StatusInfo)
+		u.flash("Nothing changed, so nothing was written.", fd.StatusInfo)
 		return
 	}
 	u.perform("Saving the settings…", func(ctx context.Context) error {
@@ -363,7 +366,7 @@ func (u *ui) setConfig(key, value, label string) {
 			u.ok(label + " was already " + res.New + ".")
 			return nil
 		}
-		u.ok(label + " is now " + orNone(res.New, "auto-detected") + ", written to " + res.Path + ".")
+		u.ok(label + " is now " + widgets.OrNone(res.New, "auto-detected") + ", written to " + res.Path + ".")
 		return nil
 	})
 }

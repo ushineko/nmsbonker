@@ -14,6 +14,10 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/save"
@@ -86,7 +90,7 @@ func (u *ui) buildSaves() fyne.CanvasObject {
 		}
 	}
 
-	top := heading("Saves", "The game's save slots, and an editor for the one you pick.")
+	top := widgets.Heading("Saves", "The game's save slots, and an editor for the one you pick.")
 	// Not wrapped in a scroll of its own: the content pane already scrolls,
 	// and gives this at least its own height, which the tabs then fill.
 	return container.NewBorder(top, nil, nil, nil, tabs)
@@ -103,7 +107,7 @@ const (
 // save the slot list picked.
 func (u *ui) selectedSaveRow() fyne.CanvasObject {
 	if u.inspect == nil {
-		return note("Pick a save in the Slots tab first.", StatusInfo)
+		return widgets.Note("Pick a save in the Slots tab first.", fd.StatusInfo)
 	}
 	in := u.inspect
 	back := widget.NewButtonWithIcon("Slots", theme.ListIcon(), func() {
@@ -111,7 +115,7 @@ func (u *ui) selectedSaveRow() fyne.CanvasObject {
 		u.refresh()
 	})
 	return container.NewBorder(nil, nil, nil, back,
-		plainRow("Save", fmt.Sprintf("slot %d %s — %s", in.Ref.Slot, in.Ref.Kind, in.File)))
+		widgets.PlainRow("Save", fmt.Sprintf("slot %d %s — %s", in.Ref.Slot, in.Ref.Kind, in.File)))
 }
 
 // --- the slots (R8.1) -------------------------------------------------------
@@ -132,26 +136,26 @@ func (u *ui) slotsCard() fyne.CanvasObject {
 	rows := []fyne.CanvasObject{}
 	switch {
 	case u.slotsErr != "":
-		rows = append(rows, note(u.slotsErr, StatusWarn))
+		rows = append(rows, widgets.Note(u.slotsErr, fd.StatusWarn))
 	case len(u.slots.Slots) == 0:
-		rows = append(rows, note("No saves were found in the profile.", StatusInfo))
+		rows = append(rows, widgets.Note("No saves were found in the profile.", fd.StatusInfo))
 	default:
-		var t detailTable
-		t.header("", "Slot", "Kind", "Name", "Summary", "Played", "Version", "Written")
-		t.setWidths(30, 60, 80, 160, 300, 90, 120, 150)
+		t := table.New()
+		t.Header("", "Slot", "Kind", "Name", "Summary", "Played", "Version", "Written")
+		t.SetWidths(30, 60, 80, 160, 300, 90, 120, 150)
 		for _, sl := range u.slots.Slots {
-			marker, st := "", StatusInfo
+			marker, st := "", fd.StatusInfo
 			if sl.Newest {
-				marker, st = "*", StatusGood
+				marker, st = "*", fd.StatusGood
 			}
 			summary := sl.Summary
 			if sl.MetaError != "" {
-				summary, st = sl.MetaError, StatusWarn
+				summary, st = sl.MetaError, fd.StatusWarn
 			}
-			t.row(st, marker, strconv.Itoa(sl.Slot), string(sl.Kind), orNone(sl.Name, "—"),
-				orNone(summary, "—"), playTimeText(sl.PlayTime), slotVersionText(sl), slotWrittenText(sl))
+			t.Row(st, marker, strconv.Itoa(sl.Slot), string(sl.Kind), widgets.OrNone(sl.Name, "—"),
+				widgets.OrNone(summary, "—"), playTimeText(sl.PlayTime), slotVersionText(sl), slotWrittenText(sl))
 		}
-		table := t.widget()
+		table := t.Widget()
 		slots := u.slots.Slots
 		table.OnSelected = func(id widget.TableCellID) {
 			if id.Row < 0 || id.Row >= len(slots) {
@@ -159,15 +163,15 @@ func (u *ui) slotsCard() fyne.CanvasObject {
 			}
 			u.selectSlot(core.SlotSelector{Slot: slots[id.Row].Slot, Kind: slots[id.Row].Kind})
 		}
-		rows = append(rows, fixedHeight(table, 180))
+		rows = append(rows, widgets.FixedHeight(table, 180))
 	}
 	rows = append(rows,
-		plainRow("Profile", orNone(u.slots.Profile, "—")),
-		factRow("Key mapping", mappingStatusText(u.slots.Mapping), mappingStatus(u.slots.Mapping)),
-		factRow("Game", gameRunningText(u.slots.GameRunning), gameRunningStatus(u.slots.GameRunning)),
+		widgets.PlainRow("Profile", widgets.OrNone(u.slots.Profile, "—")),
+		widgets.FactRow("Key mapping", mappingStatusText(u.slots.Mapping), mappingStatus(u.slots.Mapping)),
+		widgets.FactRow("Game", gameRunningText(u.slots.GameRunning), gameRunningStatus(u.slots.GameRunning)),
 		container.NewHBox(refresh, openProfile),
 	)
-	return card("Slots", rows...)
+	return widgets.Card("Slots", rows...)
 }
 
 // selectSlot reads one save for the editor.
@@ -217,7 +221,7 @@ type editGroup struct {
 
 func (u *ui) saveEditorTab() fyne.CanvasObject {
 	if u.inspect == nil {
-		return card("Editor", u.selectedSaveRow())
+		return widgets.Card("Editor", u.selectedSaveRow())
 	}
 	in := u.inspect
 	s := in.Summary
@@ -257,16 +261,16 @@ func (u *ui) saveEditorTab() fyne.CanvasObject {
 
 	rows := []fyne.CanvasObject{
 		u.selectedSaveRow(),
-		plainRow("Name", orNone(orNone(in.Meta.Name, s.SaveName), "—")),
-		plainRow("Summary", orNone(in.Meta.Summary, "—")),
-		plainRow("Version", fmt.Sprintf("%d = base %d, %s · %s", s.Version, s.Base, save.GameModeName(s.GameMode), s.Platform)),
-		plainRow("Played", playTimeText(uint64(max(s.PlayTime, 0)))), //nolint:gosec // clamped
-		plainRow("Ships / multitools", fmt.Sprintf("%d / %d", s.Ships, s.Multitools)),
+		widgets.PlainRow("Name", widgets.OrNone(widgets.OrNone(in.Meta.Name, s.SaveName), "—")),
+		widgets.PlainRow("Summary", widgets.OrNone(in.Meta.Summary, "—")),
+		widgets.PlainRow("Version", fmt.Sprintf("%d = base %d, %s · %s", s.Version, s.Base, save.GameModeName(s.GameMode), s.Platform)),
+		widgets.PlainRow("Played", playTimeText(uint64(max(s.PlayTime, 0)))), //nolint:gosec // clamped
+		widgets.PlainRow("Ships / multitools", fmt.Sprintf("%d / %d", s.Ships, s.Multitools)),
 	}
 	if len(s.Unmapped) > 0 {
-		rows = append(rows, factRow("Unmapped keys",
+		rows = append(rows, widgets.FactRow("Unmapped keys",
 			fmt.Sprintf("%d key(s) the mapping does not name; the game is newer than the mapping", len(s.Unmapped)),
-			StatusWarn))
+			fd.StatusWarn))
 	}
 
 	var fields []*editField
@@ -283,10 +287,10 @@ func (u *ui) saveEditorTab() fyne.CanvasObject {
 	apply.Importance = widget.DangerImportance
 	u.gate(preview, apply)
 	rows = append(rows, widget.NewSeparator(),
-		wrapped("Every write copies the whole profile to the backup directory first."),
+		widgets.Wrapped("Every write copies the whole profile to the backup directory first."),
 		container.NewHBox(preview, apply))
 
-	return card(fmt.Sprintf("Editor — slot %d %s", in.Ref.Slot, in.Ref.Kind), rows...)
+	return widgets.Card(fmt.Sprintf("Editor — slot %d %s", in.Ref.Slot, in.Ref.Kind), rows...)
 }
 
 /*
@@ -451,7 +455,7 @@ func standingFields(standings []save.StandingValue) []*editField {
 // preserved across the rebuilds an operation causes.
 func (u *ui) fieldRow(f *editField) fyne.CanvasObject {
 	if f.widget != nil {
-		return container.NewBorder(nil, nil, fixedWidth(lowLabel(f.label), 200), nil, f.widget)
+		return container.NewBorder(nil, nil, widgets.FixedWidth(lowLabel(f.label), 200), nil, f.widget)
 	}
 	f.entry = widget.NewEntry()
 	f.entry.SetText(f.current)
@@ -466,15 +470,15 @@ func (u *ui) fieldRow(f *editField) fyne.CanvasObject {
 		u.draft[label] = text
 	}
 	return container.NewBorder(nil, nil,
-		fixedWidth(lowLabel(f.label), 200),
-		fixedWidth(dim(f.now), 320),
-		fixedWidth(f.entry, 200))
+		widgets.FixedWidth(lowLabel(f.label), 200),
+		widgets.FixedWidth(widgets.Dim(f.now), 320),
+		widgets.FixedWidth(f.entry, 200))
 }
 
 // groupHeading is a group's title with its one line of explanation.
 func groupHeading(title, blurb string) fyne.CanvasObject {
 	t := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	return container.NewVBox(t, wrapped(blurb))
+	return container.NewVBox(t, widgets.Wrapped(blurb))
 }
 
 // changeSet reads the form into a change set, taking only fields that differ
@@ -532,11 +536,11 @@ func parseCount(text string, into **int) error {
 func (u *ui) previewEdit(fields []*editField) {
 	cs, err := changeSet(fields)
 	if err != nil {
-		u.flash(err.Error(), StatusWarn)
+		u.flash(err.Error(), fd.StatusWarn)
 		return
 	}
 	if cs.Empty() {
-		u.flash("Nothing differs from what the save holds.", StatusInfo)
+		u.flash("Nothing differs from what the save holds.", fd.StatusInfo)
 		return
 	}
 	sel := core.SlotSelector{Slot: u.inspect.Ref.Slot, Kind: u.inspect.Ref.Kind}
@@ -549,10 +553,10 @@ func (u *ui) previewEdit(fields []*editField) {
 		}
 		fyne.Do(func() {
 			if len(res.Changes) == 0 {
-				u.flash("Every value is already what the save holds.", StatusInfo)
+				u.flash("Every value is already what the save holds.", fd.StatusInfo)
 				return
 			}
-			u.showDetail("Planned changes (nothing written)", changesTable(res.Changes), 800, 360)
+			dialogs.ShowDetail(u.win, "Planned changes (nothing written)", changesTable(res.Changes), 800, 360)
 		})
 		return nil
 	})
@@ -560,13 +564,13 @@ func (u *ui) previewEdit(fields []*editField) {
 
 // changesTable lists changes the way the CLI does.
 func changesTable(changes []save.Change) fyne.CanvasObject {
-	var t detailTable
-	t.header("Field", "Old", "New", "Path")
-	t.setWidths(180, 140, 140, 320)
+	t := table.New()
+	t.Header("Field", "Old", "New", "Path")
+	t.SetWidths(180, 140, 140, 320)
 	for _, c := range changes {
-		t.row(StatusInfo, c.Field, c.Old, c.New, c.Path)
+		t.Row(fd.StatusInfo, c.Field, c.Old, c.New, c.Path)
 	}
-	return fixedHeight(t.widget(), 260)
+	return widgets.FixedHeight(t.Widget(), 260)
 }
 
 /*
@@ -580,26 +584,26 @@ refused unless the box is ticked; the box says why that is unsafe.
 func (u *ui) confirmEdit(fields []*editField) {
 	cs, err := changeSet(fields)
 	if err != nil {
-		u.flash(err.Error(), StatusWarn)
+		u.flash(err.Error(), fd.StatusWarn)
 		return
 	}
 	if cs.Empty() {
-		u.flash("Nothing differs from what the save holds.", StatusInfo)
+		u.flash("Nothing differs from what the save holds.", fd.StatusInfo)
 		return
 	}
 	in := u.inspect
 	sel := core.SlotSelector{Slot: in.Ref.Slot, Kind: in.Ref.Kind}
 	force := widget.NewCheck("Write even though the game is running (unsafe: its next autosave may overwrite the edit)", nil)
 	body := container.NewVBox(
-		wrapped(fmt.Sprintf("This rewrites %s and its manifest.", in.File)),
-		wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time. "+
+		widgets.Wrapped(fmt.Sprintf("This rewrites %s and its manifest.", in.File)),
+		widgets.Wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time. "+
 			"To undo, close the game and copy the st_* folder from that backup back into the save folder."),
-		wrapped(core.SteamCloudNote),
+		widgets.Wrapped(core.SteamCloudNote),
 	)
 	if u.slots.GameRunning {
 		body.Add(force)
 	}
-	u.confirmWithBody("Write the edited save?", body, "Write", func() {
+	dialogs.ConfirmWithBody(u.win, "Write the edited save?", body, "Write", func() {
 		u.perform("Writing the save…", func(ctx context.Context) error {
 			res, err := core.EditSave(ctx, core.EditSaveRequest{
 				Request: u.request(), Slot: sel, Changes: cs, Force: force.Checked,
@@ -620,15 +624,15 @@ func (u *ui) wrote(w *core.SaveWriteResult, changes int, sel core.SlotSelector) 
 		u.savesOK = false
 		u.draft = nil // written, so the form starts from what the save now holds
 		if w == nil {
-			u.flash("Every value was already what the save holds; nothing was written.", StatusInfo)
+			u.flash("Every value was already what the save holds; nothing was written.", fd.StatusInfo)
 			u.refresh()
 			return
 		}
-		st := StatusGood
+		st := fd.StatusGood
 		msg := fmt.Sprintf("Wrote %d change(s) to %s. The profile was backed up to %s first. %s",
 			changes, filepath.Base(w.DataFile), w.Backup, w.Note)
 		if w.Forced {
-			st = StatusWarn
+			st = fd.StatusWarn
 			msg += " The game was running: its next autosave may overwrite this."
 		}
 		u.flash(msg, st)
@@ -657,7 +661,7 @@ func (u *ui) rawJSONTab() fyne.CanvasObject {
 	if u.inspect == nil {
 		export.Disable()
 		importBtn.Disable()
-		return card("Raw JSON", u.selectedSaveRow(), container.NewHBox(export, importBtn))
+		return widgets.Card("Raw JSON", u.selectedSaveRow(), container.NewHBox(export, importBtn))
 	}
 
 	path := widget.NewEntry()
@@ -678,24 +682,24 @@ func (u *ui) rawJSONTab() fyne.CanvasObject {
 
 	rows := []fyne.CanvasObject{
 		u.selectedSaveRow(),
-		wrapped("Type a path and Load, or pick a child to descend. Names or the game's keys both work; " +
+		widgets.Wrapped("Type a path and Load, or pick a child to descend. Names or the game's keys both work; " +
 			"a number picks an array element. Keys are shown by name; Apply turns them back."),
-		container.NewBorder(nil, nil, fixedWidth(lowLabel("Path"), 60), container.NewHBox(up, load), path),
+		container.NewBorder(nil, nil, widgets.FixedWidth(lowLabel("Path"), 60), container.NewHBox(up, load), path),
 	}
 
 	node := u.rawNode
 	if node == nil {
-		rows = append(rows, note("Load a path to browse.", StatusInfo))
+		rows = append(rows, widgets.Note("Load a path to browse.", fd.StatusInfo))
 	} else {
-		rows = append(rows, plainRow("Node", fmt.Sprintf("%s · %s · %s", orNone(node.Path, "(whole save)"), node.Type, humanSize(int64(node.Bytes)))))
+		rows = append(rows, widgets.PlainRow("Node", fmt.Sprintf("%s · %s · %s", widgets.OrNone(node.Path, "(whole save)"), node.Type, widgets.HumanSize(int64(node.Bytes)))))
 		if len(node.Children) > 0 {
-			var t detailTable
-			t.header("Child", "Type", "Size", "Items")
-			t.setWidths(320, 90, 100, 80)
+			t := table.New()
+			t.Header("Child", "Type", "Size", "Items")
+			t.SetWidths(320, 90, 100, 80)
 			for _, c := range node.Children {
-				t.row(StatusInfo, c.Name, c.Type, humanSize(int64(c.Bytes)), strconv.Itoa(c.Len))
+				t.Row(fd.StatusInfo, c.Name, c.Type, widgets.HumanSize(int64(c.Bytes)), strconv.Itoa(c.Len))
 			}
-			table := t.widget()
+			table := t.Widget()
 			children := node.Children
 			base := node.Path
 			table.OnSelected = func(id widget.TableCellID) {
@@ -708,19 +712,19 @@ func (u *ui) rawJSONTab() fyne.CanvasObject {
 				}
 				u.loadRawNode(next)
 			}
-			rows = append(rows, fixedHeight(table, 240))
+			rows = append(rows, widgets.FixedHeight(table, 240))
 		}
 		if node.TooLarge {
-			rows = append(rows, note(fmt.Sprintf("This node is %s, above the %s the editor box takes; pick a child.",
-				humanSize(int64(node.Bytes)), humanSize(core.MaxInlineJSON)), StatusWarn))
+			rows = append(rows, widgets.Note(fmt.Sprintf("This node is %s, above the %s the editor box takes; pick a child.",
+				widgets.HumanSize(int64(node.Bytes)), widgets.HumanSize(core.MaxInlineJSON)), fd.StatusWarn))
 		} else {
 			rows = append(rows, u.rawEditor())
 		}
 	}
 	rows = append(rows, widget.NewSeparator(),
-		wrapped("Export writes the whole save as JSON outside the game folder; Import writes such a file back."),
+		widgets.Wrapped("Export writes the whole save as JSON outside the game folder; Import writes such a file back."),
 		container.NewHBox(export, importBtn))
-	return card("Raw JSON", rows...)
+	return widgets.Card("Raw JSON", rows...)
 }
 
 // rawEditor is the text box for the node in view and the buttons that act on it.
@@ -745,7 +749,7 @@ func (u *ui) rawEditor() fyne.CanvasObject {
 		check.Disable()
 	}
 	return container.NewVBox(
-		fixedHeight(text, 360),
+		widgets.FixedHeight(text, 360),
 		container.NewHBox(revert, check, apply),
 	)
 }
@@ -757,7 +761,7 @@ func (u *ui) loadRawNode(path string) {
 		return
 	}
 	sel := core.SlotSelector{Slot: in.Ref.Slot, Kind: in.Ref.Kind}
-	u.perform("Reading "+orNone(path, "the whole save")+"…", func(ctx context.Context) error {
+	u.perform("Reading "+widgets.OrNone(path, "the whole save")+"…", func(ctx context.Context) error {
 		res, err := core.GetSaveNode(ctx, core.SaveNodeRequest{Request: u.request(), Slot: sel, Path: path})
 		if err != nil {
 			return err
@@ -795,10 +799,10 @@ func (u *ui) applyRawNode(dryRun bool) {
 		if dryRun {
 			fyne.Do(func() {
 				if !res.Changed {
-					u.flash("Valid JSON, and the same value the save already holds.", StatusInfo)
+					u.flash("Valid JSON, and the same value the save already holds.", fd.StatusInfo)
 					return
 				}
-				u.flash(fmt.Sprintf("Valid: %s would change (%d key(s) turned back). Apply writes it.", res.Path, res.Obfuscated), StatusGood)
+				u.flash(fmt.Sprintf("Valid: %s would change (%d key(s) turned back). Apply writes it.", res.Path, res.Obfuscated), fd.StatusGood)
 			})
 			return nil
 		}
@@ -814,11 +818,11 @@ func (u *ui) confirmRawNode() {
 		return
 	}
 	body := container.NewVBox(
-		wrapped(fmt.Sprintf("This replaces %s in %s and rewrites the manifest.", u.rawPath, in.File)),
-		wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time."),
-		wrapped(core.SteamCloudNote),
+		widgets.Wrapped(fmt.Sprintf("This replaces %s in %s and rewrites the manifest.", u.rawPath, in.File)),
+		widgets.Wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time."),
+		widgets.Wrapped(core.SteamCloudNote),
 	)
-	u.confirmWithBody("Write this node into the save?", body, "Write", func() { u.applyRawNode(false) }).Show()
+	dialogs.ConfirmWithBody(u.win, "Write this node into the save?", body, "Write", func() { u.applyRawNode(false) }).Show()
 }
 
 // exportDialog writes the save's JSON outside the game folder (R5.3).
@@ -833,11 +837,11 @@ func (u *ui) exportDialog() {
 	pretty := widget.NewCheck("Indent for reading", nil)
 	pretty.Checked = true
 	body := container.NewVBox(
-		wrapped("Writes the decoded save as JSON. Nothing in the game folder changes."),
-		u.withBrowse(path, true),
+		widgets.Wrapped("Writes the decoded save as JSON. Nothing in the game folder changes."),
+		dialogs.WithBrowse(u.win, path, true),
 		names, pretty,
 	)
-	u.pathDialog("Export save JSON", "Export", body, func() {
+	dialogs.Prompt(u.win, "Export save JSON", "Export", body, func() {
 		out := strings.TrimSpace(path.Text)
 		if fi, err := os.Stat(out); err == nil && fi.IsDir() {
 			out = filepath.Join(out, filepath.Base(filepath.Dir(in.File))+"-"+
@@ -851,7 +855,7 @@ func (u *ui) exportDialog() {
 				return err
 			}
 			fyne.Do(func() {
-				u.flash(fmt.Sprintf("Exported slot %d %s to %s (%s).", res.Ref.Slot, res.Ref.Kind, res.Out, humanSize(res.Bytes)), StatusGood)
+				u.flash(fmt.Sprintf("Exported slot %d %s to %s (%s).", res.Ref.Slot, res.Ref.Kind, res.Out, widgets.HumanSize(res.Bytes)), fd.StatusGood)
 			})
 			return nil
 		})
@@ -863,17 +867,17 @@ func (u *ui) exportDialog() {
 func (u *ui) importDialog() {
 	in := u.inspect
 	sel := core.SlotSelector{Slot: in.Ref.Slot, Kind: in.Ref.Kind}
-	u.chooseFile(storage.NewExtensionFileFilter([]string{".json"}), func(file string) {
+	dialogs.ChooseFile(u.win, "", storage.NewExtensionFileFilter([]string{".json"}), func(file string) {
 		force := widget.NewCheck("Write even though the game is running (unsafe: its next autosave may overwrite the edit)", nil)
 		body := container.NewVBox(
-			wrapped(fmt.Sprintf("This replaces the contents of %s with %s and rewrites the manifest to match.", in.File, file)),
-			wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time."),
-			wrapped(core.SteamCloudNote),
+			widgets.Wrapped(fmt.Sprintf("This replaces the contents of %s with %s and rewrites the manifest to match.", in.File, file)),
+			widgets.Wrapped("The whole save profile is copied to "+u.status.Paths.SaveBackup+" first, every time."),
+			widgets.Wrapped(core.SteamCloudNote),
 		)
 		if u.slots.GameRunning {
 			body.Add(force)
 		}
-		u.confirmWithBody("Import into this save?", body, "Import", func() {
+		dialogs.ConfirmWithBody(u.win, "Import into this save?", body, "Import", func() {
 			u.perform("Importing the save…", func(ctx context.Context) error {
 				res, err := core.ImportSave(ctx, core.ImportSaveRequest{
 					Request: u.request(), Slot: sel, In: file, Force: force.Checked,
@@ -904,26 +908,26 @@ func (u *ui) backupsTab() fyne.CanvasObject {
 
 	rows := []fyne.CanvasObject{}
 	if u.savesOK && len(u.saves.Backups) > 0 {
-		var t detailTable
-		t.header("Taken", "Profiles", "Files", "Size")
-		t.setWidths(240, 100, 90, 120)
+		t := table.New()
+		t.Header("Taken", "Profiles", "Files", "Size")
+		t.SetWidths(240, 100, 90, 120)
 		for _, b := range u.saves.Backups {
-			t.row(StatusInfo, b.Created.Format("2006-01-02 15:04")+" · "+humanAgo(b.Created),
-				strconv.Itoa(b.Profiles), strconv.Itoa(b.Files), humanSize(b.Bytes))
+			t.Row(fd.StatusInfo, b.Created.Format("2006-01-02 15:04")+" · "+widgets.HumanAgo(b.Created),
+				strconv.Itoa(b.Profiles), strconv.Itoa(b.Files), widgets.HumanSize(b.Bytes))
 		}
-		rows = append(rows, fixedHeight(t.widget(), 160))
+		rows = append(rows, widgets.FixedHeight(t.Widget(), 160))
 	} else {
-		rows = append(rows, note("No save backups yet. A deploy takes one, and so does every write from the editor.", StatusInfo))
+		rows = append(rows, widgets.Note("No save backups yet. A deploy takes one, and so does every write from the editor.", fd.StatusInfo))
 	}
 	rows = append(rows,
-		plainRow("Backups", u.saves.Dir),
-		plainRow("Kept", fmt.Sprintf("the newest %d", core.SaveRetention)),
-		wrapped("To restore one: close the game, then copy an st_* folder from a backup back into "+
+		widgets.PlainRow("Backups", u.saves.Dir),
+		widgets.PlainRow("Kept", fmt.Sprintf("the newest %d", core.SaveRetention)),
+		widgets.Wrapped("To restore one: close the game, then copy an st_* folder from a backup back into "+
 			"the save folder. The editor is the only part of nmsbonker that writes into that "+
 			"folder, and it takes one of these backups before every write."),
 		container.NewHBox(take, open),
 	)
-	return card("Backups", rows...)
+	return widgets.Card("Backups", rows...)
 }
 
 // --- rendering helpers ------------------------------------------------------
@@ -963,11 +967,11 @@ func mappingStatusText(st core.MappingStatus) string {
 	return fmt.Sprintf("libMBIN %s, %d keys", st.LibMBINVersion, st.Entries)
 }
 
-func mappingStatus(st core.MappingStatus) Status {
+func mappingStatus(st core.MappingStatus) fd.Status {
 	if st.Present {
-		return StatusGood
+		return fd.StatusGood
 	}
-	return StatusWarn
+	return fd.StatusWarn
 }
 
 func gameRunningText(running bool) string {
@@ -977,9 +981,9 @@ func gameRunningText(running bool) string {
 	return "not running"
 }
 
-func gameRunningStatus(running bool) Status {
+func gameRunningStatus(running bool) fd.Status {
 	if running {
-		return StatusWarn
+		return fd.StatusWarn
 	}
-	return StatusGood
+	return fd.StatusGood
 }

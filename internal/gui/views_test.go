@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	fd "github.com/ushineko/fynedesygn"
 
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/config"
@@ -62,12 +63,12 @@ func TestTheModTableTellsEnabledDisabledAndMissingApart(t *testing.T) {
 // Every verdict the report can produce must be ranked. An unranked one renders
 // in the ordinary colour, which says "this mod is fine" about a mod that is not.
 func TestEveryReportVerdictIsRanked(t *testing.T) {
-	require.Equal(t, StatusGood, verdictStatus(report.Working))
-	require.Equal(t, StatusWarn, verdictStatus(report.WorkingSkipped))
-	require.Equal(t, StatusWarn, verdictStatus(report.WorkingStructural))
-	require.Equal(t, StatusBad, verdictStatus(report.Partial))
-	require.Equal(t, StatusBad, verdictStatus(report.NotBuilt))
-	require.Equal(t, StatusInfo, verdictStatus(""))
+	require.Equal(t, fd.StatusGood, verdictStatus(report.Working))
+	require.Equal(t, fd.StatusWarn, verdictStatus(report.WorkingSkipped))
+	require.Equal(t, fd.StatusWarn, verdictStatus(report.WorkingStructural))
+	require.Equal(t, fd.StatusBad, verdictStatus(report.Partial))
+	require.Equal(t, fd.StatusBad, verdictStatus(report.NotBuilt))
+	require.Equal(t, fd.StatusInfo, verdictStatus(""))
 }
 
 // modRows joins three sources by mod name. A verdict landing on the wrong row
@@ -217,9 +218,9 @@ func TestTheStatusBarDrawsBeforeAnythingHasLoaded(t *testing.T) {
 // A compatibility verdict core can return but the window cannot rank would be
 // painted as an ordinary fact, which is the one thing it is not.
 func TestEveryCompatibilityVerdictIsRanked(t *testing.T) {
-	require.Equal(t, StatusGood, compatStatus(core.CompatOK))
-	require.Equal(t, StatusWarn, compatStatus(core.CompatMismatch))
-	require.Equal(t, StatusBad, compatStatus(core.CompatNoCompiler))
+	require.Equal(t, fd.StatusGood, compatStatus(core.CompatOK))
+	require.Equal(t, fd.StatusWarn, compatStatus(core.CompatMismatch))
+	require.Equal(t, fd.StatusBad, compatStatus(core.CompatNoCompiler))
 	require.NotEmpty(t, compatText(core.CompatOK))
 	require.NotEmpty(t, compatText(core.CompatMismatch))
 	require.NotEmpty(t, compatText("unknown"))
@@ -228,9 +229,9 @@ func TestEveryCompatibilityVerdictIsRanked(t *testing.T) {
 // The symlinked GAMEDATA/MODS is the state where the obvious action does the
 // wrong thing, so it must rank as a warning rather than as a fact.
 func TestASymlinkedModsDirectoryIsAWarning(t *testing.T) {
-	require.Equal(t, StatusGood, modsStateStatus("dir"))
-	require.Equal(t, StatusWarn, modsStateStatus("symlink"))
-	require.Equal(t, StatusInfo, modsStateStatus("absent"))
+	require.Equal(t, fd.StatusGood, modsStateStatus("dir"))
+	require.Equal(t, fd.StatusWarn, modsStateStatus("symlink"))
+	require.Equal(t, fd.StatusInfo, modsStateStatus("absent"))
 }
 
 // --- the way in to GAMEDATA/MODS --------------------------------------------
@@ -308,16 +309,16 @@ func TestABuildSummaryRanksDroppedTargetsWorstOfAll(t *testing.T) {
 	_, st := buildSummary(core.BuildResult{Report: &report.Result{
 		Built: 10, Dropped: 1, Mods: []report.ModResult{{Verdict: report.Working}},
 	}})
-	require.Equal(t, StatusBad, st)
+	require.Equal(t, fd.StatusBad, st)
 
 	_, st = buildSummary(core.BuildResult{Report: &report.Result{
 		Built: 10, Mods: []report.ModResult{{Verdict: report.WorkingSkipped}},
 	}})
-	require.Equal(t, StatusWarn, st, "a mod that needs checking is a warning")
+	require.Equal(t, fd.StatusWarn, st, "a mod that needs checking is a warning")
 
 	msg, st := buildSummary(core.BuildResult{Report: &report.Result{
 		Built: 10, Applied: 40, Mods: []report.ModResult{{Verdict: report.Working}},
 	}})
-	require.Equal(t, StatusGood, st)
+	require.Equal(t, fd.StatusGood, st)
 	require.Contains(t, msg, "10 file(s)")
 }

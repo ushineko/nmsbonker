@@ -7,6 +7,9 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/logpane"
+	fdtheme "github.com/ushineko/fynedesygn/theme"
 )
 
 /*
@@ -31,10 +34,15 @@ func testUI(t *testing.T) *ui {
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	u := &ui{app: app, win: test.NewWindow(widget.NewLabel("")), flashes: container.NewVBox()}
+	u.loadAppearance()
 	u.run.init()
 	t.Cleanup(func() { u.win.Close() })
 	return u
 }
+
+// The log pane's levels, named so a test reads as a sentence.
+func logLevelWarn() logpane.Level  { return logpane.Warn }
+func logLevelDebug() logpane.Level { return logpane.Debug }
 
 // TestSectionNamesNeedsNoApp: the flag help lists these while parsing flags,
 // before there is a Fyne app to construct a theme icon against. Asking for one
@@ -62,10 +70,11 @@ func TestSectionNamesNeedsNoApp(t *testing.T) {
 // SchemeNames is in the --scheme help for the same reason, and an empty list
 // would make that flag undocumented rather than broken, which is worse.
 func TestSchemeNamesListsEveryPalette(t *testing.T) {
-	require.Equal(t, []string{
+	require.Equal(t, fdtheme.SchemeNames(), SchemeNames())
+	require.Subset(t, SchemeNames(), []string{
 		"Breeze Dark", "Breeze Light", "Oxygen Dark", "Adwaita Dark", "Adwaita Light",
-	}, SchemeNames())
-	require.Equal(t, "Breeze Dark", paletteByName("no such scheme").name,
+	}, "the schemes the previous build offered are still offered under the same names")
+	require.Equal(t, fdtheme.DefaultScheme().Name, fdtheme.SchemeByName("no such scheme").Name,
 		"a stale preference must fall back rather than fail")
 }
 
@@ -81,17 +90,17 @@ func TestActionsAreUniqueAndNonEmpty(t *testing.T) {
 	require.NotEmpty(t, seen)
 }
 
-// --- flash (copied from angou) ---------------------------------------------
+// --- flash ---------------------------------------------
 
 // A failure waits to be dismissed. One that removes itself on a timer is an
 // error nobody read, describing an operation that has already not happened.
 func TestFlashKeepsFailuresUntilDismissed(t *testing.T) {
-	_, fades := flashHold(StatusBad)
+	_, fades := flashHold(fd.StatusBad)
 	require.False(t, fades, "a failure must not clear itself")
 
-	warn, fades := flashHold(StatusWarn)
+	warn, fades := flashHold(fd.StatusWarn)
 	require.True(t, fades)
-	good, _ := flashHold(StatusGood)
+	good, _ := flashHold(fd.StatusGood)
 	require.Greater(t, warn, good, "a warning names a condition to act on, so it stays longer")
 	require.GreaterOrEqual(t, good.Seconds(), 5.0,
 		"a banner must be up long enough to read, not merely long enough to notice")
@@ -103,10 +112,10 @@ func TestFlashKeepsFailuresUntilDismissed(t *testing.T) {
 func TestFlashShowsOneBannerAtATime(t *testing.T) {
 	u := testUI(t)
 
-	u.flash("first", StatusGood)
+	u.flash("first", fd.StatusGood)
 	require.Len(t, u.flashes.Objects, 1)
 
-	u.flash("second", StatusBad)
+	u.flash("second", fd.StatusBad)
 	require.Len(t, u.flashes.Objects, 1, "a newer result replaces the older one")
 }
 
@@ -115,48 +124,13 @@ func TestFlashShowsOneBannerAtATime(t *testing.T) {
 func TestClearFlashIgnoresAStaleTimer(t *testing.T) {
 	u := testUI(t)
 
-	u.flash("first", StatusGood)
+	u.flash("first", fd.StatusGood)
 	stale := u.flashSeq
-	u.flash("second", StatusGood)
+	u.flash("second", fd.StatusGood)
 
 	u.clearFlash(stale)
 	require.Len(t, u.flashes.Objects, 1, "the newer banner still owns the slot")
 
 	u.clearFlash(u.flashSeq)
 	require.Empty(t, u.flashes.Objects, "dismissing the current banner empties the slot")
-}
-
-// --- browse (copied from angou) --------------------------------------------
-
-// Tapping Browse… must open a chooser, not take the process with it.
-//
-// The first version of this button in angou sized the dialog before showing it.
-// In fyne 2.8.1 that path asks a dialog with no window yet for its minimum size
-// and dereferences nil, so the crash was in the one interaction the button
-// exists for. This drives the real widget under the test driver, which needs no
-// display, so the regression cannot come back unnoticed.
-func TestBrowseButtonOpensAChooser(t *testing.T) {
-	u := testUI(t)
-	for _, dir := range []bool{false, true} {
-		field := widget.NewEntry()
-		button := u.browseButton(field, dir)
-		require.NotPanics(t, func() { test.Tap(button) }, "directory chooser: %v", dir)
-	}
-}
-
-// The same for the two choosers the Mods toolbar opens, which take a callback
-// rather than a field.
-func TestModChoosersOpenWithoutPanicking(t *testing.T) {
-	u := testUI(t)
-	require.NotPanics(t, func() { u.chooseFile(luaFilter(), func(string) {}) })
-	require.NotPanics(t, func() { u.chooseFolder("", func(string) {}) })
-}
-
-// A field holding a path that does not exist, or nothing at all, must still
-// give the chooser somewhere to start rather than leaving it wherever the
-// process happens to be.
-func TestPickerStartFallsBackToHome(t *testing.T) {
-	for _, text := range []string{"", "/nonexistent/path/for/a/test", "~"} {
-		require.NotNil(t, pickerStart(text), "no starting location for %q", text)
-	}
 }

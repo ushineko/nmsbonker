@@ -9,6 +9,9 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/core"
@@ -60,31 +63,31 @@ func (u *ui) auditBlock() fyne.CanvasObject {
 	rows := []fyne.CanvasObject{u.auditVerdict(a, fresh)}
 
 	if a != nil && len(a.Flags) > 0 {
-		var t detailTable
-		t.header("Entry", "Item", "Stock", "Built", "Ratio", "Contributors")
-		t.setWidths(180, 160, 90, 130, 90, 460)
+		t := table.New()
+		t.Header("Entry", "Item", "Stock", "Built", "Ratio", "Contributors")
+		t.SetWidths(180, 160, 90, 130, 90, 460)
 		shown := a.Flags
 		if len(shown) > maxAuditRowsShown {
 			shown = shown[:maxAuditRowsShown]
 		}
 		for _, f := range shown {
-			t.row(auditRowStatus(f), auditCells(f)...)
+			t.Row(auditRowStatus(f), auditCells(f)...)
 		}
-		rows = append(rows, fixedHeight(t.widget(), 200))
+		rows = append(rows, widgets.FixedHeight(t.Widget(), 200))
 		if len(a.Flags) > len(shown) {
-			rows = append(rows, note(fmt.Sprintf(
+			rows = append(rows, widgets.Note(fmt.Sprintf(
 				"%d further flagged amount(s) are not shown; the report file has all of them.",
-				len(a.Flags)-len(shown)), StatusWarn))
+				len(a.Flags)-len(shown)), fd.StatusWarn))
 		}
-		rows = append(rows, note(auditAdvice, StatusWarn))
+		rows = append(rows, widgets.Note(auditAdvice, fd.StatusWarn))
 	}
 	if a != nil && a.Unauditable > 0 {
-		rows = append(rows, note(fmt.Sprintf(
+		rows = append(rows, widgets.Note(fmt.Sprintf(
 			"%d block(s) could not be checked because a mod's add or remove changed the "+
-				"table's structure.", a.Unauditable), StatusInfo))
+				"table's structure.", a.Unauditable), fd.StatusInfo))
 	}
 	rows = append(rows, u.auditActions())
-	return card("Amount audit", rows...)
+	return widgets.Card("Amount audit", rows...)
 }
 
 /*
@@ -97,7 +100,7 @@ thing worth pinning is the content rather than the widget.
 */
 func auditCells(f audit.Flag) []string {
 	return []string{
-		orNone(f.EntryID, "—"), orNone(f.Item, "—"),
+		widgets.OrNone(f.EntryID, "—"), widgets.OrNone(f.Item, "—"),
 		audit.Range(f.PristineMin, f.PristineMax),
 		audit.Range(f.MergedMin, f.MergedMax),
 		auditRatioText(f.Ratio), f.ContributorText(),
@@ -123,14 +126,14 @@ func (u *ui) auditVerdict(a *audit.Result, fresh bool) fyne.CanvasObject {
 	}
 	switch {
 	case a == nil:
-		return factRow("Reward amounts", "not audited — no reward table in this build",
-			StatusInfo)
+		return widgets.FactRow("Reward amounts", "not audited — no reward table in this build",
+			fd.StatusInfo)
 	case len(a.Flags) == 0:
-		return factRow("Reward amounts",
+		return widgets.FactRow("Reward amounts",
 			fmt.Sprintf("No reward amount exceeds the configured limits — %d block(s) checked%s",
-				a.Blocks, suffix), StatusGood)
+				a.Blocks, suffix), fd.StatusGood)
 	default:
-		return factRow("Reward amounts",
+		return widgets.FactRow("Reward amounts",
 			fmt.Sprintf("%d of %d reward amount(s) are above the configured limits%s",
 				len(a.Flags), a.Blocks, suffix), auditStatus(len(a.Flags)))
 	}
@@ -144,7 +147,7 @@ func (u *ui) auditActions() fyne.CanvasObject {
 	copyAudit := widget.NewButtonWithIcon("Copy audit", theme.ContentCopyIcon(), func() {
 		a, _ := u.auditResult()
 		u.app.Clipboard().SetContent(auditText(a))
-		u.flash("The amount audit is on the clipboard.", StatusGood)
+		u.flash("The amount audit is on the clipboard.", fd.StatusGood)
 	})
 	if a, _ := u.auditResult(); a == nil {
 		copyAudit.Disable()
@@ -217,14 +220,14 @@ mod folder is installable. Enough of them at once is a different situation --
 one flagged reward is a mod to re-tune, forty is a library that is multiplying
 everything -- so the marker goes red and the Overview card follows it.
 */
-func auditStatus(flags int) Status {
+func auditStatus(flags int) fd.Status {
 	switch {
 	case flags == 0:
-		return StatusGood
+		return fd.StatusGood
 	case flags < manyAuditFlags:
-		return StatusWarn
+		return fd.StatusWarn
 	default:
-		return StatusBad
+		return fd.StatusBad
 	}
 }
 
@@ -234,11 +237,11 @@ const manyAuditFlags = 20
 
 // auditRowStatus colours one row by how far its amount moved, so the salvage
 // stack at x625000 does not read the same as a reward at x120.
-func auditRowStatus(f audit.Flag) Status {
+func auditRowStatus(f audit.Flag) fd.Status {
 	if f.Ratio >= badRatio || f.MergedMax == audit.MaxInt32 {
-		return StatusBad
+		return fd.StatusBad
 	}
-	return StatusWarn
+	return fd.StatusWarn
 }
 
 // badRatio is where a multiplier stops being a tuning choice.

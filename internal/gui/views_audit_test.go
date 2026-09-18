@@ -8,6 +8,8 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/fynetest"
 
 	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
@@ -34,15 +36,15 @@ one that matters: a green marker on a build that audited nothing is a claim
 nobody checked, and it is exactly the claim the old report made by omission.
 */
 func TestTheAuditBlockDistinguishesCleanFromNotAudited(t *testing.T) {
-	notAudited := cardText(auditUI(t, nil).auditBlock())
+	notAudited := fynetest.Text(auditUI(t, nil).auditBlock())
 	require.Contains(t, notAudited, "not audited — no reward table in this build")
 	require.NotContains(t, notAudited, "No reward amount exceeds")
 
-	clean := cardText(auditUI(t, &audit.Result{Blocks: 2431}).auditBlock())
+	clean := fynetest.Text(auditUI(t, &audit.Result{Blocks: 2431}).auditBlock())
 	require.Contains(t, clean, "No reward amount exceeds the configured limits — 2431 block(s) "+
 		"checked (from the last build)")
 
-	flagged := cardText(auditUI(t, flaggedAudit()).auditBlock())
+	flagged := fynetest.Text(auditUI(t, flaggedAudit()).auditBlock())
 	require.Contains(t, flagged, "1 of 2431 reward amount(s) are above the configured limits")
 }
 
@@ -78,7 +80,7 @@ func TestAFlaggedAmountNamesItsContributorsAndTheWayOut(t *testing.T) {
 			"ChestAndLootMaterials10x x10 -> 2500000",
 	}, auditCells(flaggedAudit().Flags[0]))
 
-	text := cardText(auditUI(t, flaggedAudit()).auditBlock())
+	text := fynetest.Text(auditUI(t, flaggedAudit()).auditBlock())
 	require.Contains(t, text, "they compound", "the block says why, not only what")
 	require.Contains(t, text, "cap parameter", "and how to stop it")
 	require.Contains(t, text, "Re-check applies a new limit to this build without rebuilding")
@@ -113,17 +115,17 @@ Any flag is a warning -- the build succeeded and the folder is installable --
 and enough of them at once is a different situation.
 */
 func TestTheAuditMarkerRanksHowManyAmountsAreFlagged(t *testing.T) {
-	require.Equal(t, StatusGood, auditStatus(0))
-	require.Equal(t, StatusWarn, auditStatus(1))
-	require.Equal(t, StatusWarn, auditStatus(manyAuditFlags-1))
-	require.Equal(t, StatusBad, auditStatus(manyAuditFlags))
+	require.Equal(t, fd.StatusGood, auditStatus(0))
+	require.Equal(t, fd.StatusWarn, auditStatus(1))
+	require.Equal(t, fd.StatusWarn, auditStatus(manyAuditFlags-1))
+	require.Equal(t, fd.StatusBad, auditStatus(manyAuditFlags))
 }
 
 // A row is coloured by how far its amount moved, not by the fact that it moved.
 func TestAnAuditRowIsRankedByItsRatio(t *testing.T) {
-	require.Equal(t, StatusWarn, auditRowStatus(audit.Flag{Ratio: 120}))
-	require.Equal(t, StatusBad, auditRowStatus(audit.Flag{Ratio: badRatio}))
-	require.Equal(t, StatusBad, auditRowStatus(audit.Flag{Ratio: 2, MergedMax: audit.MaxInt32}),
+	require.Equal(t, fd.StatusWarn, auditRowStatus(audit.Flag{Ratio: 120}))
+	require.Equal(t, fd.StatusBad, auditRowStatus(audit.Flag{Ratio: badRatio}))
+	require.Equal(t, fd.StatusBad, auditRowStatus(audit.Flag{Ratio: 2, MergedMax: audit.MaxInt32}),
 		"a saturated value is bad however small the ratio looks")
 	require.Equal(t, "—", auditRatioText(0), "no stock value means no ratio to state")
 }
@@ -131,9 +133,9 @@ func TestAnAuditRowIsRankedByItsRatio(t *testing.T) {
 // Overview says the same thing in one line, and says the not-audited case as
 // such rather than as "no flags".
 func TestOverviewReportsTheAmountFlags(t *testing.T) {
-	require.Contains(t, cardText(amountFlagsRow(nil)), "no reward table in that build")
-	require.Contains(t, cardText(amountFlagsRow(&audit.Result{})), "no amount flags")
-	require.Contains(t, cardText(amountFlagsRow(flaggedAudit())), "1 amount flag(s) — see Report")
+	require.Contains(t, fynetest.Text(amountFlagsRow(nil)), "no reward table in that build")
+	require.Contains(t, fynetest.Text(amountFlagsRow(&audit.Result{})), "no amount flags")
+	require.Contains(t, fynetest.Text(amountFlagsRow(flaggedAudit())), "1 amount flag(s) — see Report")
 }
 
 // The Report facts card says whether a tweak's cap changed anything, in both
@@ -206,11 +208,11 @@ follows from it, and what follows is the part somebody can act on.
 func TestTheModDetailExplainsTheEffectivenessNote(t *testing.T) {
 	dead := core.ModCheck{Effect: core.EffectNoEdits}
 	require.Contains(t, effectBlurb(dead), "Nothing this script asks for reached the merged files")
-	require.Equal(t, StatusBad, effectStatus(dead))
+	require.Equal(t, fd.StatusBad, effectStatus(dead))
 
 	failing := core.ModCheck{Effect: core.EffectMostlyFailing}
 	require.Contains(t, effectBlurb(failing), "written for an older version of the game")
-	require.Equal(t, StatusWarn, effectStatus(failing))
+	require.Equal(t, fd.StatusWarn, effectStatus(failing))
 
 	overlap := core.ModCheck{
 		Effect:   "overlaps built-in ChestAndLootMaterials10x",
@@ -220,7 +222,7 @@ func TestTheModDetailExplainsTheEffectivenessNote(t *testing.T) {
 	require.Contains(t, blurb, "edits the same values as ChestAndLootMaterials10x")
 	require.Contains(t, blurb, "multiply in build order")
 	require.Contains(t, blurb, "information, not a fault")
-	require.Equal(t, StatusWarn, effectStatus(overlap))
+	require.Equal(t, fd.StatusWarn, effectStatus(overlap))
 }
 
 // The re-check button is a real operation, and it is named in Actions() so the
@@ -235,16 +237,9 @@ func TestTheAuditOperationIsClaimedInActions(t *testing.T) {
 // without knowing the layout.
 func buttonNamed(t *testing.T, o fyne.CanvasObject, label string) *widget.Button {
 	t.Helper()
-	var found *widget.Button
-	walk(o, func(obj fyne.CanvasObject) bool {
-		if b, ok := obj.(*widget.Button); ok && b.Text == label {
-			found = b
-			return true
-		}
-		return false
-	})
+	found := fynetest.FindButton(o, label)
 	require.NotNilf(t, found, "no button labelled %q; the block holds:\n%s",
-		label, strings.Join(strings.Split(cardText(o), "\n"), " | "))
+		label, strings.Join(strings.Split(fynetest.Text(o), "\n"), " | "))
 	return found
 }
 

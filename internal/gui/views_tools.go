@@ -9,6 +9,10 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 )
@@ -29,7 +33,7 @@ func (u *ui) buildTools() fyne.CanvasObject {
 	u.loadTools()
 
 	body := container.NewVBox(
-		heading("Tools", "MBINCompiler, the caches, and the game archives they are read from."),
+		widgets.Heading("Tools", "MBINCompiler, the caches, and the game archives they are read from."),
 		u.compilerCard(),
 		widget.NewSeparator(),
 		u.cacheCard(),
@@ -44,21 +48,21 @@ func (u *ui) compilerCard() fyne.CanvasObject {
 	selected := -1
 	entries := u.tools.Entries
 
-	var t detailTable
-	t.header("", "Tag", "Flavor", "Save mapping", "Reports", "Path")
-	t.setWidths(30, 150, 130, 110, 260, 420)
+	t := table.New()
+	t.Header("", "Tag", "Flavor", "Save mapping", "Reports", "Path")
+	t.SetWidths(30, 150, 130, 110, 260, 420)
 	for _, e := range entries {
-		marker, st := "", StatusInfo
+		marker, st := "", fd.StatusInfo
 		if e.Active {
-			marker, st = "*", StatusGood
+			marker, st = "*", fd.StatusGood
 		}
 		mapping := "absent"
 		if e.Mapping {
 			mapping = "present"
 		}
-		t.row(st, marker, e.Tag, orNone(e.Flavor, "—"), mapping, e.Version, e.Dir)
+		t.Row(st, marker, e.Tag, widgets.OrNone(e.Flavor, "—"), mapping, e.Version, e.Dir)
 	}
-	table := t.widget()
+	table := t.Widget()
 
 	pin := widget.NewButtonWithIcon("Pin", theme.ConfirmIcon(), nil)
 	remove := widget.NewButtonWithIcon("Remove…", theme.DeleteIcon(), nil)
@@ -101,22 +105,22 @@ func (u *ui) compilerCard() fyne.CanvasObject {
 	rows := []fyne.CanvasObject{}
 	if u.toolsOK && len(entries) == 0 {
 		rows = append(rows,
-			factRow("MBINCompiler", "nothing installed", StatusBad),
-			note("Install the newest match downloads the release that fits this game from "+
+			widgets.FactRow("MBINCompiler", "nothing installed", fd.StatusBad),
+			widgets.Note("Install the newest match downloads the release that fits this game from "+
 				"the MBINCompiler releases on GitHub, into the tools directory. Nothing is "+
-				"installed system-wide and the game is not touched.", StatusInfo))
+				"installed system-wide and the game is not touched.", fd.StatusInfo))
 	} else {
-		rows = append(rows, fixedHeight(table, 150))
+		rows = append(rows, widgets.FixedHeight(table, 150))
 	}
 	rows = append(rows,
-		plainRow("Tools directory", u.tools.ToolsDir),
-		plainRow("Pinned", orNone(u.tools.Pin, "none — the newest match is chosen automatically")),
-		factRow(".NET 10 runtime",
+		widgets.PlainRow("Tools directory", u.tools.ToolsDir),
+		widgets.PlainRow("Pinned", widgets.OrNone(u.tools.Pin, "none — the newest match is chosen automatically")),
+		widgets.FactRow(".NET 10 runtime",
 			dotnetText(u.status.Compiler.Dotnet10, u.status.Compiler.Flavor),
 			dotnetStatus(u.status.Compiler.Dotnet10, u.status.Compiler.Flavor)),
 		container.NewHBox(check, install, compat, pin, unpin, remove),
 	)
-	return card("MBINCompiler", rows...)
+	return widgets.Card("MBINCompiler", rows...)
 }
 
 // cacheCard is the derived data and the one button that throws it away.
@@ -127,57 +131,57 @@ func (u *ui) cacheCard() fyne.CanvasObject {
 	clearBtn.Importance = widget.DangerImportance
 	u.gate(measure, clearBtn)
 
-	rows := []fyne.CanvasObject{plainRow("Cache directory", u.status.Paths.Cache)}
+	rows := []fyne.CanvasObject{widgets.PlainRow("Cache directory", u.status.Paths.Cache)}
 	if !u.cacheOK {
 		rows = append(rows,
-			note("The pristine cache holds every game file a build has decompiled, keyed by the "+
+			widgets.Note("The pristine cache holds every game file a build has decompiled, keyed by the "+
 				"game's Steam buildid. Measuring it walks the tree, so it is asked for rather "+
-				"than done on arrival.", StatusInfo))
+				"than done on arrival.", fd.StatusInfo))
 	} else {
 		rows = append(rows,
-			plainRow("Pristine cache", fmt.Sprintf("%s in %d file(s) across %d game build(s)",
-				humanSize(u.cache.TotalBytes), u.cache.TotalFiles, len(u.cache.Games))),
-			plainRow("Current buildid", orNone(u.cache.CurrentBuildID, "unknown")),
-			plainRow("Pak index", humanSize(u.cache.PakIndexBytes)+" · "+u.cache.PakIndexPath),
-			plainRow("Release listing", humanSize(u.cache.ReleasesBytes)),
+			widgets.PlainRow("Pristine cache", fmt.Sprintf("%s in %d file(s) across %d game build(s)",
+				widgets.HumanSize(u.cache.TotalBytes), u.cache.TotalFiles, len(u.cache.Games))),
+			widgets.PlainRow("Current buildid", widgets.OrNone(u.cache.CurrentBuildID, "unknown")),
+			widgets.PlainRow("Pak index", widgets.HumanSize(u.cache.PakIndexBytes)+" · "+u.cache.PakIndexPath),
+			widgets.PlainRow("Release listing", widgets.HumanSize(u.cache.ReleasesBytes)),
 		)
 		if len(u.cache.Games) > 1 {
-			var t detailTable
-			t.header("", "Game buildid", "Files", "Size", "Written")
-			t.setWidths(30, 160, 90, 110, 140)
+			t := table.New()
+			t.Header("", "Game buildid", "Files", "Size", "Written")
+			t.SetWidths(30, 160, 90, 110, 140)
 			for _, g := range u.cache.Games {
-				marker, st := "", StatusInfo
+				marker, st := "", fd.StatusInfo
 				if g.Current {
-					marker, st = "*", StatusGood
+					marker, st = "*", fd.StatusGood
 				}
-				t.row(st, marker, g.BuildID, strconv.Itoa(g.Files), humanSize(g.Bytes),
-					humanAgo(g.Modified))
+				t.Row(st, marker, g.BuildID, strconv.Itoa(g.Files), widgets.HumanSize(g.Bytes),
+					widgets.HumanAgo(g.Modified))
 			}
-			rows = append(rows, fixedHeight(t.widget(), 120))
-			rows = append(rows, note("Trees for game builds you no longer have are kept "+
+			rows = append(rows, widgets.FixedHeight(t.Widget(), 120))
+			rows = append(rows, widgets.Note("Trees for game builds you no longer have are kept "+
 				"deliberately: rolling a game update back finds its cache still there.",
-				StatusInfo))
+				fd.StatusInfo))
 		}
 	}
 	rows = append(rows, container.NewHBox(measure, clearBtn))
-	return card("Caches", rows...)
+	return widgets.Card("Caches", rows...)
 }
 
 // archivesCard is the game's own .pak files: the index over them, and the two
 // ways to look inside.
 func (u *ui) archivesCard() fyne.CanvasObject {
 	idx := u.status.PakIndex
-	indexText, indexStatus := "not built yet", StatusInfo
+	indexText, indexStatus := "not built yet", fd.StatusInfo
 	switch {
 	case !idx.Exists:
 	case idx.Stale == 0 && idx.Missing == 0:
 		indexText = fmt.Sprintf("current: %d paks, %d files, written %s",
-			idx.Paks, idx.Files, humanAgo(idx.Written))
-		indexStatus = StatusGood
+			idx.Paks, idx.Files, widgets.HumanAgo(idx.Written))
+		indexStatus = fd.StatusGood
 	default:
 		indexText = fmt.Sprintf("stale: %d pak(s) changed, %d gone, written %s",
-			idx.Stale, idx.Missing, humanAgo(idx.Written))
-		indexStatus = StatusWarn
+			idx.Stale, idx.Missing, widgets.HumanAgo(idx.Written))
+		indexStatus = fd.StatusWarn
 	}
 
 	rebuild := widget.NewButtonWithIcon("Rebuild index", theme.ViewRefreshIcon(),
@@ -191,13 +195,13 @@ func (u *ui) archivesCard() fyne.CanvasObject {
 		find.Disable()
 	}
 
-	return card("Game archives",
-		plainRow("PCBANKS", orNone(u.status.Install.PCBanksDir, "no game found")),
-		plainRow("Archives", fmt.Sprintf("%d .pak", u.status.Install.PakCount)),
-		factRow("Index", indexText, indexStatus),
-		note("The index maps every path inside every archive, so a build does not open "+
+	return widgets.Card("Game archives",
+		widgets.PlainRow("PCBANKS", widgets.OrNone(u.status.Install.PCBanksDir, "no game found")),
+		widgets.PlainRow("Archives", fmt.Sprintf("%d .pak", u.status.Install.PakCount)),
+		widgets.FactRow("Index", indexText, indexStatus),
+		widgets.Note("The index maps every path inside every archive, so a build does not open "+
 			"ninety-seven files to find one. It re-reads only the archives whose size or "+
-			"timestamp changed; rebuilding is for when that is not enough.", StatusInfo),
+			"timestamp changed; rebuilding is for when that is not enough.", fd.StatusInfo),
 		container.NewHBox(rebuild, browse, find),
 	)
 }
@@ -215,7 +219,7 @@ func (u *ui) ensureTools() {
 			if len(res.Attempts) > 0 {
 				fyne.Do(func() {
 					u.flash("Installing MBINCompiler failed: "+err.Error()+" — "+
-						joinLines(res.Attempts), StatusBad)
+						joinLines(res.Attempts), fd.StatusBad)
 				})
 				return nil
 			}
@@ -253,51 +257,51 @@ func (u *ui) toolCheck() {
 
 // showToolCheck puts the round-trip evidence on screen: which file proved what.
 func (u *ui) showToolCheck(res core.ToolCheckResult) {
-	var t detailTable
-	t.header("File", "Result")
-	t.setWidths(420, 460)
+	t := table.New()
+	t.Header("File", "Result")
+	t.SetWidths(420, 460)
 	for _, f := range res.Files {
-		st, state := StatusGood, "round-trips byte-identical outside the header"
+		st, state := fd.StatusGood, "round-trips byte-identical outside the header"
 		if !f.OK {
-			st, state = StatusWarn, f.Reason
+			st, state = fd.StatusWarn, f.Reason
 		}
-		t.row(st, f.Name, state)
+		t.Row(st, f.Name, state)
 	}
 	for name, why := range res.Skipped {
-		t.row(StatusInfo, name, "skipped: "+why)
+		t.Row(fd.StatusInfo, name, "skipped: "+why)
 	}
 
 	body := container.NewVBox(
-		container.NewHBox(marker(compatStatus(res.Status)),
-			statusText(res.Status, compatStatus(res.Status))),
-		plainRow("Compiler", orNone(res.CompilerVersion, "none")),
-		wrapped(res.Detail),
-		fixedHeight(t.widget(), 160),
+		container.NewHBox(widgets.Marker(compatStatus(res.Status)),
+			widgets.StatusText(res.Status, compatStatus(res.Status))),
+		widgets.PlainRow("Compiler", widgets.OrNone(res.CompilerVersion, "none")),
+		widgets.Wrapped(res.Detail),
+		widgets.FixedHeight(t.Widget(), 160),
 	)
 	if res.Advice != "" {
-		body.Add(note(res.Advice, StatusWarn))
+		body.Add(widgets.Note(res.Advice, fd.StatusWarn))
 	}
-	body.Add(wrapped("A mismatch does not stop a build. It means the compiler and this game " +
+	body.Add(widgets.Wrapped("A mismatch does not stop a build. It means the compiler and this game " +
 		"install disagree about a file format, so what a build produces is worth doubting — " +
 		"the report says which file proved it."))
-	u.showDetail("Compiler compatibility", body, 900, 520)
+	dialogs.ShowDetail(u.win, "Compiler compatibility", body, 900, 520)
 }
 
 // showReleases lists what GitHub offers.
 func (u *ui) showReleases() {
-	var t detailTable
-	t.header("", "Tag", "State", "Assets")
-	t.setWidths(30, 190, 170, 80)
+	t := table.New()
+	t.Header("", "Tag", "State", "Assets")
+	t.SetWidths(30, 190, 170, 80)
 	for _, r := range u.releases.Releases {
-		st := StatusInfo
+		st := fd.StatusInfo
 		marker := ""
 		switch {
 		case r.Active:
-			st, marker = StatusGood, "*"
+			st, marker = fd.StatusGood, "*"
 		case r.Selected:
-			st = StatusWarn
+			st = fd.StatusWarn
 		}
-		t.row(st, marker, r.Tag, releaseStateText(r), strconv.Itoa(r.Assets))
+		t.Row(st, marker, r.Tag, releaseStateText(r), strconv.Itoa(r.Assets))
 	}
 
 	install := widget.NewButtonWithIcon("Install the newest match", theme.DownloadIcon(),
@@ -306,14 +310,14 @@ func (u *ui) showReleases() {
 
 	body := container.NewBorder(
 		container.NewVBox(
-			plainRow("Listing from", u.releases.Source),
-			plainRow("Game data version", u.releases.GameDataVersion),
-			plainRow("Pinned", orNone(u.releases.Pin, "none")),
-			plainRow("Would install", orNone(u.releases.Selected, "nothing")),
-			wrapped(u.releases.Reason),
+			widgets.PlainRow("Listing from", u.releases.Source),
+			widgets.PlainRow("Game data version", u.releases.GameDataVersion),
+			widgets.PlainRow("Pinned", widgets.OrNone(u.releases.Pin, "none")),
+			widgets.PlainRow("Would install", widgets.OrNone(u.releases.Selected, "nothing")),
+			widgets.Wrapped(u.releases.Reason),
 		),
-		container.NewHBox(install), nil, nil, fixedHeight(t.widget(), 300))
-	u.showDetail("MBINCompiler releases", body, 780, 580)
+		container.NewHBox(install), nil, nil, widgets.FixedHeight(t.Widget(), 300))
+	dialogs.ShowDetail(u.win, "MBINCompiler releases", body, 780, 580)
 }
 
 // releaseStateText names a release's relationship to this machine in one word.
@@ -357,7 +361,7 @@ func (u *ui) pinTool(tag string) {
 
 // removeToolDialog deletes an installed release that is not in use.
 func (u *ui) removeToolDialog(e core.ToolEntry) {
-	u.confirmDestructive("Remove MBINCompiler "+e.Tag+"?",
+	dialogs.ConfirmDestructive(u.win, "Remove MBINCompiler "+e.Tag+"?",
 		"This deletes "+e.Dir+" and nothing else.\n\n"+
 			"The release currently in use is not this one, so builds are unaffected. The "+
 			"pristine cache built with this compiler is kept: it is keyed by the game build, "+
@@ -371,7 +375,7 @@ func (u *ui) removeToolDialog(e core.ToolEntry) {
 				if err != nil {
 					return err
 				}
-				u.ok(fmt.Sprintf("Removed %s, freeing %s.", res.Tag, humanSize(res.Bytes)))
+				u.ok(fmt.Sprintf("Removed %s, freeing %s.", res.Tag, widgets.HumanSize(res.Bytes)))
 				return nil
 			})
 		})
@@ -382,14 +386,14 @@ func (u *ui) clearCacheDialog() {
 	all := widget.NewCheck("Clear every game build's cache, not only this one's", nil)
 	index := widget.NewCheck("Also delete the pak index", nil)
 	body := container.NewVBox(
-		wrapped("This deletes the game files a build has already extracted and decompiled. "+
+		widgets.Wrapped("This deletes the game files a build has already extracted and decompiled. "+
 			"They are rebuilt by the next build, which costs the few seconds the cache "+
 			"normally saves."),
-		wrapped("Not touched: your mod library, the build output in the workspace, the mod "+
+		widgets.Wrapped("Not touched: your mod library, the build output in the workspace, the mod "+
 			"folder installed in the game, and the game's own files."),
 		all, index,
 	)
-	u.confirmWithBody("Clear the cache?", body, "Clear", func() {
+	dialogs.ConfirmWithBody(u.win, "Clear the cache?", body, "Clear", func() {
 		everything, withIndex := all.Checked, index.Checked
 		u.perform("Clearing the cache…", func(ctx context.Context) error {
 			res, err := core.ClearCache(ctx, core.ClearCacheRequest{
@@ -403,7 +407,7 @@ func (u *ui) clearCacheDialog() {
 				return nil
 			}
 			fyne.Do(func() { u.cacheOK = false })
-			u.ok(fmt.Sprintf("Cleared %d file(s), freeing %s.", res.Files, humanSize(res.Bytes)))
+			u.ok(fmt.Sprintf("Cleared %d file(s), freeing %s.", res.Files, widgets.HumanSize(res.Bytes)))
 			return nil
 		})
 	}).Show()
@@ -437,13 +441,13 @@ func (u *ui) browseArchives() {
 
 func (u *ui) showArchives(res core.PakListResult) {
 	selected := -1
-	var t detailTable
-	t.header("Archive", "Files", "Size")
-	t.setWidths(420, 100, 120)
+	t := table.New()
+	t.Header("Archive", "Files", "Size")
+	t.SetWidths(420, 100, 120)
 	for _, p := range res.Paks {
-		t.row(StatusInfo, p.Name, strconv.Itoa(p.Files), humanSize(p.Size))
+		t.Row(fd.StatusInfo, p.Name, strconv.Itoa(p.Files), widgets.HumanSize(p.Size))
 	}
-	table := t.widget()
+	table := t.Widget()
 
 	glob := widget.NewEntry()
 	glob.SetPlaceHolder("optional pattern, for example *.mbin")
@@ -472,31 +476,31 @@ func (u *ui) showArchives(res core.PakListResult) {
 	}
 
 	body := container.NewBorder(
-		plainRow("PCBANKS", res.PCBanksDir), container.NewBorder(nil, nil, nil, list, glob),
-		nil, nil, fixedHeight(table, 360))
-	u.showDetail("Game archives", body, 780, 560)
+		widgets.PlainRow("PCBANKS", res.PCBanksDir), container.NewBorder(nil, nil, nil, list, glob),
+		nil, nil, widgets.FixedHeight(table, 360))
+	dialogs.ShowDetail(u.win, "Game archives", body, 780, 560)
 }
 
 func (u *ui) showArchiveFiles(pak string, res core.PakListResult) {
-	var t detailTable
-	t.header("File", "Bytes")
-	t.setWidths(620, 120)
+	t := table.New()
+	t.Header("File", "Bytes")
+	t.SetWidths(620, 120)
 	for _, e := range res.Entries {
-		t.row(StatusInfo, e.Name, strconv.FormatUint(e.Size, 10))
+		t.Row(fd.StatusInfo, e.Name, strconv.FormatUint(e.Size, 10))
 	}
 	body := container.NewBorder(
 		widget.NewLabel(fmt.Sprintf("%d file(s) in %s", len(res.Entries), pak)),
-		nil, nil, nil, fixedHeight(t.widget(), 420))
-	u.showDetail(pak, body, 860, 600)
+		nil, nil, nil, widgets.FixedHeight(t.Widget(), 420))
+	dialogs.ShowDetail(u.win, pak, body, 860, 600)
 }
 
 // findInArchivesDialog searches every archive at once through the index.
 func (u *ui) findInArchivesDialog() {
 	glob := widget.NewEntry()
 	glob.SetPlaceHolder("a name or a pattern, for example *rewardtable*")
-	u.pathDialog("Find a file in the archives", "Find", container.NewVBox(
+	dialogs.Prompt(u.win, "Find a file in the archives", "Find", container.NewVBox(
 		widget.NewForm(widget.NewFormItem("Pattern", glob)),
-		wrapped("A pattern with no wildcard matches anywhere in a path. The search reads the "+
+		widgets.Wrapped("A pattern with no wildcard matches anywhere in a path. The search reads the "+
 			"index rather than the archives, so it is instant once the index is warm."),
 	), func() {
 		pattern := glob.Text
@@ -513,13 +517,13 @@ func (u *ui) findInArchivesDialog() {
 
 func (u *ui) showFindResults(res core.PakFindResult) {
 	selected := -1
-	var t detailTable
-	t.header("File", "Archive")
-	t.setWidths(560, 240)
+	t := table.New()
+	t.Header("File", "Archive")
+	t.SetWidths(560, 240)
 	for _, m := range res.Matches {
-		t.row(StatusInfo, m.Name, m.Pak)
+		t.Row(fd.StatusInfo, m.Name, m.Pak)
 	}
-	table := t.widget()
+	table := t.Widget()
 
 	extract := widget.NewButtonWithIcon("Extract…", theme.DownloadIcon(), nil)
 	extract.Disable()
@@ -535,17 +539,17 @@ func (u *ui) showFindResults(res core.PakFindResult) {
 	summary := fmt.Sprintf("%d match(es) for %q in %d file(s) across %d archive(s).",
 		len(res.Matches), res.Glob, res.IndexedFiles, res.IndexedPaks)
 	body := container.NewBorder(widget.NewLabel(summary), container.NewHBox(extract), nil, nil,
-		fixedHeight(table, 380))
-	u.showDetail("Search results", body, 880, 560)
+		widgets.FixedHeight(table, 380))
+	dialogs.ShowDetail(u.win, "Search results", body, 880, 560)
 }
 
 // extractDialog writes one file out of the archives, keeping its internal path.
 func (u *ui) extractDialog(name string) {
 	dest := widget.NewEntry()
 	dest.SetPlaceHolder("directory to write into")
-	u.pathDialog("Extract "+name, "Extract", container.NewVBox(
-		widget.NewForm(widget.NewFormItem("Destination", u.withBrowse(dest, true))),
-		wrapped("The file's directory structure inside the archive is recreated under this "+
+	dialogs.Prompt(u.win, "Extract "+name, "Extract", container.NewVBox(
+		widget.NewForm(widget.NewFormItem("Destination", dialogs.WithBrowse(u.win, dest, true))),
+		widgets.Wrapped("The file's directory structure inside the archive is recreated under this "+
 			"directory, so what is written can be compared with the archive it came from. "+
 			"The game is not modified — this reads the archives and writes a copy."),
 	), func() {
@@ -557,7 +561,7 @@ func (u *ui) extractDialog(name string) {
 			if err != nil {
 				return err
 			}
-			msg := fmt.Sprintf("Wrote %s (%s) from %s.", res.Path, humanSize(int64(res.Size)), res.Pak)
+			msg := fmt.Sprintf("Wrote %s (%s) from %s.", res.Path, widgets.HumanSize(int64(res.Size)), res.Pak)
 			if res.ByBasename {
 				msg += " The exact path is in no archive; this matched by basename."
 			}

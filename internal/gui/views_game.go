@@ -9,6 +9,10 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
+	"github.com/ushineko/fynedesygn/table"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/steam"
@@ -57,7 +61,7 @@ func (u *ui) saveBackupText() string {
 	when := "never"
 	if len(u.saves.Backups) > 0 {
 		b := u.saves.Backups[0]
-		when = humanAgo(b.Created) + " (" + b.Created.Format("2006-01-02 15:04") + ")"
+		when = widgets.HumanAgo(b.Created) + " (" + b.Created.Format("2006-01-02 15:04") + ")"
 	}
 	before := "a deploy takes one first"
 	if !u.saves.Enabled {
@@ -82,7 +86,7 @@ func (u *ui) backupSaves() {
 		fyne.Do(func() {
 			u.savesOK = false
 			if res.Skipped != "" {
-				u.flash("No saves were copied: "+res.Skipped, StatusWarn)
+				u.flash("No saves were copied: "+res.Skipped, fd.StatusWarn)
 				u.invalidate()
 				return
 			}
@@ -92,7 +96,7 @@ func (u *ui) backupSaves() {
 				msg += fmt.Sprintf(" %d older backup(s) were deleted to keep the newest %d.",
 					len(res.Pruned), core.SaveRetention)
 			}
-			u.flash(msg, StatusGood)
+			u.flash(msg, fd.StatusGood)
 			u.invalidate()
 		})
 		return nil
@@ -152,7 +156,7 @@ func (u *ui) toggleAllMods(off bool) {
 		if !res.Changed {
 			fyne.Do(func() {
 				u.flash("The game's switch was already set that way; nothing was written.",
-					StatusInfo)
+					fd.StatusInfo)
 			})
 			return nil
 		}
@@ -164,7 +168,7 @@ func (u *ui) toggleAllMods(off bool) {
 
 // confirmDisableAllMods says what the switch does before flipping it.
 func (u *ui) confirmDisableAllMods() {
-	u.confirmDestructive("Stop the game loading any mod?",
+	dialogs.ConfirmDestructive(u.win, "Stop the game loading any mod?",
 		"This sets DisableAllMods in the game's own GCMODSETTINGS.MXML and changes nothing "+
 			"else. Every mod folder stays where it is, every per-mod switch keeps its state, "+
 			"and Enable mods puts it back exactly as it was. It is the cheapest thing to try "+
@@ -187,16 +191,16 @@ for everyone whose reason was different.
 func (u *ui) replaceSymlinkAndDeploy() {
 	in := u.status.Install
 	body := container.NewVBox(
-		wrapped("GAMEDATA/MODS is a symlink pointing at "+in.ModsTarget+"."),
-		wrapped("The game reads mods through the link, so installing here would write into "+
+		widgets.Wrapped("GAMEDATA/MODS is a symlink pointing at "+in.ModsTarget+"."),
+		widgets.Wrapped("The game reads mods through the link, so installing here would write into "+
 			"that directory rather than into the game."),
-		wrapped("Replacing it removes the link, and only the link: "+in.ModsTarget+" and "+
+		widgets.Wrapped("Replacing it removes the link, and only the link: "+in.ModsTarget+" and "+
 			"everything in it is left exactly as it is. A real directory is created in its "+
 			"place, and the build in the workspace is installed into it."),
-		wrapped("This is reversible by hand — the link can be re-made with ln -sfn — and "+
+		widgets.Wrapped("This is reversible by hand — the link can be re-made with ln -sfn — and "+
 			"Steam's \"verify integrity of game files\" restores the stock layout."),
 	)
-	u.confirmWithBody("Replace the symlink and deploy?", body, "Replace and deploy", func() {
+	dialogs.ConfirmWithBody(u.win, "Replace the symlink and deploy?", body, "Replace and deploy", func() {
 		u.perform("Replacing the symlink and installing…", func(ctx context.Context) error {
 			res, err := core.Deploy(ctx, core.DeployRequest{
 				Request: u.request(), ReplaceSymlink: true,
@@ -220,7 +224,7 @@ func (u *ui) deployed(res core.DeployResult, msg string) {
 	if len(res.Warnings) > 0 {
 		fyne.Do(func() {
 			u.savesOK = false
-			u.flash(msg+" "+res.Warnings[0], StatusWarn)
+			u.flash(msg+" "+res.Warnings[0], fd.StatusWarn)
 			u.invalidate()
 		})
 		return
@@ -233,8 +237,8 @@ func (u *ui) deployed(res core.DeployResult, msg string) {
 
 // confirmUndeploy removes the installed mod folder, keeping a copy.
 func (u *ui) confirmUndeploy() {
-	dest := u.status.Install.ModsDir + "/" + orNone(u.status.ModName, "COSMOS COMBINE")
-	u.confirmDestructive("Remove the deployed mod?",
+	dest := u.status.Install.ModsDir + "/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
+	dialogs.ConfirmDestructive(u.win, "Remove the deployed mod?",
 		"The folder at "+dest+" is moved into "+u.status.Paths.Archive+" under a timestamp, "+
 			"so it can be rolled back. The game's own mod settings are left alone, and so is "+
 			"the build in the workspace — this removes what is installed, not what would be "+
@@ -284,23 +288,23 @@ button that can only undo one step is a button that cannot reach it.
 func (u *ui) showRollback() {
 	if !u.archiveOK || len(u.archive.Entries) == 0 {
 		u.flash("Nothing has been deployed yet, so there is nothing to roll back to.",
-			StatusInfo)
+			fd.StatusInfo)
 		return
 	}
 	selected := 0
 
-	var t detailTable
-	t.header("Taken", "Mod", "Holds", "Files", "Size")
-	t.setWidths(220, 220, 260, 80, 110)
+	t := table.New()
+	t.Header("Taken", "Mod", "Holds", "Files", "Size")
+	t.SetWidths(220, 220, 260, 80, 110)
 	for _, e := range u.archive.Entries {
-		st := StatusInfo
+		st := fd.StatusInfo
 		if e.HasMod {
-			st = StatusGood
+			st = fd.StatusGood
 		}
-		t.row(st, e.Created.Format("2006-01-02 15:04")+" · "+humanAgo(e.Created),
-			e.ModName, archiveHolds(e), strconv.Itoa(e.Files), humanSize(e.Bytes))
+		t.Row(st, e.Created.Format("2006-01-02 15:04")+" · "+widgets.HumanAgo(e.Created),
+			e.ModName, archiveHolds(e), strconv.Itoa(e.Files), widgets.HumanSize(e.Bytes))
 	}
-	table := t.widget()
+	table := t.Widget()
 	table.OnSelected = func(id widget.TableCellID) {
 		if id.Row >= 0 && id.Row < len(u.archive.Entries) {
 			selected = id.Row
@@ -308,16 +312,16 @@ func (u *ui) showRollback() {
 	}
 
 	head := container.NewVBox(
-		plainRow("Archive", u.archive.Dir),
-		plainRow("Kept", fmt.Sprintf("the newest %d", u.archive.Retention)),
-		wrapped("Rolling back swaps what is installed in the game for the entry you pick. "+
+		widgets.PlainRow("Archive", u.archive.Dir),
+		widgets.PlainRow("Kept", fmt.Sprintf("the newest %d", u.archive.Retention)),
+		widgets.Wrapped("Rolling back swaps what is installed in the game for the entry you pick. "+
 			"What is installed now becomes a new archive entry, so a rollback can itself be "+
 			"rolled back, and the build in the workspace is not touched — this changes what "+
 			"is in the game, not what the next deploy would install."),
 	)
-	body := container.NewBorder(head, nil, nil, nil, fixedHeight(table, 240))
+	body := container.NewBorder(head, nil, nil, nil, widgets.FixedHeight(table, 240))
 
-	d := u.confirmWithBody("Roll back to an earlier deployment?", body, "Roll back", func() {
+	d := dialogs.ConfirmWithBody(u.win, "Roll back to an earlier deployment?", body, "Roll back", func() {
 		entry := u.archive.Entries[selected]
 		u.rollback(entry)
 	})
@@ -346,11 +350,11 @@ func (u *ui) rollback(entry core.ArchiveEntry) {
 		if err != nil {
 			return err
 		}
-		st := StatusGood
+		st := fd.StatusGood
 		msg := fmt.Sprintf("Restored the deployment from %s: %d file(s) in %s.",
 			entry.Created.Format("2006-01-02 15:04"), res.Files, res.Dest)
 		if res.Removed {
-			st = StatusWarn
+			st = fd.StatusWarn
 			msg = "That entry recorded the state before anything was installed, so " +
 				res.Dest + " has been removed."
 		}
