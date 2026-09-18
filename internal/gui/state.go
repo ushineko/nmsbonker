@@ -365,7 +365,11 @@ func (u *ui) startBuild(recache bool) {
 	}
 
 	go func() {
-		done := u.sh.Busy("Building…")
+		// The busy popup is modal, so the toolbar's Cancel behind it cannot be
+		// clicked once it is up. cancelBuild goes on the popup instead, where
+		// it is the one control in front of the user; it is the same function
+		// the toolbar button calls, so either route does the same bookkeeping.
+		done := u.sh.BusyCancellable("Building…", u.cancelBuild)
 		defer done()
 		defer cancel()
 

@@ -643,6 +643,21 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
+### 0.4.0
+
+- **The design system is a library now.** `internal/gui` imports
+  [fynedesygn](https://github.com/ushineko/fynedesygn) for the theme, fonts,
+  cursor fix, window shell, table, dialogs, log pane, step list and forms
+  instead of carrying a hand-synced copy of them; the package's non-test code
+  drops from 8,244 to 6,059 lines. Behaviour is kept — the same preference
+  keys, sections, operations and build flow — and the window gains what the
+  library had and the copy did not: the Windows and macOS colour schemes, a
+  monospace font picker and an interface scale.
+- **Cancel works during a build.** The progress popup is modal, so the Build
+  toolbar's Cancel was on screen, enabled and unclickable from 300 ms into
+  every build — since well before the library existed. The cancel is on the
+  popup now, where it can be reached, and does the same thing either way.
+
 ### 0.3.0
 
 - **Save editor, second round.** Faction standing as the levels 1–9 the game
