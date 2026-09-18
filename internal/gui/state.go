@@ -48,15 +48,7 @@ race the test driving it. Operations the user starts go through the shell's
 Perform, which makes the same choice.
 */
 func (u *ui) load(what string, run func()) {
-	if !u.sh.OnScreen() {
-		run()
-		return
-	}
-	go func() {
-		done := u.sh.Busy(what)
-		defer done()
-		run()
-	}()
+	u.sh.Load(what, func(context.Context) error { run(); return nil })
 }
 
 // --- loaders ---------------------------------------------------------------

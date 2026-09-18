@@ -129,20 +129,13 @@ type buildRun struct {
 
 func (r *buildRun) init() {
 	r.pane = logpane.New(logpane.NewModel(maxLogLines))
-	names := make([]string, 0, len(buildSteps()))
+	list := make([]steps.Step, 0, len(buildSteps()))
 	for _, s := range buildSteps() {
-		names = append(names, s.name)
+		// The note is a standing note: shown before the run reaches the step,
+		// and restored by Reset for the next run.
+		list = append(list, steps.Step{Name: s.name, Note: s.note})
 	}
-	r.steps = steps.New(names...)
-	r.pendingNotes()
-}
-
-// pendingNotes writes each step's standing note, the one it shows before and
-// until the run reaches it.
-func (r *buildRun) pendingNotes() {
-	for i, s := range buildSteps() {
-		r.steps.Set(i, steps.Pending, s.note)
-	}
+	r.steps = steps.NewSteps(list...)
 }
 
 // detach forgets the live widgets. Called when the content pane is replaced: a
@@ -160,10 +153,11 @@ func (r *buildRun) detach() {
 func (r *buildRun) reset() {
 	r.running, r.cancelled, r.finished = true, false, false
 	r.steps.Reset()
-	r.pendingNotes()
 	r.steps.Set(stepDetect, steps.Running, buildSteps()[stepDetect].note)
 	r.summary, r.summarySt = "", fd.StatusInfo
 	r.pane.Model().Reset()
+	// A new run follows its tail whatever the reader did during the last one.
+	r.pane.SetFollowing(true)
 }
 
 // advance marks a step running and everything before it done. Progress arrives

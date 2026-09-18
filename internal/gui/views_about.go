@@ -34,7 +34,8 @@ func (u *ui) about() shell.About {
 		Blurb: "Builds AMUMSS-format .lua mods against the game files you have installed, merges " +
 			"them into one mod folder, and deploys it. Reads and edits your saves. Native Go " +
 			"on a Steam/Proton install: no Wine, no Windows VM, no Python.",
-		URL: projectURL,
+		URL:     projectURL,
+		URLText: "Project documentation",
 		Notes: []shell.Note{
 			{Title: "Build", Detail: "Every enabled script edits the same pristine game files, in your order. Two mods " +
 				"touching one file yield one merged file, not two that fight."},
