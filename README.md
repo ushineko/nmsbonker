@@ -172,7 +172,7 @@ the build if either front end grows an operation the other lacks.
   framework-dependent build when `dotnet --list-runtimes` reports
   `Microsoft.NETCore.App 10.x`, and falls back to the self-contained build
   otherwise.
-- **Go 1.25 or newer**, to build it. The CLI builds with `CGO_ENABLED=0`.
+- **Go 1.26 or newer**, to build it. The CLI builds with `CGO_ENABLED=0`.
 - **For the window only**: CGO, OpenGL, and X11 or Wayland development headers,
   which is what Fyne needs. The command line needs none of them and never links
   them — everything the tool does is reachable without a display.
@@ -465,7 +465,7 @@ yet.](assets/screenshot-report.png)
 | `$XDG_DATA_HOME/nmsbonker/archive/` | what each deploy displaced, newest five |
 | `$XDG_DATA_HOME/nmsbonker/save-backup/` | copies of your save profiles, newest ten |
 | `$XDG_CACHE_HOME/nmsbonker/` | the pak index, the release listing, the decompiled game files |
-| `$XDG_CONFIG_HOME/fyne/io.ushineko.nmsbonker/` | the window's colour scheme, font and text size |
+| `$XDG_CONFIG_HOME/fyne/io.ushineko.nmsbonker/` | the window's colour scheme (Breeze, Oxygen, Adwaita, Windows and macOS, dark and light), font, text size and interface scale |
 | `<game>/GAMEDATA/MODS/<mod_name>/` | where deploy installs the mod |
 | `<game>/Binaries/SETTINGS/GCMODSETTINGS.MXML` | the game's own mod list, which deploy edits |
 | `<compatdata>/275850/pfx/.../HelloGames/NMS/st_*/` | your saves; `saves edit` and `saves import` write here, after a backup |
@@ -709,11 +709,14 @@ The first release: the whole pipeline, both front ends, and the packaging.
 
 ## Credit
 
-The window's design system — the colour schemes, the font scanner, the flash
-slot, the busy strip, the small shared widgets, the installer's shape and the
-screenshot harness — is copied from
-[angou](https://github.com/ushineko/angou) (MIT, same author). The copied files
-say so at the top; they are kept in step by hand.
+The window's design system — the colour schemes, the font scanner, the shell
+with its banners and busy indicator, the small shared widgets, the detail
+table, the log pane, the step list and the dialogs — comes from
+[fynedesygn](https://github.com/ushineko/fynedesygn) (MIT, same author), a
+library extracted from this program, [angou](https://github.com/ushineko/angou)
+and clockwork-orange; its rules are written down in that repository's
+`docs/design-system.md`. The installer's shape and the screenshot harness are
+angou's.
 
 The HGPAK v2 read path is a port of
 [HGPAKtool](https://github.com/monkeyman192/HGPAKtool) (MIT). The edit engine is

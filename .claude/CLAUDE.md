@@ -12,8 +12,14 @@ below.
   `.lua` mod scripts against the installed game's data files into one merged,
   collision-free mod, and deploys it. Native Go pipeline, no Wine, no Windows VM.
 - **Module**: `github.com/ushineko/nmsbonker`
-- **Sibling project**: `~/git/angou` is the design system and engineering reference.
-  When this file and angou's conventions disagree, this file wins; otherwise copy angou.
+- **Design system**: `github.com/ushineko/fynedesygn` (checked out at `~/git/fynedesygn`)
+  supplies the window's shell, theme, widgets, table, log pane, step list, dialogs and
+  test helpers; its rules are in that repository's `docs/design-system.md`. The window
+  imports the library and does not copy from it. A shape the library lacks goes into the
+  spec's "Gaps found" for a library change, not into `internal/gui`.
+- **Sibling project**: `~/git/angou` is the engineering reference for everything that is
+  not the design system (installer, packaging, screenshot harness, conventions). When this
+  file and angou's conventions disagree, this file wins; otherwise copy angou.
 
 ---
 
@@ -86,9 +92,9 @@ This repository is **public**. The following hold without exception:
   the edit engine (spec 002). Do not "improve" engine semantics without updating
   the golden fixtures and saying so in the spec.
 - **Long-running work is cancellable** (`context.Context`) and reports progress
-  through `core.Events`; the GUI never blocks its render thread (angou's
-  `fyne.Do` idiom).
-- **Nothing transient may reflow the interface** (angou rule): result banners
+  through `core.Events`; the GUI never blocks its render thread (the design
+  system's `fyne.Do` idiom).
+- **Nothing transient may reflow the interface** (design system rule): result banners
   and the progress indicator float over the content as popups (a non-modal
   banner above the status bar; a centred modal progress popup after 300 ms) and
   never insert themselves into a section's layout.
@@ -97,7 +103,7 @@ This repository is **public**. The following hold without exception:
 
 ## Environment
 
-- Go from `go.mod` (`go 1.25.0` minimum). Local toolchain may be newer.
+- Go from `go.mod` (`go 1.26.0` minimum, which fynedesygn requires). Local toolchain may be newer.
 - Fyne needs CGO, OpenGL and X11/Wayland headers; the CLI must build with
   `CGO_ENABLED=0`.
 - External tools at runtime: MBINCompiler (downloaded from GitHub releases into

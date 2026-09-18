@@ -49,7 +49,7 @@ Two consequences that are easy to lose:
 | `cmd/nmsbonker` | CLI entry point. Parses nothing; hands off to `internal/cli` and maps error kinds to exit codes |
 | `cmd/nmsbonker-gui` | Window entry point. Four flags: `--config`, `--section`, `--scheme`, `--version` |
 | `internal/cli` | The cobra tree. Builds a `core.Request` from flags, calls one operation, prints the result |
-| `internal/gui` | The Fyne window. Nine sections, every core call off the UI thread and back through `fyne.Do` |
+| `internal/gui` | The Fyne window, on [fynedesygn](https://github.com/ushineko/fynedesygn)'s shell. Ten sections, every core call off the UI thread and back through `fyne.Do` |
 | `internal/core` | Every operation, as request/result structs. The only package both front ends import |
 | `internal/config` | The settings document, the XDG directory resolution, and the parameter overrides |
 | `internal/steam` | `libraryfolders.vdf` and `appmanifest_275850.acf` parsing; game detection; the state of `GAMEDATA/MODS` |
@@ -253,14 +253,24 @@ the MBINCompiler processes it started *and* puts the previous mod folder back â€
 a bug that was found by pressing Cancel in the window and not by any test.
 
 **The window never blocks its render thread.** Every core call in
-`internal/gui` goes through `perform` or `startBuild`, which run on a goroutine
-and hop back with `fyne.Do`. A raw `go func()` reaching into core is a window
-that sits still with no explanation.
+`internal/gui` goes through the shell's `Perform`, the `load` helper or
+`startBuild`, which run on a goroutine and hop back with `fyne.Do`. A raw
+`go func()` reaching into core is a window that sits still with no explanation.
 
-**Nothing transient may reflow the interface.** Result banners, the busy strip
-and the build's step markers live in regions that keep their size whether or not
-anything is in them. A card that grows a row when a slider moves takes the next
-card out from under the mouse.
+**Nothing transient may reflow the interface.** Result banners and the busy
+indicator are popups floated over the content; the build's step list and log
+pane are fixed-size regions written to in place. A card that grows a row when a
+slider moves takes the next card out from under the mouse.
+
+**The design language is fynedesygn's.** The window skeleton, the colour
+schemes and fonts, the widgets a section is assembled from, the table, the log
+pane, the step list, the dialogs and the headless test helpers come from
+[`github.com/ushineko/fynedesygn`](https://github.com/ushineko/fynedesygn);
+the rules they follow are in that repository's `docs/design-system.md`. What
+`internal/gui` owns is the sections, the status bar's segments, the build run
+and the mapping from core's verdicts and levels onto the library's `Status`
+(`model.go`). A shape the library lacks is recorded in the adopting spec's
+"Gaps found" for a library change, not worked around here.
 
 **A settings file this tool did not write is edited, not regenerated.**
 `config.json` keeps keys it does not understand and writes them back.
