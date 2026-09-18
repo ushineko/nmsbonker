@@ -88,10 +88,15 @@ Build section and read its buttons instead of driving `drawControls`.
 
 ## Line counts (`internal/gui`, AC11)
 
-| | Before (29a77d6) | After (this branch) |
+| | Before (29a77d6) | After (a64693f) |
 | --- | --- | --- |
-| Non-test `.go` | 8,230 | 7,344 |
+| Non-test `.go` | 8,244 | 6,059 |
 | Test `.go` | 1,375 | 1,290 |
+
+Counted as the sum of `wc -l` over each `.go` file under `internal/gui` at
+that commit. An earlier revision of this table gave the "after" figure as
+7,344, which was measured before the shell commit landed and never corrected;
+the breakdown below sums to the same 6,059.
 
 Deleted: `theme.go` (288), `fonts.go` (236), `cursor_linux.go` (100),
 `cursor_other.go` (10), `views_table.go` (144), `dialogs.go` (255),

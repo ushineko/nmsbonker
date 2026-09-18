@@ -3,14 +3,14 @@
 > **Note**: This work has no associated issue tracker ticket. The repository
 > is a personal public project without an issue tracker.
 
-## Status: INCOMPLETE
+## Status: COMPLETE
 
 ## Executive Summary
 
-`internal/gui` now imports `github.com/ushineko/fynedesygn` v0.1.1 for its
+`internal/gui` now imports `github.com/ushineko/fynedesygn` v0.1.3 for its
 design system and runs the window on the library's shell; the hand-copied
 theme, fonts, cursor fix, shell, runner, table, dialogs, log pane and step
-list are deleted, and the package's non-test code goes from 8,230 to 7,344
+list are deleted, and the package's non-test code goes from 8,244 to 6,059
 lines (tests 1,375 to 1,290) while gaining the Windows and macOS schemes, a
 monospace-font picker and an interface scale. Behaviour is kept: the same
 preference keys, sections, operations and build flow. Reviewers should start
@@ -147,15 +147,20 @@ fast-forwarded onto `main`.
   schemes render every section headlessly (R4.2).
   `TestEverySectionRendersHeadlesslyInEveryScheme`.
 - [x] AC8 `govulncheck -mode binary` on both binaries: no findings.
-- [ ] AC9 The GUI is run on this machine under a throwaway HOME with the
+- [x] AC9 The GUI is run on this machine under a throwaway HOME with the
   screenshot harness: Overview, Mods, Build, Tools, Settings, Appearance,
   About render; a banner shows (manual, recorded in the report).
-  _Partly verified 2026-09-18: all seven sections captured and checked by
-  eye under a throwaway HOME, XDG and STEAM_ROOT; the Build section shows
-  the step list with its standing notes beside the log pane; Overview shows
-  the detail table and an info banner floating over the toolbar; the status
-  bar carries game, compiler, mods and output. Not exercised: a real build
-  (no game install in the sandbox), Deploy, the save editor._
+  _Verified at a64693f: all seven sections captured and checked by eye under
+  a throwaway HOME, XDG and STEAM_ROOT, with the demo world built for real
+  against the installed game and MBINCompiler. Build shows the step list with
+  its standing notes beside the log pane and "Follow the tail" armed; Mods
+  carries the verdicts that build produced; About renders its markdown under
+  a "Project documentation" link; Appearance wraps its notes rather than
+  scrolling sideways; the status bar carries game, compiler, mods and output.
+  A notice banner (a configured mod with no .lua) floats over the toolbar
+  while the compatibility popup floats over the content, and neither reflows
+  the interface. Still not exercised through the window: Deploy and the save
+  editor._
 - [x] AC10 Documentation updated; "Gaps found" filled (R5).
 - [x] AC11 Line counts of `internal/gui` (non-test) before and after are in
   the validation report.
