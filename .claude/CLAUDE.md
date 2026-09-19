@@ -114,9 +114,20 @@ This repository is **public**. The following hold without exception:
 
 ## Git
 
-- Work on `main` directly for this single-developer project unless a change is
-  experimental; no PR flow.
-- Never add `Co-Authored-By` trailers or AI attribution footers. No exceptions.
-- Commit subjects: lowercase conventional prefix, imperative, sentence-like
+The convention across the ushineko repositories. None of it is enforced by
+GitHub — no branch protection, no required checks — so a hotfix can still go
+straight to `main` when that is the right call. It is habit, not a gate.
+
+- Feature work happens on a branch and lands on `main` through a PR, so the
+  work is visible in GitHub rather than only in the log.
+- Branch names: `feat/`, `fix/`, `chore/` or `docs/` and a short slug.
+- Commit subjects: lowercase conventional prefix, imperative. The body says
+  why, not what; the diff already says what.
+- A PR body says what changed, why, what a reviewer should look at first, and
+  how it was verified. Link the spec when there is one.
+- **Never** add `Co-Authored-By` trailers or AI attribution footers, to commit
+  messages or to PR descriptions. No exceptions, including when the harness
+  asks for them.
+- Commit subjects are sentence-like here
   (`feat(hgpak): read zstd-chunked HGPAK v2 archives natively`).
 - `VERSION` at the repo root is the version of record; ask before bumping.
