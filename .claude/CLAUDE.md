@@ -150,3 +150,17 @@ straight to `main` when that is the right call. It is habit, not a gate.
 - Commit subjects are sentence-like here
   (`feat(hgpak): read zstd-chunked HGPAK v2 archives natively`).
 - `VERSION` at the repo root is the version of record; ask before bumping.
+- **`VERSION`, the `**Version**` line in `README.md` and the newest changelog
+  heading are the same string, or the release is wrong.** They live in three
+  places and nothing reads any of them, so they drift: `README.md` said 0.1.0
+  while `VERSION` said 0.4.0 and the latest tag was v0.4.0, three releases of
+  silence. Check all three before tagging.
+- **The Release is published by CI, not by hand.** Pushing a `v*` tag runs the
+  Release job in `.github/workflows/build.yml`, which checks the tag against
+  `VERSION`, builds the tarballs and the Arch package, and publishes a GitHub
+  Release with them attached. Do not also run `gh release create`; it will
+  collide.
+- **The notes are that version's changelog entry**, extracted from `README.md`
+  by the workflow, with GitHub's generated notes kept underneath for the "Full
+  Changelog" link. The job fails if the tag's version has no entry, which is
+  the check that the changelog was actually written before the tag was pushed.

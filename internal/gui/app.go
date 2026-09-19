@@ -265,6 +265,19 @@ func (u *ui) shellOptions(o Options) shell.Options {
 		// The build runs outside Perform, with a step list of its own; the
 		// shell counts it as work so every section's buttons gate on it.
 		AlsoWorking: func() bool { return u.run.running },
+
+		// The navigation's shape is the user's: titles with icons, icons
+		// alone, or hidden entirely, down the left or along the top. One
+		// stock control in the header offers exactly what is listed here, and
+		// Ctrl+B hides and restores. The choice is stored by the library
+		// under fynedesygn.nav, so it outlives the run.
+		//
+		// Ten sections is enough for the icons-only shapes to be worth
+		// having, and every one of them has an icon: in those shapes each
+		// icon carries its section's title as a hover tip, and a section with
+		// no icon would be a generic picture to guess at.
+		NavModes:      []shell.NavMode{shell.NavLabels, shell.NavIcons, shell.NavHidden},
+		NavPlacements: []shell.NavPlacement{shell.NavLeft, shell.NavTop},
 	}
 }
 

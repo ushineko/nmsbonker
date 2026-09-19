@@ -124,10 +124,27 @@ jobs:
           name: arch-package
           path: dist
 
+      # The release notes are this version's changelog entry, not a list of
+      # commit subjects. The entry is written for someone deciding whether to
+      # upgrade; the commit list is written for someone who already has the
+      # diff. GitHub's generated notes are kept as well, so the "Full
+      # Changelog" link and the contributor list still appear, under the prose.
+      - name: Take the release notes from the changelog
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" '
+            index($0, "### " v) == 1 { f = 1; next }
+            f && /^### / { exit }
+            f { print }
+          ' README.md > dist/NOTES.md
+          test -s dist/NOTES.md || { echo "no changelog entry for $ver in README.md"; exit 1; }
+          echo "--- notes ---"; cat dist/NOTES.md
+
       - uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.tar.gz
             dist/SHA256SUMS
             dist/*.pkg.tar.zst
+          body_path: dist/NOTES.md
           generate_release_notes: true
