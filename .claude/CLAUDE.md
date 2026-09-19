@@ -150,3 +150,13 @@ straight to `main` when that is the right call. It is habit, not a gate.
 - Commit subjects are sentence-like here
   (`feat(hgpak): read zstd-chunked HGPAK v2 archives natively`).
 - `VERSION` at the repo root is the version of record; ask before bumping.
+- **`VERSION`, the `**Version**` line in `README.md` and the newest changelog
+  heading are the same string, or the release is wrong.** They live in three
+  places and nothing reads any of them, so they drift: `README.md` said 0.1.0
+  while `VERSION` said 0.4.0 and the latest tag was v0.4.0, three releases of
+  silence. Check all three before tagging.
+- **Every tag gets a GitHub Release**, titled `vX.Y.Z`, whose notes are that
+  version's changelog entry verbatim -- `gh release create vX.Y.Z --title
+  vX.Y.Z --notes-file <the entry>`. A bare tag is invisible: it is not in the
+  Releases feed, nobody can watch it, and anyone deciding whether to upgrade
+  has to read a diff.

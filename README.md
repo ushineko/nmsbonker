@@ -17,7 +17,7 @@ downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
 
-**Version**: 0.1.0
+**Version**: 0.4.1
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -642,6 +642,37 @@ flow in more detail, including how the golden fixtures are regenerated.
 > tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
 
 ## Changelog
+
+### 0.4.1
+
+- **The design system library is twenty-four releases newer.** `fynedesygn`
+  moves from v0.1.4 to v0.1.28. Nothing in this repository needed changing for
+  it — the window builds, the tests pass and the sections are unaltered — but
+  the fixes it carries are ones this window had:
+  - **A result banner no longer takes every click in the window.** A banner was
+    a popup, a popup is an overlay, and Fyne routes pointer events to the top
+    overlay rather than to the content, so for the six to twelve seconds a
+    banner was up the first click anywhere went to dismissing it instead of to
+    the button it was aimed at. The same applied to hover tips.
+  - **A long log line wraps.** Longer than the pane, it was drawn past the
+    right edge and the rest could not be read at all; continuation rows are
+    indented and marked so where a message starts is visible without reading
+    it. The pane also reflows when the window or the divider above it moves,
+    where before it wrapped to whatever width it was first drawn at.
+  - **A table no longer re-shapes its text every time it is resized.** Fyne
+    re-shapes a label through harfbuzz whenever it is resized, for text that
+    has not changed, and a table resizes every visible cell on every layout.
+    Dragging a window that showed a table stalled; a 300-row table now resizes
+    in 27 microseconds where it took 738.
+  - **A refused operation says what is holding the window**, rather than
+    "something is already running", and offers Cancel when that operation has
+    one.
+- **Appearance settings live in a file you can read** rather than in Fyne's
+  preference store, one section per key. The old values are read once, so a
+  window that has been configured opens the way it was left.
+- **The README's Version line said 0.1.0** while this program was 0.4.0, three
+  releases behind. It is checked against the changelog now, in the same way the
+  library checks its own.
 
 ### 0.4.0
 
