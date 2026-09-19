@@ -670,6 +670,13 @@ flow in more detail, including how the golden fixtures are regenerated.
 - **Appearance settings live in a file you can read** rather than in Fyne's
   preference store, one section per key. The old values are read once, so a
   window that has been configured opens the way it was left.
+- **The navigation's shape is yours now.** Titles with icons, icons alone, or
+  no navigation at all with the content taking the whole window; down the left
+  as before, or along the top. One control in the header offers the lot, and
+  `Ctrl+B` hides the navigation and brings it back. The choice is remembered
+  between runs. With ten sections the icons-only shapes buy real width back,
+  and they are usable because every section has an icon of its own — in those
+  shapes each icon carries its section's title as a hover tip.
 - **The README's Version line said 0.1.0** while this program was 0.4.0, three
   releases behind. It is checked against the changelog now, in the same way the
   library checks its own.
