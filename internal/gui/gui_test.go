@@ -123,8 +123,19 @@ func TestSectionSelectionResolvesNamesAndFallsBackToTheFirst(t *testing.T) {
 	require.Equal(t, "Overview", u.sh.Current().Title(), "no --section: the first")
 	u.sh.Select("report")
 	require.Equal(t, "Report", u.sh.Current().Title())
+	// Select is navigation: a name that is not there leaves the reader where
+	// they are rather than sending the window home (fynedesygn spec 028).
 	u.sh.Select("nope")
-	require.Equal(t, "Overview", u.sh.Current().Title(), "a typo opens the first, not a dead window")
+	require.Equal(t, "Report", u.sh.Current().Title(), "a typo moved the navigation")
+
+	// --section is a different question -- where to open -- and a typo there
+	// opens the first section rather than a dead window.
+	app := test.NewApp()
+	t.Cleanup(app.Quit)
+	typo := shell.Headless(app, u.shellOptions(Options{Section: "nope"}))
+	require.Equal(t, "Overview", typo.Current().Title(), "--section nope opens the first")
+	named := shell.Headless(app, u.shellOptions(Options{Section: "report"}))
+	require.Equal(t, "Report", named.Current().Title(), "--section report opens Report")
 }
 
 // A saved appearance from the previous build is read unchanged: the keys are
