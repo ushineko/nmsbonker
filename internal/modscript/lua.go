@@ -35,10 +35,20 @@ const ContainerName = "NMS_MOD_DEFINITION_CONTAINER"
 // DefaultTimeout bounds one script's execution (R1.2).
 const DefaultTimeout = 5 * time.Second
 
-// maxMemoryKB caps a script's allocations. A script that builds an ADD payload
-// with string.rep can ask for an unbounded amount of memory without ever
-// running long enough for the timeout to fire.
-const maxMemoryKB = 256 * 1024
+/*
+maxRepBytes caps what one string.rep call may build.
+
+A script that builds an ADD payload with string.rep can ask for an unbounded
+amount of memory in one call, without running long enough for the timeout to
+fire. The largest legitimate payload seen is a few tens of kilobytes; 16 MB is
+generous and still a refusal rather than an outage.
+
+This replaced gopher-lua's SetMx, which looked like a per-script limit and was
+not (#14): it polls the whole process's Go heap and calls os.Exit(3) when that
+passes the limit. In the window, which holds several builds in one process,
+the heap passed 256 MB after a few builds, and the next script load killed it.
+*/
+const maxRepBytes = 16 << 20
 
 // maxDepth bounds table nesting while converting the container. A self-
 // referential table is legal Lua and would otherwise recurse forever.
@@ -123,7 +133,6 @@ func run(ctx context.Context, path string, src []byte) (map[string]any, map[stri
 	state := lua.NewState(lua.Options{SkipOpenLibs: true})
 	defer state.Close()
 	state.SetContext(ctx)
-	state.SetMx(maxMemoryKB / 1024)
 	sandbox(state)
 
 	fn, err := state.LoadString(text)
@@ -184,6 +193,23 @@ func sandbox(state *lua.LState) {
 		state.SetGlobal(name, lua.LNil)
 	}
 	state.SetGlobal("print", state.NewFunction(func(*lua.LState) int { return 0 }))
+
+	// string.rep with its result size checked before anything is allocated.
+	// gopher-lua's takes (s, n) and nothing else, so this is the whole of it.
+	if str, ok := state.GetGlobal(lua.StringLibName).(*lua.LTable); ok {
+		str.RawSetString("rep", state.NewFunction(func(L *lua.LState) int {
+			s, n := L.CheckString(1), L.CheckInt(2)
+			if n <= 0 {
+				L.Push(lua.LString(""))
+				return 1
+			}
+			if int64(n)*int64(len(s)) > maxRepBytes {
+				L.RaiseError("string.rep result larger than %d bytes", maxRepBytes)
+			}
+			L.Push(lua.LString(strings.Repeat(s, n)))
+			return 1
+		}))
+	}
 }
 
 // cleanLuaError strips the interpreter's Go-side decoration so the message
