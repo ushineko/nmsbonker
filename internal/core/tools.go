@@ -200,14 +200,21 @@ type PinToolRequest struct {
 type PinToolResult struct {
 	Pin       string
 	Installed bool
+	// Ensured is what unpinning installed (#12): unpinned means "choose
+	// automatically", and a build only ever uses an installed compiler, so
+	// an unpin that installed nothing left builds on the old pin's release.
+	// Nil on a pin, or when the install could not run (EnsureError says why).
+	Ensured     *EnsureToolsResult
+	EnsureError string
 }
 
 // PinTool records which release to use, and says whether it is installed.
+// Unpinning also installs the release automatic selection now chooses (#12).
 //
 // Pinning a release that is not installed is allowed: the natural order is to
 // decide which one you want and then fetch it, and refusing here would force
 // the user to install a version they have already decided against.
-func PinTool(_ context.Context, req PinToolRequest) (PinToolResult, error) {
+func PinTool(ctx context.Context, req PinToolRequest) (PinToolResult, error) {
 	s, err := open(req.Request)
 	if err != nil {
 		return PinToolResult{}, err
@@ -221,6 +228,21 @@ func PinTool(_ context.Context, req PinToolRequest) (PinToolResult, error) {
 	}
 	if err := s.cfg.Save(); err != nil {
 		return PinToolResult{}, err
+	}
+	if req.Tag == "" {
+		out := PinToolResult{}
+		ensured, err := EnsureTools(ctx, EnsureToolsRequest{Request: req.Request})
+		if err != nil {
+			// The pin is gone either way; saying what is still in use is the
+			// useful part when the install could not happen (offline, say).
+			out.EnsureError = err.Error()
+			if c, lerr := mbin.Locate(s.paths.Tools, ""); lerr == nil {
+				out.EnsureError += "; builds use " + c.Tag + ", the newest installed"
+			}
+			return out, nil
+		}
+		out.Ensured, out.Installed = &ensured, true
+		return out, nil
 	}
 	_, err = mbin.Locate(s.paths.Tools, req.Tag)
 	return PinToolResult{Pin: req.Tag, Installed: err == nil}, nil
@@ -256,6 +278,37 @@ type ListReleasesResult struct {
 	Selected        string        `json:"selected,omitempty"`
 	Reason          string        `json:"reason,omitempty"`
 	Releases        []ReleaseInfo `json:"releases"`
+	// InUse is the release builds use now; Newest is the highest listed.
+	InUse  string `json:"inUse,omitempty"`
+	Newest string `json:"newest,omitempty"`
+	// Verdict answers "is there an update" in one sentence, and
+	// UpdateAvailable says whether acting on it would change the compiler
+	// (#12: a listing that only marked a row "would install" read as "no").
+	Verdict         string `json:"verdict"`
+	UpdateAvailable bool   `json:"updateAvailable"`
+}
+
+/*
+releaseVerdict is the one-sentence answer to "check for updates" (#12).
+
+Pinned, the newest release is reported but not called an update: the pin is
+a decision, and the sentence says how to undo it. Unpinned, an update is the
+automatic choice differing from what builds use.
+*/
+func releaseVerdict(pin, inUse, selected, newest string) (string, bool) {
+	switch {
+	case inUse == "":
+		return "Nothing is installed. Install the newest match fetches " + selected + ".", selected != ""
+	case pin != "" && newest != "" && newest != pin:
+		return "Pinned to " + pin + "; " + newest + " is newer. Unpin to move to it.", true
+	case pin != "":
+		return "Pinned to " + pin + ", which is the newest release.", false
+	case selected != "" && selected != inUse:
+		return "Update available: " + selected + " (builds use " + inUse + "). " +
+			"Install the newest match to switch.", true
+	default:
+		return "Up to date: builds use " + inUse + ", the newest match.", false
+	}
 }
 
 /*
@@ -304,6 +357,11 @@ func ListReleases(ctx context.Context, req ListReleasesRequest) (ListReleasesRes
 		installed[tag] = true
 	}
 	active, _ := mbin.Locate(s.paths.Tools, s.cfg.MBINCompiler.Pin)
+	if active != nil {
+		out.InUse = active.Tag
+	}
+	out.Newest = releases[0].Tag
+	out.Verdict, out.UpdateAvailable = releaseVerdict(out.Pin, out.InUse, out.Selected, out.Newest)
 	for _, r := range releases {
 		out.Releases = append(out.Releases, ReleaseInfo{
 			Tag:        r.Tag,

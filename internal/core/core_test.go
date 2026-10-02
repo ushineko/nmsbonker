@@ -118,9 +118,13 @@ func TestPinningAReleaseThatIsNotInstalledIsAllowedAndSaidSo(t *testing.T) {
 	_, err = core.PinTool(t.Context(), core.PinToolRequest{Tag: "latest"})
 	require.Error(t, err, "a tag that is not a version is a typo, not a pin")
 
-	res, err = core.PinTool(t.Context(), core.PinToolRequest{})
+	// Unpinning installs the automatic choice (#12). Offline with nothing
+	// cached it cannot, and the unpin still happens and says why.
+	res, err = core.PinTool(t.Context(), core.PinToolRequest{Request: core.Request{NoNetwork: true}})
 	require.NoError(t, err)
 	require.Empty(t, res.Pin)
+	require.Nil(t, res.Ensured)
+	require.NotEmpty(t, res.EnsureError, "an unpin that installed nothing says so")
 }
 
 // Reading a pak needs the game; saying "not found" here rather than panicking

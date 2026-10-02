@@ -253,6 +253,9 @@ func (u *ui) loadReleases() {
 			}
 			u.sh.Refresh()
 			u.showReleases()
+			if res.UpdateAvailable {
+				u.sh.Flash(res.Verdict, fd.StatusWarn)
+			}
 		})
 		return nil
 	})

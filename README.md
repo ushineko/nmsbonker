@@ -656,6 +656,20 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
+### Unreleased
+
+- **Fix: unpinning MBINCompiler switches compiler** (#12). Builds use the
+  newest *installed* compiler, and unpinning installed nothing, so builds stayed
+  on the release that had been pinned. Unpin now installs the release automatic
+  selection chooses, and says so. Offline, it says it could not install and
+  which compiler builds still use. On game build 25625620 this mattered:
+  v7.03.2-pre2 rewrote bytes of `GCGAMEPLAYGLOBALS` it does not model, and
+  v7.04.1-pre3 round-trips the file byte for byte.
+- **"Check for updates" says whether there is one.** The listing now opens with
+  a verdict ("Update available: … (builds use …)", "Up to date", or "Pinned
+  to …; … is newer"), in the window and in `tools releases`, with the release
+  in use beside it. Before, the only sign was a row marked "would install".
+
 ### 0.5.1
 
 - **Fix: ticking a tweak no longer throws the page back to the top.** Every
