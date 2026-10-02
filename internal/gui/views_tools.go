@@ -114,7 +114,7 @@ func (u *ui) compilerCard() fyne.CanvasObject {
 	}
 	rows = append(rows,
 		widgets.PlainRow("Tools directory", u.tools.ToolsDir),
-		widgets.PlainRow("Pinned", widgets.OrNone(u.tools.Pin, "none — the newest match is chosen automatically")),
+		widgets.PlainRow("Pinned", widgets.OrNone(u.tools.Pin, "none — builds use the newest installed release")),
 		widgets.FactRow(".NET 10 runtime",
 			dotnetText(u.status.Compiler.Dotnet10, u.status.Compiler.Flavor),
 			dotnetStatus(u.status.Compiler.Dotnet10, u.status.Compiler.Flavor)),
@@ -310,8 +310,14 @@ func (u *ui) showReleases() {
 		func() { u.ensureTools() })
 	install.Importance = widget.HighImportance
 
+	verdict := fd.StatusGood
+	if u.releases.UpdateAvailable {
+		verdict = fd.StatusWarn
+	}
 	body := container.NewBorder(
 		container.NewVBox(
+			widgets.Note(u.releases.Verdict, verdict),
+			widgets.PlainRow("In use", widgets.OrNone(u.releases.InUse, "nothing")),
 			widgets.PlainRow("Listing from", u.releases.Source),
 			widgets.PlainRow("Game data version", u.releases.GameDataVersion),
 			widgets.PlainRow("Pinned", widgets.OrNone(u.releases.Pin, "none")),
@@ -349,7 +355,15 @@ func (u *ui) pinTool(tag string) {
 			return err
 		}
 		if res.Pin == "" {
-			fyne.Do(func() { u.sh.OK("Removed the pin. The newest release that matches this game is chosen again.") })
+			fyne.Do(func() {
+				if res.Ensured == nil {
+					u.sh.Flash("Removed the pin, but the newest match could not be installed: "+
+						res.EnsureError, fd.StatusWarn)
+					u.sh.Invalidate()
+					return
+				}
+				u.sh.OK("Removed the pin. Builds now use MBINCompiler " + res.Ensured.Tag + ".")
+			})
 			return nil
 		}
 		msg := "Pinned " + res.Pin + ". Every build uses it until you unpin."

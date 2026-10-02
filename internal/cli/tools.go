@@ -116,10 +116,18 @@ func newToolsUnpinCmd() *cobra.Command {
 		Short: "Go back to choosing an MBINCompiler release automatically",
 		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if _, err := core.PinTool(cmd.Context(), core.PinToolRequest{Request: request()}); err != nil {
+			res, err := core.PinTool(cmd.Context(), core.PinToolRequest{Request: request()})
+			if err != nil {
 				return err
 			}
-			fact(cmd.OutOrStdout(), "pinned", "(none)")
+			w := cmd.OutOrStdout()
+			fact(w, "pinned", "(none)")
+			switch {
+			case res.Ensured != nil:
+				fact(w, "using", res.Ensured.Tag+" ("+res.Ensured.Reason+")")
+			case res.EnsureError != "":
+				fact(w, "not installed", res.EnsureError)
+			}
 			return nil
 		},
 	}
@@ -207,6 +215,8 @@ func newToolsReleasesCmd() *cobra.Command {
 			if res.Selected != "" {
 				fact(w, "would install", res.Selected+" ("+res.Reason+")")
 			}
+			fact(w, "in use", orNone(res.InUse))
+			fact(w, "verdict", res.Verdict)
 			var t table
 			t.header("", "TAG", "STATE", "ASSETS")
 			for _, r := range res.Releases {
