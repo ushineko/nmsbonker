@@ -536,3 +536,34 @@ func TestADisabledLibraryModOverlapsNothing(t *testing.T) {
 	})
 	require.Empty(t, plan.Overlaps)
 }
+
+/*
+#5: a change table that names files but carries no edits must not crash the
+build.
+
+A script can list MBIN_FILE_SOURCE with an empty or missing
+EXML_CHANGE_TABLE (scripts that only ship extra files are written that way).
+Planned as a target with no items, it reached the "no cached MXML" warning,
+which named the mod by t.Items[0] and panicked with index out of range. There
+is nothing to merge in such a target, so it is not planned at all.
+*/
+func TestASourceWithNoEditsIsNotATargetAndDoesNotCrash(t *testing.T) {
+	internal, src := pristine(t, "present.mbin", tinyMXML)
+	plan := NewPlan([]Script{
+		{Name: "FilesOnly", Enabled: true, Def: def("FilesOnly", nil, "POLICE.SCENE.MBIN")},
+		{Name: "Present", Enabled: true, Def: def("Present",
+			[]*modscript.Block{valueBlock("A", "2")}, internal)},
+	})
+	require.Len(t, plan.Targets, 1, "a source with no edits is not a target")
+
+	var res *report.Result
+	require.NotPanics(t, func() {
+		var err error
+		res, err = Run(t.Context(), plan, Options{
+			Sources:  map[string]Source{"PRESENT.MBIN": src},
+			Compiler: fakeCompiler(t), Workspace: t.TempDir(), ModName: "TEST MOD", Workers: 2,
+		})
+		require.NoError(t, err)
+	})
+	require.Equal(t, 1, res.Built)
+}
