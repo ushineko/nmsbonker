@@ -17,7 +17,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
 
-**Version**: 0.4.1
+**Version**: 0.5.0
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -656,7 +656,7 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
-### Unreleased
+### 0.5.0
 
 - **Fourteen more built-in tweaks** (spec 014, #7). The effects people were
   downloading as third-party AMUMSS scripts now come with the program: mining
@@ -686,6 +686,11 @@ flow in more detail, including how the golden fixtures are regenerated.
   you. `mods check` and the Mods detail dialog already said this, and the
   build now uses the same comparison.
 - **fynedesygn v0.1.82.**
+- **Fix: a script that names files with no edits no longer crashes the build**
+  (#5). A change table with `MBIN_FILE_SOURCE` and no `EXML_CHANGE_TABLE` was
+  planned as a target with nothing in it. When its file was not in the cache,
+  the build panicked with `index out of range` while naming the mod. Such a
+  table is no longer planned, because there is nothing to merge.
 
 ### 0.4.1
 
