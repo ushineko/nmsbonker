@@ -17,7 +17,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
 
-**Version**: 0.5.0
+**Version**: 0.5.1
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -656,7 +656,7 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
-### Unreleased
+### 0.5.1
 
 - **Fix: ticking a tweak no longer throws the page back to the top.** Every
   switch and slider is an operation, every operation rebuilds the section, and
@@ -664,6 +664,10 @@ flow in more detail, including how the golden fixtures are regenerated.
   Overview, Report and Saves tabs had the same problem after any operation.
   All four now use fynedesygn's `Shell.VScroll`, which keeps a scroller's
   position across rebuilds (fynedesygn v0.1.83).
+- **A build that is not the release says so.** `make build` and `make install`
+  stamp the plain version only on a clean tree at its tag, and
+  `VERSION-COMMIT-dev` otherwise. Release tarballs and the Arch package are
+  always the plain version.
 
 ### 0.5.0
 
