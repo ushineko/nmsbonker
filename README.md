@@ -656,6 +656,15 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
+### Unreleased
+
+- **Fix: ticking a tweak no longer throws the page back to the top.** Every
+  switch and slider is an operation, every operation rebuilds the section, and
+  the page's own scroller under the Apply strip was new each time. The
+  Overview, Report and Saves tabs had the same problem after any operation.
+  All four now use fynedesygn's `Shell.VScroll`, which keeps a scroller's
+  position across rebuilds (fynedesygn v0.1.83).
+
 ### 0.5.0
 
 - **Fourteen more built-in tweaks** (spec 014, #7). The effects people were

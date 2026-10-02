@@ -47,7 +47,7 @@ func (u *ui) buildOverview() fyne.CanvasObject {
 		widget.NewSeparator(),
 		u.libraryCard(),
 	)
-	return container.NewBorder(nil, u.overviewActions(), nil, nil, container.NewVScroll(body))
+	return container.NewBorder(nil, u.overviewActions(), nil, nil, u.sh.VScroll("overview", body))
 }
 
 // installCard is the game side: where it is, which build, and the state of the
