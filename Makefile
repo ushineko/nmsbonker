@@ -9,8 +9,19 @@ help: ## Show this help
 
 BINDIR=$(shell go env GOPATH)
 MODULE=github.com/ushineko/nmsbonker
-VERSION?=$(shell cat VERSION 2>/dev/null || echo dev)
+# A build that is not the release says so (hotaru's rule, as in ototo).
+#
+# The version is VERSION at the repository root when HEAD is on that version's
+# tag with a clean tree, and TAG-COMMIT-dev otherwise: `make install` from a
+# working tree used to report the same string as the release, so a window
+# built from a branch could not be told apart from the one the tarball put
+# there. A package and the release job pass VERSION themselves and are always
+# the plain version.
+TAG?=$(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0)
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DIRTY:=$(shell git status --porcelain 2>/dev/null | head -1)
+ATTAG:=$(shell git describe --exact-match --tags --match 'v$(TAG)' HEAD 2>/dev/null)
+VERSION?=$(if $(and $(ATTAG),$(if $(DIRTY),,x)),$(TAG),$(TAG)-$(COMMIT)-dev)
 LDFLAGS=-w -s -X $(MODULE)/internal/buildinfo.Version=$(VERSION) -X $(MODULE)/internal/buildinfo.Commit=$(COMMIT)
 
 # migrated_fynedo tells Fyne this front end has been through the fyne.Do

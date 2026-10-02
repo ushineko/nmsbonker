@@ -31,11 +31,13 @@ pkgver() {
 build() {
 	cd "${_root}"
 	# Go's module cache lives in the build user's home; the Makefile's LDFLAGS
-	# carry VERSION and the commit. GOFLAGS=-buildvcs=false: the tree may be
+	# carry the version and the commit. GOFLAGS=-buildvcs=false: the tree may be
 	# owned by another user in CI, and the version is stamped by hand anyway.
 	export GOFLAGS="-buildvcs=false -mod=readonly"
 	export CGO_ENABLED=1
-	make build build-gui
+	# A package is the release, so it is stamped with pkgver rather than the
+	# Makefile's TAG-COMMIT-dev for a tree that is not on the tag.
+	make build build-gui VERSION="${pkgver}"
 }
 
 check() {
