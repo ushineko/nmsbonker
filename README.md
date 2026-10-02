@@ -656,6 +656,17 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
+### Unreleased
+
+- **Fix: the window no longer exits with "out of memory" after a few builds**
+  (#14). Each script ran under gopher-lua's `SetMx`, which watches the whole
+  process's memory, not the script's, and calls `os.Exit(3)` past its limit.
+  A command-line run never got there. The window holds several builds in one
+  process, so after a few builds the next script load closed it, typically
+  right after a deploy. The limit is gone. The memory bomb it was meant to
+  stop, `string.rep` asked for gigabytes, is now refused inside the sandbox
+  as a load error for that script.
+
 ### 0.5.2
 
 - **Fix: unpinning MBINCompiler switches compiler** (#12). Builds use the

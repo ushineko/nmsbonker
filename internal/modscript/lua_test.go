@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -298,4 +299,43 @@ func TestAnEmptyTableDumpsAsAnEmptyArray(t *testing.T) {
 		`{ ["PRECEDING_KEY_WORDS"] = {}, ["VALUE_CHANGE_TABLE"] = { {"A", 1} } }`)))
 	require.NoError(t, err)
 	require.Contains(t, string(modscript.DumpJSON(def)), `"PRECEDING_KEY_WORDS":[]`)
+}
+
+/*
+#14: loading a script never exits the process, however large the process is.
+
+gopher-lua's SetMx polled the whole process's heap and called os.Exit(3) past
+256 MB. The window holds several builds in one process, so after a few builds
+the next script load killed it. This test holds 320 MB while loading a script;
+with SetMx back, the test binary exits with status 3 and the package fails.
+*/
+func TestLoadingAScriptDoesNotExitALargeProcess(t *testing.T) {
+	ballast := make([]byte, 320<<20)
+	for i := range ballast {
+		ballast[i] = byte(i)
+	}
+	src := []byte(`NMS_MOD_DEFINITION_CONTAINER = { ["MOD_FILENAME"] = "x.pak", ["MODIFICATIONS"] = { { ["MBIN_CHANGE_TABLE"] = { { ["MBIN_FILE_SOURCE"] = "A.MBIN", ["EXML_CHANGE_TABLE"] = { { ["VALUE_CHANGE_TABLE"] = { {"K", 1} } } } } } } } }`)
+	for range 3 {
+		_, err := modscript.LoadSource(t.Context(), "big.lua", src)
+		require.NoError(t, err)
+	}
+	// Long enough for a watcher that polls every 100 ms to have looked.
+	time.Sleep(300 * time.Millisecond)
+	runtime.KeepAlive(ballast)
+}
+
+// The memory bomb the old limit was for, a string.rep of gigabytes, is a load
+// error for that script and nothing else.
+func TestAHugeStringRepIsALoadError(t *testing.T) {
+	src := []byte(`local s = string.rep("x", 2000000000)
+NMS_MOD_DEFINITION_CONTAINER = { ["MOD_FILENAME"] = s, ["MODIFICATIONS"] = { { ["MBIN_CHANGE_TABLE"] = { { ["MBIN_FILE_SOURCE"] = "A.MBIN", ["EXML_CHANGE_TABLE"] = { { ["VALUE_CHANGE_TABLE"] = { {"K", 1} } } } } } } } }`)
+	_, err := modscript.LoadSource(t.Context(), "bomb.lua", src)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "string.rep result larger than")
+
+	ok := []byte(`local s = string.rep("ab", 3)
+NMS_MOD_DEFINITION_CONTAINER = { ["MOD_FILENAME"] = s, ["MODIFICATIONS"] = { { ["MBIN_CHANGE_TABLE"] = { { ["MBIN_FILE_SOURCE"] = "A.MBIN", ["EXML_CHANGE_TABLE"] = { { ["VALUE_CHANGE_TABLE"] = { {"K", 1} } } } } } } } }`)
+	def, err := modscript.LoadSource(t.Context(), "fine.lua", ok)
+	require.NoError(t, err)
+	require.Equal(t, "ababab", def.ModFilename)
 }
