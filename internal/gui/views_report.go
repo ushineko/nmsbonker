@@ -158,7 +158,7 @@ func (u *ui) buildReport() fyne.CanvasObject {
 			"not.", fd.StatusWarn))
 	}
 
-	return container.NewBorder(nil, u.reportActions(), nil, nil, container.NewVScroll(body))
+	return container.NewBorder(nil, u.reportActions(), nil, nil, u.sh.VScroll("report", body))
 }
 
 // reportActions is the bottom strip: three ways out to a file manager, and the

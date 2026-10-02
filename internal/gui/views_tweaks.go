@@ -78,6 +78,9 @@ Nothing here reflows while it is being used. A parameter that has moved since
 the last build shows a warn-coloured line in its card header, and that line's
 space is reserved whether or not there is anything in it -- a card that grows a
 row when a slider is dragged would move the next card out from under the mouse.
+The page scrolls in the shell's named scroller for the same reason: every
+switch and slider is an operation, every operation rebuilds the section, and a
+fresh scroller each time threw the page back to the top under the pointer.
 */
 func (u *ui) buildTweakPage(page string) fyne.CanvasObject {
 	u.loadTweaks()
@@ -102,7 +105,7 @@ func (u *ui) buildTweakPage(page string) fyne.CanvasObject {
 		n++
 	}
 
-	return container.NewBorder(nil, u.tweaksActions(), nil, nil, container.NewVScroll(body))
+	return container.NewBorder(nil, u.tweaksActions(), nil, nil, u.sh.VScroll("tweaks/"+page, body))
 }
 
 // tweaksInBuildOrder is the loaded built-ins, ascending by build position.

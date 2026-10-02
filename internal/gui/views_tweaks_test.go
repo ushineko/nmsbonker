@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
 	fd "github.com/ushineko/fynedesygn"
@@ -279,4 +281,26 @@ func findParamIn(t *testing.T, res core.ListTweaksResult, mod, param string) cor
 	}
 	t.Fatalf("%s has no parameter %q", mod, param)
 	return core.TweakParam{}
+}
+
+/*
+Ticking a tweak halfway down a page leaves the page where it was.
+
+Every operation rebuilds the section, and the page's own scroller (under the
+affixed Apply strip) used to be a new one each build, so the page jumped to the
+top under the pointer. It is the shell's named scroller now, which hands its
+offset to its replacement.
+*/
+func TestATweakPageKeepsItsScrollPositionAcrossARebuild(t *testing.T) {
+	u, _ := tweaksUI(t)
+	first := fynetest.Find[*container.Scroll](u.buildTweakPage("Rewards"))
+	require.NotNil(t, first)
+	first.Offset = fyne.NewPos(0, 400)
+
+	again := fynetest.Find[*container.Scroll](u.buildTweakPage("Rewards"))
+	require.NotSame(t, first, again, "the page was rebuilt")
+	require.InDelta(t, 400, again.Offset.Y, 0.5)
+
+	other := fynetest.Find[*container.Scroll](u.buildTweakPage("Ships"))
+	require.Zero(t, other.Offset.Y, "each page has its own position")
 }

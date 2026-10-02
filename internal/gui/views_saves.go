@@ -71,10 +71,10 @@ func (u *ui) buildSaves() fyne.CanvasObject {
 	// its own: stacked in a VBox instead, the tabs got the height of whichever
 	// was built first and the others were clipped.
 	tabs := container.NewAppTabs(
-		container.NewTabItemWithIcon("Slots", theme.ListIcon(), container.NewVScroll(u.slotsCard())),
-		container.NewTabItemWithIcon("Editor", theme.DocumentCreateIcon(), container.NewVScroll(u.saveEditorTab())),
-		container.NewTabItemWithIcon("Raw JSON", theme.FileTextIcon(), container.NewVScroll(u.rawJSONTab())),
-		container.NewTabItemWithIcon("Backups", theme.ContentCopyIcon(), container.NewVScroll(u.backupsTab())),
+		container.NewTabItemWithIcon("Slots", theme.ListIcon(), u.sh.VScroll("saves/slots", u.slotsCard())),
+		container.NewTabItemWithIcon("Editor", theme.DocumentCreateIcon(), u.sh.VScroll("saves/editor", u.saveEditorTab())),
+		container.NewTabItemWithIcon("Raw JSON", theme.FileTextIcon(), u.sh.VScroll("saves/raw", u.rawJSONTab())),
+		container.NewTabItemWithIcon("Backups", theme.ContentCopyIcon(), u.sh.VScroll("saves/backups", u.backupsTab())),
 	)
 	tabs.SetTabLocation(container.TabLocationTop)
 	if u.savesTab >= 0 && u.savesTab < len(tabs.Items) {
