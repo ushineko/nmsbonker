@@ -17,7 +17,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
 
-**Version**: 0.5.2
+**Version**: 0.5.3
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -656,7 +656,7 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
-### Unreleased
+### 0.5.3
 
 - **Fix: the window no longer exits with "out of memory" after a few builds**
   (#14). Each script ran under gopher-lua's `SetMx`, which watches the whole
