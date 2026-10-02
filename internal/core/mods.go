@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ushineko/nmsbonker/internal/build"
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/modscript"
@@ -641,7 +642,7 @@ func annotate(checks []ModCheck, defs map[string]*modscript.Definition,
 	builtins := map[string]map[string]bool{}
 	for name, def := range defs {
 		if enabledBuiltin[name] {
-			builtins[name] = signature(def)
+			builtins[name] = build.Signature(def)
 		}
 	}
 
@@ -653,7 +654,7 @@ func annotate(checks []ModCheck, defs map[string]*modscript.Definition,
 			checks[i].Skipped = row.Skipped
 			checks[i].NotFound = uniqueSorted(row.NotFound)
 		}
-		checks[i].Overlaps = overlaps(name, signature(defs[name]), builtins)
+		checks[i].Overlaps = overlaps(name, build.Signature(defs[name]), builtins)
 		checks[i].Effect = effectNote(modRow(last, name), degradedFor(last, name), checks[i].Overlaps)
 	}
 }

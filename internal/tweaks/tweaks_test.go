@@ -16,7 +16,7 @@ import (
 // one listed but not embedded is a name the interface offers and cannot load.
 func TestEveryEmbeddedScriptIsListedAndEveryListedScriptIsEmbedded(t *testing.T) {
 	files := tweaks.Files()
-	require.Len(t, files, 12, "the built-in set is twelve scripts")
+	require.Len(t, files, 26, "the built-in set is twenty-six scripts (spec 014)")
 
 	listed := map[string]bool{}
 	for _, n := range tweaks.Names() {
@@ -37,7 +37,13 @@ writes to, so a script whose @param names a global it does not assign would show
 a slider that changes nothing. Checking it here rather than in the GUI is the
 difference between a test and a bug report.
 */
+//
+// A switch-only tweak is one whose effect has no sensible number: the hover
+// either works or it does not. They are named here so that a header typo that
+// drops every @param line from any other script still fails.
 func TestEveryBuiltInDeclaresAHeaderAndUsableParameters(t *testing.T) {
+	switchOnly := map[string]bool{"AtmosphereHover": true, "ChefKeepsTalking": true}
+
 	groups := map[string]bool{tweaks.GroupOther: true}
 	for _, g := range tweaks.Groups {
 		groups[g] = true
@@ -50,7 +56,11 @@ func TestEveryBuiltInDeclaresAHeaderAndUsableParameters(t *testing.T) {
 				"every built-in belongs to one of the declared groups")
 			require.True(t, groups[tw.Header.Group])
 			require.NotEmpty(t, tw.Header.Desc, "the card needs something to say")
-			require.NotEmpty(t, tw.Params)
+			if switchOnly[tw.Name] {
+				require.Empty(t, tw.Params, "a switch-only tweak declares nothing to tune")
+			} else {
+				require.NotEmpty(t, tw.Params)
+			}
 
 			src, ok := tweaks.Source(tw.Name)
 			require.True(t, ok)
@@ -85,6 +95,30 @@ func TestEveryBuiltInLoadsThroughTheSandbox(t *testing.T) {
 		require.NoErrorf(t, err, "%s does not load", name)
 		require.Equal(t, "nmsbonker", def.Author, "%s", name)
 		require.NotEmpty(t, def.Targets(), "%s edits nothing", name)
+	}
+}
+
+/*
+Spec 014 R1.3: no built-in adds or removes entries.
+
+A structural edit is the one kind the build may have to drop to get a file to
+recompile, and a built-in is meant to be the dependable version of an effect.
+The instant-text mod these replace added a block per letter; DefaultDelay
+already covers every character, so the built-in sets delays and nothing else.
+*/
+func TestNoBuiltInAddsOrRemovesEntries(t *testing.T) {
+	for _, name := range tweaks.Names() {
+		src, ok := tweaks.Source(name)
+		require.True(t, ok)
+		def, err := modscript.LoadSource(t.Context(), name+".lua", src)
+		require.NoError(t, err)
+		for _, mod := range def.Modifications {
+			for _, ch := range mod.Changes {
+				for _, blk := range ch.Blocks {
+					require.Falsef(t, blk.Structural(), "%s carries ADD or REMOVE", name)
+				}
+			}
+		}
 	}
 }
 

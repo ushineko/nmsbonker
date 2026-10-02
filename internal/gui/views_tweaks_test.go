@@ -11,9 +11,11 @@ import (
 	"github.com/stretchr/testify/require"
 	fd "github.com/ushineko/fynedesygn"
 	"github.com/ushineko/fynedesygn/fynetest"
+	"github.com/ushineko/fynedesygn/shell"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/modscript"
+	"github.com/ushineko/nmsbonker/internal/tweaks"
 )
 
 /*
@@ -131,8 +133,8 @@ The number beside a tweak's name says what it is: its place in the build order.
 The bug this prevents: the badge was an unexplained number. The card carried a
 bare "#13", which reads as an identifier, a version, a count of anything --
 while it is in fact the position that decides which of two tweaks editing the
-same value wins. The group it used to be filed under is still on the card, as
-the other half of the same dim tag.
+same value wins. The subject it used to carry beside the number is the page's
+tab since spec 014.
 */
 func TestTheOrderBadgeSaysBuildOrderRatherThanAnUnexplainedNumber(t *testing.T) {
 	u, _ := tweaksUI(t)
@@ -141,47 +143,51 @@ func TestTheOrderBadgeSaysBuildOrderRatherThanAnUnexplainedNumber(t *testing.T) 
 
 	text := fynetest.Text(u.tweakCard(tw))
 	require.Contains(t, text, "build order "+strconv.Itoa(tw.Order))
-	require.Contains(t, text, tw.Group+" · build order "+strconv.Itoa(tw.Order),
-		"the group stays visible as a dim tag after the name")
 	require.NotContains(t, text, "#"+strconv.Itoa(tw.Order),
 		"the bare number is what this test exists to keep out")
 }
 
 /*
-The section is one list of cards, ascending by build order, disabled ones in place.
+The section is five pages, and each page lists exactly its own tweaks, ascending
+by build order, disabled ones in place (spec 014 R2).
 
-Cards filed under Mining / Loot / … hid the ordering that decides the outcome
-of two tweaks touching the same value. The list is fed in the wrong order on
-purpose: sorting it is the section's promise, not something inherited from
-whoever loaded the model. A switched-off tweak keeps its slot, because sinking
-it would move a card the instant its switch was used.
+The model is fed in the wrong order on purpose: sorting it is the page's
+promise, not something inherited from whoever loaded the model. A switched-off
+tweak keeps its slot, because sinking it would move a card the instant its
+switch was used. And every tweak is on some page, so none is reachable from
+nowhere.
 */
-func TestTheTweaksSectionListsEveryTweakInBuildOrder(t *testing.T) {
+func TestTheTweaksSectionIsOnePagePerSubjectEachInBuildOrder(t *testing.T) {
 	u, _ := tweaksUI(t)
 	require.NotEmpty(t, u.tweaks.Tweaks)
-	require.NotEmpty(t, u.tweaks.Groups)
 
-	var want []string
+	sec, ok := tweaksSection(u, nil).(*shell.Tabs)
+	require.True(t, ok, "the Tweaks section is a shell.Tabs")
+	require.Equal(t, "Tweaks", sec.Title())
+	require.Equal(t, tweaks.Groups, shell.Names(sec.Parts()))
+	require.Equal(t, []string{"Rewards", "Gathering", "Player", "Ships", "Interface"}, tweaks.Groups)
+
+	want := map[string][]string{}
 	for i, tw := range u.tweaks.Tweaks {
 		if i > 0 {
 			require.Lessf(t, u.tweaks.Tweaks[i-1].Order, tw.Order,
 				"core hands the tweaks over in build order")
 		}
-		want = append(want, tw.Group+" · build order "+strconv.Itoa(tw.Order))
+		want[tw.Group] = append(want[tw.Group], "build order "+strconv.Itoa(tw.Order))
 	}
 
 	// One tweak off, and not the first or the last: it must not move.
 	u.tweaks.Tweaks[len(u.tweaks.Tweaks)/2].Enabled = false
 	slices.Reverse(u.tweaks.Tweaks)
 
-	got := orderTags(fynetest.Text(u.buildTweaks()))
-	require.Equal(t, want, got)
-
-	for _, g := range u.tweaks.Groups {
-		require.Truef(t, slices.ContainsFunc(got, func(tag string) bool {
-			return strings.HasPrefix(tag, g+" · ")
-		}), "group %q is on no card", g)
+	seen := 0
+	for _, part := range sec.Parts() {
+		got := orderTags(fynetest.Text(part.Build(u.sh)))
+		require.Equalf(t, want[part.Title()], got, "page %s", part.Title())
+		require.NotEmptyf(t, got, "page %s has no tweaks", part.Title())
+		seen += len(got)
 	}
+	require.Equal(t, len(u.tweaks.Tweaks), seen, "every tweak is on exactly one page")
 }
 
 /*
@@ -225,8 +231,8 @@ func TestTheOverviewDoesNotReportAGameDataVersion(t *testing.T) {
 
 // --- helpers ---------------------------------------------------------------
 
-// orderTags is the "<group> · build order <n>" line off every card in the
-// section, top to bottom, which is the order the section renders them in.
+// orderTags is the "build order <n>" line off every card on a page, top to
+// bottom, which is the order the page renders them in.
 func orderTags(text string) []string {
 	var out []string
 	for _, line := range strings.Split(text, "\n") {

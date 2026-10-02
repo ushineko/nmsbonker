@@ -59,17 +59,32 @@ var order = []string{
 	"MissionStandingBuff",
 	"NexusRewards",
 	"MissionBoardRewards",
+	// Spec 014: the effects people were fetching from the library, each
+	// rewritten for this project. They touch files the twelve above do not,
+	// apart from MiningSpeed (Health, beside MaterialYield10x's amounts), so
+	// their place after them is a convention rather than a dependency.
+	"MiningSpeed",
+	"MiningLaser",
+	"RefinerSpeed",
+	"MovementSpeed",
+	"ScannerBoost",
+	"TechStacking",
+	"ShipTransferRange",
+	"PulseEngineSpeed",
+	"AtmosphereHover",
+	"FleetExpeditionTime",
+	"FrigateRewards",
+	"InstantText",
+	"QuickConfirm",
+	"ChefKeepsTalking",
 }
 
-// Groups are the headings the Tweaks section lays the cards out under, in
-// display order. A tweak whose header names something else is shown under
-// "Other" rather than being hidden.
+// Groups are the Tweaks section's pages, in display order (spec 014 R2). A
+// tweak whose header names something else lands on "Other" rather than being
+// hidden, and a test keeps every built-in off it.
 //
 //nolint:gochecknoglobals // a fixed list, read-only after initialisation
-var Groups = []string{
-	"Mining", "Loot", "Currency", "Standing", "Inventory", "Economy",
-	"Exploration", "Language", "Missions",
-}
+var Groups = []string{"Rewards", "Gathering", "Player", "Ships", "Interface"}
 
 // GroupOther is where a tweak with an unrecognised group lands.
 const GroupOther = "Other"

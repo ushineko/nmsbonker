@@ -160,6 +160,9 @@ type sectionEntry struct {
 	icon   func() fyne.Resource
 	build  func(*ui) fyne.CanvasObject
 	detach func(*ui)
+	// section, when set, is a section that is more than one builder (Tweaks'
+	// pages); it is given the icon, and build and detach are unused.
+	section func(u *ui, icon func() fyne.Resource) shell.Section
 }
 
 // sectionBuilders is what each section is made of. sections walks
@@ -172,18 +175,18 @@ type sectionEntry struct {
 // initialization cycle in a package-level map.
 func sectionBuilders() map[string]sectionEntry {
 	return map[string]sectionEntry{
-		"Overview": {theme.HomeIcon, (*ui).buildOverview, nil},
-		"Mods":     {theme.ListIcon, (*ui).buildMods, nil},
-		"Tweaks":   {theme.SettingsIcon, (*ui).buildTweaks, nil},
+		"Overview": {theme.HomeIcon, (*ui).buildOverview, nil, nil},
+		"Mods":     {theme.ListIcon, (*ui).buildMods, nil, nil},
+		"Tweaks":   {icon: theme.SettingsIcon, section: tweaksSection},
 		// The Build section holds the run's live widgets (the step rows, the
 		// log list, the Cancel button), so it is told before it is replaced.
-		"Build":      {theme.MediaPlayIcon, (*ui).buildBuild, func(u *ui) { u.run.detach() }},
-		"Report":     {theme.DocumentIcon, (*ui).buildReport, nil},
-		"Saves":      {theme.StorageIcon, (*ui).buildSaves, nil},
-		"Tools":      {theme.ComputerIcon, (*ui).buildTools, nil},
-		"Settings":   {theme.SettingsIcon, (*ui).buildSettings, nil},
-		"Appearance": {theme.ColorPaletteIcon, (*ui).buildAppearance, nil},
-		"About":      {theme.HelpIcon, (*ui).buildAbout, nil},
+		"Build":      {theme.MediaPlayIcon, (*ui).buildBuild, func(u *ui) { u.run.detach() }, nil},
+		"Report":     {theme.DocumentIcon, (*ui).buildReport, nil, nil},
+		"Saves":      {theme.StorageIcon, (*ui).buildSaves, nil, nil},
+		"Tools":      {theme.ComputerIcon, (*ui).buildTools, nil, nil},
+		"Settings":   {theme.SettingsIcon, (*ui).buildSettings, nil, nil},
+		"Appearance": {theme.ColorPaletteIcon, (*ui).buildAppearance, nil, nil},
+		"About":      {theme.HelpIcon, (*ui).buildAbout, nil, nil},
 	}
 }
 
@@ -196,6 +199,10 @@ func sections(u *ui) []shell.Section {
 		b, ok := builders[title]
 		if !ok {
 			continue // a title with no builder draws nothing; see SectionNames
+		}
+		if b.section != nil {
+			out = append(out, b.section(u, b.icon))
+			continue
 		}
 		sec := shell.NewSection(title, b.icon, func(*shell.Shell) fyne.CanvasObject { return b.build(u) })
 		if b.detach != nil {

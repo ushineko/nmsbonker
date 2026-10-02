@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/ushineko/nmsbonker/internal/build/cache"
+	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/modscript"
 	"github.com/ushineko/nmsbonker/internal/mxml"
 )
@@ -73,6 +74,9 @@ type Script struct {
 	Enabled bool
 	Def     *modscript.Definition
 	Err     error
+	// Builtin marks one of the embedded tweaks, which is what overlap
+	// detection compares library mods against (spec 014 R3).
+	Builtin bool
 	// Missing is true when the library has no file for this entry at all.
 	Missing bool
 }
@@ -94,6 +98,9 @@ type Plan struct {
 	Unsupported []string
 	// Sources lists every distinct MBIN_FILE_SOURCE, for the cache to produce.
 	Sources []string
+	// Overlaps are the library mods that change a key a built-in also
+	// changes in the same file (spec 014 R3).
+	Overlaps []report.Overlap
 }
 
 /*
@@ -165,6 +172,7 @@ func NewPlan(scripts []Script) *Plan {
 		}
 	}
 
+	plan.Overlaps = overlaps(scripts)
 	plan.Unsupported = make([]string, 0, len(unsupported))
 	for k := range unsupported {
 		plan.Unsupported = append(plan.Unsupported, k)
@@ -196,4 +204,74 @@ func (p *Plan) isComplex(name string) bool {
 // the separators the game uses.
 func InternalUpper(internal string) string {
 	return strings.ToUpper(strings.ReplaceAll(internal, `\`, "/"))
+}
+
+/*
+overlaps finds each enabled library mod that changes a (file, key) pair some
+enabled built-in also changes (spec 014 R3), one entry per pair of mods and
+file, in build order.
+
+The comparison is Signature's, which `mods check` uses too: key names within a
+file, and the wrapper or currency for a WRAPPER_MULT or CURRENCY_MULT. Two mods
+that change Amount in different rows of one table are reported as well. That
+is coarse on purpose, because resolving each block to the lines it would touch
+is the merge, and the report says only that both change the key, which is true
+either way. Built-in against built-in is left out (the currency tweaks
+compound by design), and so is library against library, which the build order
+has always been the answer to.
+*/
+func overlaps(scripts []Script) []report.Overlap {
+	type signed struct {
+		name string
+		keys map[string]bool
+	}
+	var libs, builtins []signed
+	for _, s := range scripts {
+		if !s.Enabled || s.Def == nil {
+			continue
+		}
+		sig := signed{s.Name, Signature(s.Def)}
+		if s.Builtin {
+			builtins = append(builtins, sig)
+		} else {
+			libs = append(libs, sig)
+		}
+	}
+	var out []report.Overlap
+	for _, lib := range libs {
+		for _, bi := range builtins {
+			byFile := map[string][]string{}
+			var files []string
+			for k := range lib.keys {
+				if !bi.keys[k] {
+					continue
+				}
+				file, key := splitSignatureKey(k)
+				if byFile[file] == nil {
+					files = append(files, file)
+				}
+				byFile[file] = append(byFile[file], key)
+			}
+			sort.Strings(files)
+			for _, f := range files {
+				sort.Strings(byFile[f])
+				out = append(out, report.Overlap{Library: lib.name, Builtin: bi.name, File: f, Keys: byFile[f]})
+			}
+		}
+	}
+	return out
+}
+
+// overlapsFor is the built-ins one library mod overlaps, sorted, for its row.
+func (p *Plan) overlapsFor(mod string) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, o := range p.Overlaps {
+		if o.Library == mod && !seen[o.Builtin] {
+			seen[o.Builtin] = true
+			out = append(out, o.Builtin)
+		}
+	}
+	sort.Strings(out)
+	return out
 }

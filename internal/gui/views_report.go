@@ -226,7 +226,10 @@ func cappedText(capped int) string {
 
 // modNote is the Notes column, worded as the CLI and the Markdown report word
 // it. Three renderings of one report must not describe a verdict differently.
-func modNote(m report.ModResult) string {
+func modNote(m report.ModResult) string { return report.WithOverlaps(m, verdictNote(m)) }
+
+// verdictNote is what the verdict alone says.
+func verdictNote(m report.ModResult) string {
 	switch m.Verdict {
 	case report.Partial:
 		return "structural add/remove skipped; value edits kept"

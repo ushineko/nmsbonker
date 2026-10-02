@@ -1,4 +1,4 @@
--- @tweak name="Nanite rewards" group="Currency"
+-- @tweak name="Nanite rewards" group="Rewards"
 -- @desc Multiplies Nanites rewards only, on top of whatever the units and
 -- @desc nanites tweak already did. Units are never touched here.
 -- @param NANITE_MULT label="Extra nanite multiplier" min=1 max=100 step=1 default=10

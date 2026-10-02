@@ -1,4 +1,4 @@
--- @tweak name="Mission board rewards" group="Missions"
+-- @tweak name="Mission board rewards" group="Rewards"
 -- @desc Multiplies what station mission board and corvette missions pay, on top
 -- @desc of the global reward tweaks: the item lists and the units and nanites.
 -- @desc Ships neutral; only the eight mission board entries are touched.

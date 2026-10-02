@@ -1,4 +1,4 @@
--- @tweak name="Scan value" group="Exploration"
+-- @tweak name="Scan value" group="Rewards"
 -- @desc Multiplies the base analysis and discovery payouts for creatures,
 -- @desc plants, minerals, planets and systems, and sets a flat value for a
 -- @desc starship scan, which stock pays nothing for.

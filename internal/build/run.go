@@ -125,6 +125,7 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 		CompilerFailures: append([]report.CompilerFailure(nil), opts.DecompileFailures...),
 		CacheReused:      opts.CacheReused, CacheBuilt: opts.CacheBuilt,
 		Complex: plan.Complex, Workers: opts.Workers, Params: opts.Params,
+		Overlaps: plan.Overlaps,
 	}
 
 	stats := newTally()
@@ -184,6 +185,9 @@ func Run(ctx context.Context, plan *Plan, opts Options) (*report.Result, error) 
 	}
 	res.Applied, res.Skipped, res.Capped = stats.applied, stats.skipped, stats.capped
 	res.Mods = stats.rows(plan)
+	for i := range res.Mods {
+		res.Mods[i].Overlaps = plan.overlapsFor(res.Mods[i].Name)
+	}
 	res.Lines = report.Events(events)
 	res.Timings.Cache = opts.CacheTime
 

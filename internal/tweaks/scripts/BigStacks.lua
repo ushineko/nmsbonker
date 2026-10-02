@@ -1,4 +1,4 @@
--- @tweak name="Big stacks" group="Inventory"
+-- @tweak name="Big stacks" group="Gathering"
 -- @desc Raises the inventory stack limits, for every difficulty tier and every
 -- @desc inventory. Absolute caps rather than a multiplier: products start at
 -- @desc five to twenty and the game uses hard limits. Also bounds what an

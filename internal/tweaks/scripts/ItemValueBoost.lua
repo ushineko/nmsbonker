@@ -1,4 +1,4 @@
--- @tweak name="Item value" group="Economy"
+-- @tweak name="Item value" group="Rewards"
 -- @desc Multiplies the base value of every substance and product, which is what
 -- @desc the galactic market prices are derived from. Buy prices rise with sell
 -- @desc prices; the game computes both from the same number.

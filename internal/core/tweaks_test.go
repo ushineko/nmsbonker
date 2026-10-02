@@ -17,7 +17,7 @@ func TestListTweaksDescribesEveryBuiltIn(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, res.Tweaks, len(tweaks.Names()))
 	require.NotEmpty(t, res.Groups)
-	require.Contains(t, res.Groups, "Mining")
+	require.Equal(t, tweaks.Groups, res.Groups, "every page has a tweak on it, in page order")
 
 	for i, tw := range res.Tweaks {
 		require.NotEmpty(t, tw.Title)
@@ -25,7 +25,6 @@ func TestListTweaksDescribesEveryBuiltIn(t *testing.T) {
 		require.NotEmpty(t, tw.Group)
 		require.Equal(t, i+1, tw.Order, "the listing is the build order")
 		require.False(t, tw.Enabled)
-		require.NotEmpty(t, tw.Params)
 		for _, p := range tw.Params {
 			require.False(t, p.Overridden)
 			require.Equal(t, p.Default, p.Current)

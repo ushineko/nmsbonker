@@ -69,7 +69,7 @@ type Param struct {
 type Header struct {
 	// Name is the display name; empty when the script has no @tweak line.
 	Name string `json:"name,omitempty"`
-	// Group is one of the eight groups the Tweaks section is laid out in.
+	// Group is the page of the Tweaks section the tweak is drawn on.
 	Group string `json:"group,omitempty"`
 	// Desc is the @desc lines joined into one paragraph, falling back to the
 	// script's first comment block.

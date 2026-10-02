@@ -1,4 +1,4 @@
--- @tweak name="Space mining" group="Mining"
+-- @tweak name="Space mining" group="Gathering"
 -- @desc Multiplies the resources an asteroid holds and raises the chance that
 -- @desc a shot at one yields anything at all.
 -- @param AST_MULT label="Asteroid resource multiplier" min=1 max=100 step=1 default=20
