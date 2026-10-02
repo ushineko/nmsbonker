@@ -1,4 +1,4 @@
--- @tweak name="Learn more words" group="Language"
+-- @tweak name="Learn more words" group="Rewards"
 -- @desc Multiplies the number of words learned from a monolith, a knowledge
 -- @desc stone, a plaque or a conversation.
 -- @param WORD_MULT label="Words per interaction" min=1 max=50 step=1 default=5

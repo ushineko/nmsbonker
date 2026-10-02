@@ -1,4 +1,4 @@
--- @tweak name="Chest and loot materials" group="Loot"
+-- @tweak name="Chest and loot materials" group="Rewards"
 -- @desc Multiplies the substance and product amounts handed out by the reward
 -- @desc tables: chests, cargo drops, salvage, containers and mission material
 -- @desc rewards. Units and nanites are deliberately left alone.

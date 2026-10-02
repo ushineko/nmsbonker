@@ -214,7 +214,7 @@ func (s *session) loadScripts(ctx context.Context, all bool) ([]build.Script, er
 	}
 	out := make([]build.Script, 0, len(list.Mods))
 	for _, m := range list.Mods {
-		script := build.Script{Name: m.Name, Enabled: m.Enabled || all}
+		script := build.Script{Name: m.Name, Enabled: m.Enabled || all, Builtin: m.Source == SourceBuiltin}
 		switch {
 		case m.Status == ModMissing:
 			script.Missing = true

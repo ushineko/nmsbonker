@@ -1,4 +1,4 @@
--- @tweak name="Mission standing" group="Standing"
+-- @tweak name="Mission standing" group="Rewards"
 -- @desc Multiplies the faction and race standing a mission pays out.
 -- @param STANDING_MULT label="Standing multiplier" min=1 max=50 step=1 default=5
 -- @param STANDING_CAP label="Largest standing reward" min=0 max=100000 step=50 default=500

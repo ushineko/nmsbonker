@@ -1,14 +1,13 @@
--- @tweak name="Material yield" group="Gathering"
--- @desc Multiplies the substance amounts a rock, plant, crystal or asteroid
--- @desc gives up when it is mined, on the entity files themselves.
--- @param MATERIAL_MULTIPLIER label="Mined amount multiplier" min=1 max=100 step=1 default=10
--- @param YIELD_CAP label="Largest mined amount" min=0 max=1000000 step=1000 default=50000
-MATERIAL_MULTIPLIER = 10  -- multiply mined substance amounts (rock/crystal/plant) by this
-YIELD_CAP = 50000         -- ceiling on the result, whatever ran before this. 0 = no ceiling.
+-- @tweak name="Mining speed" group="Gathering"
+-- @desc Rocks, plants and crystals break sooner under the mining beam: their
+-- @desc health is divided by the speed. What they yield is Material yield's
+-- @desc job. After TheVoidKnight's "Faster Mining".
+-- @param MINING_SPEED label="Mining speed" min=1 max=20 step=1 default=5
+MINING_SPEED = 5  -- divide every mineable object's Health by this
 
 NMS_MOD_DEFINITION_CONTAINER =
 {
-["MOD_FILENAME"] = "MaterialYield10x.pak",
+["MOD_FILENAME"] = "MiningSpeed.pak",
 ["MOD_AUTHOR"]   = "nmsbonker",
 ["MODIFICATIONS"] =
     {
@@ -16,12 +15,12 @@ NMS_MOD_DEFINITION_CONTAINER =
             ["MBIN_CHANGE_TABLE"] =
             {
                 {
+                    -- The same entity files Material yield edits.
                     ["MBIN_FILE_SOURCE"] =
                     {
 						"MODELS\SPACE\ASTEROIDS\SMALLASTEROID\ENTITIES\ASTEROID.ENTITY.MBIN",
 						"MODELS\SPACE\ASTEROIDS\GIANTASTEROID\ENTITIES\ASTEROID_01.ENTITY.MBIN",
 						"MODELS\SPACE\ASTEROIDS\NONDESTRUCTIBLE\BIGASTEROID01\ENTITIES\BIGASTEROID.ENTITY.MBIN",
-
 						"MODELS\PLANETS\BIOMES\BARREN\PLANTS\LARGECACTUS\ENTITIES\LARGECACTUS.ENTITY.MBIN",
 						"MODELS\PLANETS\BIOMES\BARREN\PLANTS\MEDIUMCACTUS\ENTITIES\MEDIUMCACTUS.ENTITY.MBIN",
 						"MODELS\PLANETS\BIOMES\BARREN\PLANTS\SMALLCACTUS\ENTITIES\SMALLCACTUS.ENTITY.MBIN",
@@ -88,19 +87,13 @@ NMS_MOD_DEFINITION_CONTAINER =
 						"MODELS\PLANETS\BIOMES\UNDERWATER\MEDIUMPLANTS\ENTITIES\MEDIUMPLANTWATER.ENTITY.MBIN",
 						"MODELS\PLANETS\BIOMES\UNDERWATER\MEDIUMPLANTS\MEDIUIMGLOWPLANT\ENTITIES\_BASE_1.ENTITY.MBIN",
 						"MODELS\PLANETS\BIOMES\UNDERWATER\SMALLPLANTS\ENTITIES\SMALLPLANTWATER.ENTITY.MBIN"
-					},
+                    },
                     ["EXML_CHANGE_TABLE"] =
                     {
                         {
-                            ["PRECEDING_KEY_WORDS"] = "",
-                            ["MATH_OPERATION"]      = "*",
-                            ["REPLACE_TYPE"]        = "ALL",
-                            ["CAP"]                 = YIELD_CAP,
-                            ["VALUE_CHANGE_TABLE"]  =
-                            {
-                                { "AmountMin", MATERIAL_MULTIPLIER },
-                                { "AmountMax", MATERIAL_MULTIPLIER }
-                            }
+                            ["MATH_OPERATION"]     = "/",
+                            ["REPLACE_TYPE"]       = "ALL",
+                            ["VALUE_CHANGE_TABLE"] = { {"Health", MINING_SPEED} }
                         }
                     }
                 }

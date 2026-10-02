@@ -1,4 +1,4 @@
--- @tweak name="Units and nanites" group="Currency"
+-- @tweak name="Units and nanites" group="Rewards"
 -- @desc Multiplies every Units and Nanites reward exactly once per reward
 -- @desc block, so a mixed units-and-nanites jackpot is not multiplied twice.
 -- @param CUR_MULT label="Units and nanites multiplier" min=1 max=100 step=1 default=5

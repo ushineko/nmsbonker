@@ -250,3 +250,21 @@ func TestTheTimingsLineNamesTheAudit(t *testing.T) {
 	r.Timings.Audit = 1200 * time.Millisecond
 	require.Contains(t, report.Markdown(r), "audit 1.2s")
 }
+
+// Spec 014 R3: the Notes column names the built-ins a library mod overlaps,
+// after whatever its verdict already says.
+func TestTheNotesNameTheBuiltInsAModOverlaps(t *testing.T) {
+	r := sample()
+	r.Mods = []report.ModResult{
+		{Name: "FastRefiners", Verdict: report.Working, Applied: 1,
+			Overlaps: []string{"RefinerSpeed"}},
+		{Name: "OldScanner", Verdict: report.WorkingSkipped, Applied: 1, Skipped: 1,
+			NotFound: []string{"PulseRange"}, Overlaps: []string{"MiningLaser", "ScannerBoost"}},
+		{Name: "Plain", Verdict: report.Working, Applied: 1},
+	}
+	md := report.Markdown(r)
+	require.Contains(t, md, "| FastRefiners | WORKING | 1 | 0 | overlaps built-in RefinerSpeed |")
+	require.Contains(t, md, "| OldScanner | WORKING~ | 1 | 1 | keys not found: PulseRange; "+
+		"overlaps built-in MiningLaser, ScannerBoost |")
+	require.Contains(t, md, "| Plain | WORKING | 1 | 0 |  |")
+}

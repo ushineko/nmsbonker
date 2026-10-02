@@ -10,9 +10,9 @@ Python, no `hgpaktool.exe`.
 
 Rebuilds AMUMSS-format `.lua` mod scripts against the game files you have
 installed, merges every enabled mod into one collision-free mod folder, and
-deploys it. It also ships ten mods of its own — the "tweaks" — with a slider
-for every number they change, so a fresh install has something to build without
-downloading anything first.
+deploys it. It also ships twenty-six mods of its own — the "tweaks" — with a
+slider for every number they change, so a fresh install has something to build
+without downloading anything first.
 
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
@@ -98,25 +98,38 @@ that moved each flagged one, in build order, with the value after each of them.
 `nmsbonker audit` re-runs the check against different limits in about a second,
 without rebuilding.
 
-**Comes with ten mods of its own,** each with declared parameters: material
-yield, chest and loot amounts, units and nanites, nanites again on top, mission
-standing, inventory stack limits, scan payouts, asteroid yield, item value, and
-words learned per interaction. They are ordinary AMUMSS scripts, MIT-licensed
-with the rest of this repository, and every number in them is a slider. Eight of
-them also carry a **cap**: a ceiling on the amount the tweak produces, applied
-after the arithmetic and after whatever ran before it, so a compounding script
-in your library cannot push a reward past a value the game can hold.
+**Comes with twenty-six mods of its own,** each with declared parameters, on
+five pages:
 
-![The Tweaks section. A Mining card holding two tweaks: "Material yield" with
-its checkbox ticked and "#1" beside it, described as multiplying the substance
-amounts a rock, plant, crystal or asteroid gives up when mined, with a "Mined
-amount multiplier" slider set to 20 against a dim "default 10" and a Reset
-button; and "Space mining" unticked at #6, with an "Asteroid resource
-multiplier" of 20 and an "Asteroid yield chance" of 1.0. Below them a Loot card
-begins with "Chest and loot materials", ticked at #2, and its "Reward amount
-multiplier" of 10. A line above the buttons reads "The last build, 2026-09-11
-21:28, used these values", and the buttons are "Apply and build", "Reset all to
-defaults" and Refresh.](assets/screenshot-tweaks.png)
+| Page | Tweaks |
+|------|--------|
+| Rewards | chest and loot amounts, units and nanites, nanites again on top, item value, scan payouts, words learned, mission standing, Nexus and mission-board rewards |
+| Gathering | material yield, asteroid yield, mining speed, mining laser and terrain yield, refiner speed, stack limits |
+| Player | running, jetpack and swimming speed; analysis visor and scanner range and recharge; how many upgrade modules of one kind count |
+| Ships | ship inventory transfer range, pulse engine speed, atmospheric hover, frigate expedition time, frigate rewards |
+| Interface | instant dialogue text, a shorter hold-to-confirm, the Nexus chef's conversation staying open |
+
+They are ordinary AMUMSS scripts, MIT-licensed with the rest of this
+repository, and every number in them is a slider. Fourteen of them do what
+popular community mods do, rewritten for this project rather than copied (see
+Credit), so the effects people used to download come with the program. Your own
+library scripts still build exactly as before. When one changes a value a
+built-in also changes, the report says so ("overlaps built-in RefinerSpeed"),
+and you decide which one stays on. Eight of them also carry a **cap**: a
+ceiling on the amount the tweak produces, applied after the arithmetic and
+after whatever ran before it, so a compounding script in your library cannot
+push a reward past a value the game can hold.
+
+![The Tweaks section, with a strip of five page tabs across the top — Rewards
+(selected), Gathering, Player, Ships and Interface. The Rewards page opens with
+"What missions, chests, the Nexus and selling things pay out." Below it,
+"Chest and loot materials" is ticked at build order 2, with a "Reward amount
+multiplier" slider at 10 and a "Largest reward amount" of 50000, each with its
+default beside it and a Reset button. "Units and nanites" is ticked at build
+order 3, with a multiplier of 5 and caps of 50000000 units and 250000 nanites.
+"Scan value" is unticked at build order 5. A line above the buttons reads "The
+last build, 2026-10-02 09:42, used these values", and the buttons are "Apply
+and build", "Reset all to defaults" and Refresh.](assets/screenshot-tweaks.png)
 
 **Tells you what happened.** `BUILD_REPORT.md` and `report.json` per build: a
 verdict per mod, the keys a game update renamed out from under it, the files
@@ -233,7 +246,7 @@ nmsbonker status                # is the game here, is there a compiler, what wo
 nmsbonker tools ensure          # download the MBINCompiler this game version needs
 nmsbonker tools check           # prove it can read this install's files
 
-nmsbonker tweaks list           # the twelve built-in mods and every number in them
+nmsbonker tweaks list           # the built-in mods, their pages and every number in them
 nmsbonker tweaks enable MaterialYield10x ItemValueBoost
 nmsbonker tweaks set MaterialYield10x MATERIAL_MULTIPLIER 20
 
@@ -260,13 +273,13 @@ nmsbonker-gui --version
 ```
 
 ![The Mods section. A table with columns #, On, Name, Source, Author, Files and
-Last verdict, holding the ten built-in tweaks: MaterialYield10x ticked with 69
+Last verdict, opening on the built-in tweaks: MaterialYield10x ticked with 69
 files and an orange WORKING~, ChestAndLootMaterials10x, MoneyAndNanites5x,
 ItemValueBoost, LearnMoreWords and MissionStandingBuff ticked and green
-WORKING, and BigStacks, ScanValue50x, SpaceMiningBoost and NaniteRewardBuff
-switched off with no verdict. Every row's Source reads "builtin" and its Author
+WORKING, and BigStacks, ScanValue50x, SpaceMiningBoost, NaniteRewardBuff and
+NexusRewards switched off with no verdict. Every row's Source reads "builtin" and its Author
 "nmsbonker". Above the table: Add…, Import folder…, Check, Open library folder.
-Below it, "8 of 12 enabled · build order is table order; lower rows apply later
+Below it, "8 of 28 enabled · build order is table order; lower rows apply later
 and win on conflicts", and the row actions Enable, Disable, Move up, Move down,
 Details…, Open script and a red Remove….](assets/screenshot-mods.png)
 
@@ -618,7 +631,7 @@ are never committed.
 | `internal/build` | The target plan, the merge and recompile gate, the report |
 | `internal/build/audit` | The reward-amount audit: reward blocks parsed, limits applied, contributors attributed |
 | `internal/save` | The save file codec: the chunked LZ4 container, the encrypted manifest, a byte-preserving JSON tree, the key mapping and the typed edits |
-| `internal/tweaks` | The ten built-in mod scripts, embedded |
+| `internal/tweaks` | The twenty-six built-in mod scripts, embedded, and the pages they are drawn on |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
 | `packaging` | The desktop entry, the application icon, and `arch/PKGBUILD` |
@@ -642,6 +655,37 @@ flow in more detail, including how the golden fixtures are regenerated.
 > tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
 
 ## Changelog
+
+### Unreleased
+
+- **Fourteen more built-in tweaks** (spec 014, #7). The effects people were
+  downloading as third-party AMUMSS scripts now come with the program: mining
+  speed, mining laser and terrain yield, refiner speed, movement speed, the
+  scanner, technology stacking, ship transfer range, pulse engine speed,
+  atmospheric hover, frigate expedition time, frigate rewards, instant text,
+  quick confirm, and the Nexus chef's conversation staying open. Each is
+  written for this project and credits the mod that had the idea. Each is
+  checked against the current game build. Two corrections against the
+  originals:
+  - The scanner's range and recharge moved out of `GCGAMEPLAYGLOBALS` into
+    `SCANDATATABLE`, so the built-in edits them there.
+  - The chef's `KeepOpen` is a sibling of the option's cost, not inside it.
+    The original script's anchor found nothing to change under this engine,
+    so it reported OK and did nothing.
+
+  New built-ins start switched off, existing configurations included, at the
+  end of the build order.
+- **The Tweaks section has pages.** Rewards, Gathering, Player, Ships and
+  Interface, under a tab strip (fynedesygn's `shell.Tabs`, v0.1.82). Within
+  a page, cards stay in build order, and the page last shown is remembered
+  across restarts.
+- **The build report names overlaps.** A library mod that changes a key a
+  built-in also changes, in the same file, gets "overlaps built-in X" in
+  its Notes column, in `BUILD_REPORT.md`, `nmsbonker report` and the window.
+  `report.json` lists each pair under `overlaps`. Nothing is switched off for
+  you. `mods check` and the Mods detail dialog already said this, and the
+  build now uses the same comparison.
+- **fynedesygn v0.1.82.**
 
 ### 0.4.1
 
@@ -780,6 +824,16 @@ Lua runs through [gopher-lua](https://github.com/yuin/gopher-lua) (MIT).
 [MBINCompiler](https://github.com/monkeyman192/MBINCompiler) is downloaded and
 run, not vendored; it remains the only maintained MBIN↔MXML converter, and none
 of this would exist without it.
+
+The fourteen tweaks added in spec 014 follow effects first published as
+community AMUMSS scripts: TheVoidKnight's "Faster Mining", wim95's
+"FastRefiners", Mjjstral's "ScanTimesAndRangeImprove" and (after Lo2k)
+"SpeedIncreaseActions", "runforrestrun", Wbertro's "StackingTechnologyModules",
+Lo2k's "Better Ship Transfer Range", BigEx20's "AtmoHover-PulseSpeedDefined",
+Ahawk's "FleetUpdate", MrTrack's "BetterFrigateRewards", NooBzPoWaH's
+"InstantTextDisplay" and JustRuthless's "Keep Talking Chef". The scripts here
+are written for this project and change the same game values. None of the
+originals' text is in this repository.
 
 ## License
 

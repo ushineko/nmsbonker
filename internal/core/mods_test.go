@@ -296,11 +296,13 @@ func TestTheBuiltInsAreListedInOrderAndStartDisabled(t *testing.T) {
 		require.False(t, m.Enabled, "%s is enabled on a fresh install", m.Name)
 		require.Equal(t, core.ModOK, m.Status)
 		require.Empty(t, m.Path, "a built-in has no file in the library")
-		require.Positive(t, m.Params, "%s declares no parameters", m.Name)
+		tw, ok := tweaks.Get(m.Name)
+		require.True(t, ok)
+		require.Len(t, tw.Params, m.Params, "%s: the listing counts the parameters the script declares", m.Name)
 		names = append(names, m.Name)
 	}
 	require.Equal(t, tweaks.Names(), names)
-	require.Contains(t, notices(list), "added 12 built-in tweak(s), disabled")
+	require.Contains(t, notices(list), "added 26 built-in tweak(s), disabled")
 
 	// Persisted, so the second call has nothing to add and nothing to say.
 	again, err := core.ListMods(t.Context(), core.ListModsRequest{})

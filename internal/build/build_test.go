@@ -486,3 +486,53 @@ func TestCancellingAFirstBuildLeavesNoPartialOutput(t *testing.T) {
 	require.NoDirExists(t, filepath.Join(workspace, "TEST MOD"))
 	require.NoDirExists(t, filepath.Join(workspace, "TEST MOD.prev"))
 }
+
+/*
+Spec 014 R3: a library mod and a built-in that change the same key in one file
+are an overlap, and nothing else is.
+
+Four mods over two files. FastRefiners and the RefinerSpeed built-in both
+change TimeToMake in the recipe table, which is the case the check exists for.
+A library mod that changes a different key in that file is not reported. Two
+built-ins that change the same key are not reported either, because the
+currency tweaks compound on purpose. The same key in a different file is a
+different value.
+*/
+func TestALibraryModChangingWhatABuiltInChangesIsAnOverlap(t *testing.T) {
+	const recipes = `METADATA\REALITY\TABLES\NMS_REALITY_GCRECIPETABLE.MBIN`
+	const globals = "GCGAMEPLAYGLOBALS.GLOBAL.MBIN"
+	const key = "METADATA/REALITY/TABLES/NMS_REALITY_GCRECIPETABLE.MBIN"
+	plan := NewPlan([]Script{
+		{Name: "FastRefiners", Enabled: true, Def: def("FastRefiners", []*modscript.Block{
+			valueBlock("TimeToMake", "0.1"), valueBlock("Amount", "1"),
+		}, recipes)},
+		{Name: "RecipeNames", Enabled: true, Def: def("RecipeNames",
+			[]*modscript.Block{valueBlock("Name", "x")}, recipes)},
+		{Name: "OtherFile", Enabled: true, Def: def("OtherFile",
+			[]*modscript.Block{valueBlock("TimeToMake", "1")}, globals)},
+		{Name: "RefinerSpeed", Enabled: true, Builtin: true, Def: def("RefinerSpeed",
+			[]*modscript.Block{valueBlock("TimeToMake", "10")}, recipes)},
+		{Name: "AlsoRecipes", Enabled: true, Builtin: true, Def: def("AlsoRecipes",
+			[]*modscript.Block{valueBlock("TimeToMake", "2")}, recipes)},
+	})
+
+	require.Equal(t, []report.Overlap{
+		{Library: "FastRefiners", Builtin: "RefinerSpeed", File: key, Keys: []string{"TimeToMake"}},
+		{Library: "FastRefiners", Builtin: "AlsoRecipes", File: key, Keys: []string{"TimeToMake"}},
+	}, plan.Overlaps)
+	require.Equal(t, []string{"AlsoRecipes", "RefinerSpeed"}, plan.overlapsFor("FastRefiners"))
+	require.Empty(t, plan.overlapsFor("RefinerSpeed"), "a built-in's own row carries nothing")
+	require.Empty(t, plan.overlapsFor("OtherFile"))
+}
+
+// A disabled library mod overlaps nothing: it is not in the build.
+func TestADisabledLibraryModOverlapsNothing(t *testing.T) {
+	const recipes = `METADATA\REALITY\TABLES\NMS_REALITY_GCRECIPETABLE.MBIN`
+	plan := NewPlan([]Script{
+		{Name: "FastRefiners", Def: def("FastRefiners",
+			[]*modscript.Block{valueBlock("TimeToMake", "0.1")}, recipes)},
+		{Name: "RefinerSpeed", Enabled: true, Builtin: true, Def: def("RefinerSpeed",
+			[]*modscript.Block{valueBlock("TimeToMake", "10")}, recipes)},
+	})
+	require.Empty(t, plan.Overlaps)
+}

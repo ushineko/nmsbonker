@@ -15,25 +15,60 @@ import (
 	fd "github.com/ushineko/fynedesygn"
 	"github.com/ushineko/fynedesygn/dialogs"
 	"github.com/ushineko/fynedesygn/forms"
+	"github.com/ushineko/fynedesygn/shell"
 	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/modscript"
+	"github.com/ushineko/nmsbonker/internal/tweaks"
 )
 
-// --- Tweaks (spec 004 R2.1) -------------------------------------------------
+// --- Tweaks (spec 004 R2.1, spec 014 R2) ------------------------------------
 
 /*
-buildTweaks is the section this project's own mods live in.
+tweaksSection is the section this project's own mods live in: one page per
+subject, under a strip of tabs (fynedesygn's shell.Tabs).
 
 A tweak is a mod with declared parameters, which is the whole difference: the
 Mods section can only offer a mod's name and its place in the order, and here
-there is a slider with a range and a label saying what the number means. One
-flat list in build order rather than a card per subject: build order is what
-decides which of two tweaks editing the same value wins, and a layout that hid
-it asked the reader to hold ten positions in their head to work out what the
-next build would do. The subject is still on every card as a dim tag after the
-name, so "make mining better" is still findable by reading down the list.
+there is a slider with a range and a label saying what the number means.
+
+Pages because there are twenty-six of them (spec 014). One flat list was the
+right shape at twelve -- a layout that filed cards under Mining and Loot hid the
+build order that decides which of two tweaks editing the same value wins -- and
+at twenty-six it is a scroll nobody reads to the end. The pages are subjects a
+reader goes looking for ("make the ship better"), and within a page the cards
+are still in build order with the position on every card, so the rule that
+decides a conflict is still printed where the conflict is. The page last shown
+is remembered by the library, across restarts.
+
+The pages are the fixed list in tweaks.Groups rather than whatever the loaded
+model contains, because a section has to exist before its data loads: a page
+is drawn as "Reading…" until the built-ins arrive, like the flat list was.
+*/
+func tweaksSection(u *ui, icon func() fyne.Resource) shell.Section {
+	parts := make([]shell.Section, 0, len(tweaks.Groups))
+	for _, page := range tweaks.Groups {
+		parts = append(parts, shell.NewSection(page, nil, func(*shell.Shell) fyne.CanvasObject {
+			return u.buildTweakPage(page)
+		}))
+	}
+	return shell.NewTabs("Tweaks", icon, parts...)
+}
+
+// tweakPageBlurbs is the line under each page's heading.
+//
+//nolint:gochecknoglobals // a fixed table, read-only after initialisation
+var tweakPageBlurbs = map[string]string{
+	"Rewards":   "What missions, chests, the Nexus and selling things pay out.",
+	"Gathering": "Mining, refining and how much a stack holds.",
+	"Player":    "Moving on foot, scanning, and how far upgrades stack.",
+	"Ships":     "Your ship, its pulse drive, and the freighter's frigates.",
+	"Interface": "Dialogue, hold-to-confirm, and conversations that stay open.",
+}
+
+/*
+buildTweakPage is one page: its tweaks as cards, in build order.
 
 A tweak that is switched off keeps its slot. Sinking the disabled ones would
 move a card the instant its switch was used, and the position is a fact about
@@ -44,22 +79,27 @@ the last build shows a warn-coloured line in its card header, and that line's
 space is reserved whether or not there is anything in it -- a card that grows a
 row when a slider is dragged would move the next card out from under the mouse.
 */
-func (u *ui) buildTweaks() fyne.CanvasObject {
+func (u *ui) buildTweakPage(page string) fyne.CanvasObject {
 	u.loadTweaks()
 
 	if !u.tweaksOK {
 		return container.NewVScroll(container.NewVBox(
-			widgets.Heading("Tweaks", "Reading the built-in tweaks…")))
+			widgets.Heading(page, "Reading the built-in tweaks…")))
 	}
 
-	body := container.NewVBox(widgets.Heading("Tweaks",
-		"The mods that come with nmsbonker. Turn one on, set what it does, and build."))
+	body := container.NewVBox(widgets.Heading(page, tweakPageBlurbs[page]+
+		" Turn one on, set what it does, and build."))
 
-	for i, tw := range u.tweaksInBuildOrder() {
-		if i > 0 {
+	n := 0
+	for _, tw := range u.tweaksInBuildOrder() {
+		if tw.Group != page {
+			continue
+		}
+		if n > 0 {
 			body.Add(widget.NewSeparator())
 		}
 		body.Add(u.tweakCard(tw))
+		n++
 	}
 
 	return container.NewBorder(nil, u.tweaksActions(), nil, nil, container.NewVScroll(body))
@@ -76,11 +116,11 @@ func (u *ui) tweaksInBuildOrder() []core.TweakInfo {
 	return out
 }
 
-// tweakTag is the dim line after a tweak's name: what it is about, and where it
-// sits in the build order. It used to be "#13", and a bare number beside a name
-// says nothing about what it counts.
+// tweakTag is the dim line after a tweak's name: where it sits in the build
+// order. It used to be "#13", and a bare number beside a name says nothing
+// about what it counts. The subject it used to carry too is the page's tab.
 func tweakTag(tw core.TweakInfo) string {
-	return tw.Group + " · build order " + strconv.Itoa(tw.Order)
+	return "build order " + strconv.Itoa(tw.Order)
 }
 
 /*

@@ -1,4 +1,4 @@
--- @tweak name="Nexus mission rewards" group="Missions"
+-- @tweak name="Nexus mission rewards" group="Rewards"
 -- @desc Multiplies what Nexus missions pay, on top of the global reward tweaks:
 -- @desc the item lists, and the units, nanites and quicksilver that come with
 -- @desc them. Nothing outside the seven Nexus reward entries is touched.

@@ -77,6 +77,25 @@ type ModResult struct {
 	Files []string `json:"files"`
 	// NotFound lists the keys its edits could not find, in the order reported.
 	NotFound []string `json:"notFound"`
+	// Overlaps names the built-ins that change a value this library mod also
+	// changes (spec 014 R3), sorted. Empty for a built-in.
+	Overlaps []string `json:"overlaps,omitempty"`
+}
+
+/*
+Overlap is a library mod and a built-in tweak changing the same key in the
+same game file (spec 014 R3).
+
+Both run, in build order, and the later one wins or compounds -- which is what
+the build order has always meant. It is reported because the built-ins now
+cover what people used to download, and a library copy left switched on beside
+its built-in is the same edit made twice without anyone deciding that.
+*/
+type Overlap struct {
+	Library string   `json:"library"`
+	Builtin string   `json:"builtin"`
+	File    string   `json:"file"`
+	Keys    []string `json:"keys"`
 }
 
 // TargetResult is what happened to one game file.
@@ -180,7 +199,10 @@ type Result struct {
 	CompilerFailures []CompilerFailure `json:"compilerFailures,omitempty"`
 	// Complex lists mods carrying ADD or REMOVE, in first-seen order.
 	Complex []string `json:"complex"`
-	Lines   []Line   `json:"lines"`
+	// Overlaps are the library mods changing what a built-in also changes
+	// (spec 014 R3), in plan order.
+	Overlaps []Overlap `json:"overlaps,omitempty"`
+	Lines    []Line    `json:"lines"`
 
 	Timings         Timings `json:"timings"`
 	CompilerVersion string  `json:"compilerVersion"`
@@ -473,7 +495,24 @@ func ratioText(ratio float64) string {
 	return "x" + audit.Amount(ratio)
 }
 
-func note(m ModResult) string {
+// note is a row's Notes column: what its verdict means, and any built-in it
+// overlaps (spec 014 R3).
+func note(m ModResult) string { return WithOverlaps(m, verdictNote(m)) }
+
+// WithOverlaps appends the overlap clause to a row's verdict note, so the
+// Markdown, the CLI and the window word it the same way (spec 014 R3).
+func WithOverlaps(m ModResult, verdict string) string {
+	if len(m.Overlaps) == 0 {
+		return verdict
+	}
+	clause := "overlaps built-in " + strings.Join(m.Overlaps, ", ")
+	if verdict == "" {
+		return clause
+	}
+	return verdict + "; " + clause
+}
+
+func verdictNote(m ModResult) string {
 	switch m.Verdict {
 	case Partial:
 		return "new-entry add/remove not applied; base value edits kept"

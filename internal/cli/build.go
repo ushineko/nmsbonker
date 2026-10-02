@@ -148,7 +148,10 @@ func auditSummary(r *report.Result) string {
 	return r.Audit.Summary()
 }
 
-func modNote(m report.ModResult) string {
+func modNote(m report.ModResult) string { return report.WithOverlaps(m, verdictNote(m)) }
+
+// verdictNote is what the verdict alone says.
+func verdictNote(m report.ModResult) string {
 	switch m.Verdict {
 	case report.Partial:
 		return "structural add/remove skipped; value edits kept"
