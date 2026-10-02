@@ -117,7 +117,9 @@ jobs:
 
       - name: Build the release tarballs
         # Static CLI for four targets, the GUI for the runner, SHA256SUMS.
-        run: make release
+        # VERSION passed explicitly: the tree is the tag, but the release is
+        # never left to the Makefile's on-the-tag test.
+        run: make release VERSION="$(tr -d '[:space:]' < VERSION)"
 
       - uses: actions/download-artifact@v4
         with:
