@@ -144,6 +144,13 @@ func NewPlan(scripts []Script) *Plan {
 		}
 		for _, mod := range s.Def.Modifications {
 			for _, ch := range mod.Changes {
+				// A change table with files and no edits has nothing to merge.
+				// Planned anyway, it became a target with no items, and the
+				// report path that names a target's mod by its first item
+				// panicked on it (#5).
+				if len(ch.Blocks) == 0 {
+					continue
+				}
 				for _, src := range ch.Sources {
 					if !sourceSeen[src] {
 						sourceSeen[src] = true
