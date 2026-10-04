@@ -473,16 +473,11 @@ func writeAudit(w func(string, ...any), r *Result) {
 			"structure.", a.Unauditable)
 	}
 	w("")
-	w("Every edit above applied correctly; the amounts are large because they " +
-		"compound. Each mod multiplies what the mod before it left, so two reasonable " +
-		"multipliers make an unreasonable amount and nothing in the per-mod table can " +
-		"see it. Two ways out, and they can be combined: disable or re-tune the script " +
-		"named most often in the Contributors column, which is the one doing most of " +
-		"the multiplying; or put a ceiling on it with the built-in tweaks' cap " +
-		"parameters (Tweaks, or `nmsbonker tweaks set NAME LOOT_CAP 50000`), which " +
-		"clamps the result whatever ran before it. The limits themselves are settings: " +
-		"`nmsbonker config set audit.max_ratio 5` and re-run `nmsbonker audit` to " +
-		"re-check without rebuilding.")
+	w("Limits are checked to stop multipliers causing game issues or instability, " +
+		"such as a counter that goes negative past its maximum. To fix, lower the mod " +
+		"named in Contributors or set a tweak's cap (`nmsbonker tweaks set NAME " +
+		"LOOT_CAP 50000`). Limits: `nmsbonker config set audit.max_ratio 5`, then " +
+		"`nmsbonker audit`.")
 	w("")
 }
 

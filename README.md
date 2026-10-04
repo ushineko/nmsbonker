@@ -673,6 +673,9 @@ flow in more detail, including how the golden fixtures are regenerated.
   plants) give their material through a destruction reward in the reward
   table, which Chest and loot materials already multiplies. They are off its
   list, so nothing it yields changes and the row is WORKING.
+- **The amount audit's advice is two sentences.** Limits exist to stop
+  multipliers breaking the game (a counter past its maximum goes negative);
+  the fix is to lower the mod named in Contributors or set a tweak's cap.
 
 ### 0.5.5
 
