@@ -27,8 +27,8 @@ closed.
 
 ## Requirements
 
-- R1 Built-in `FleetExpeditionRefresh`, group Ships, after `FleetNoDamage`,
-  marked experimental in its description.
+- R1 Built-in `FleetExpeditionRefresh`, group Ships, after `FleetNoDamage`.
+  Its description said "experimental" until AC4 passed.
 - R2 `MINUTES_PER_DAY` (1–1440, default 10) sets
   `OverrideExpeditionSecondsPerDay` to that many minutes in seconds.
 - R3 `CHOICES` (1–10, default 5, the stock value) sets

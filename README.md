@@ -672,11 +672,11 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ### Unreleased
 
-- **New tweak: Fleet expedition refresh** (Ships page, #21, experimental).
+- **New tweak: Fleet expedition refresh** (Ships page, #21).
   Frigate expeditions are offered every so many minutes (default 10) instead of
   once a real-world day, and the board can offer up to ten at once. It sets
   the fleet globals' `OverrideExpeditionSecondsPerDay`, which the shipped game
-  leaves off; whether the game honours it is being tested.
+  leaves off and still honours.
 - **New tweak: Fleet takes no damage** (Ships page, #19). Frigates never come
   back from an expedition damaged, so there is nothing to fly round and
   repair. A failed event still costs its rewards. It zeroes the damage chance
