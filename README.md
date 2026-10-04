@@ -656,6 +656,14 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
+### Unreleased
+
+- **Scan value: the starship scan setting is gone.** The game has no
+  starship scan, so the value it set was never paid. The tweak no longer
+  writes the Starship worth block. A saved `SHIP_FLAT` now stops the build
+  as an unknown parameter; `nmsbonker tweaks reset ScanValue50x` clears it.
+- **Scan value: the payout multiplier goes to 500**, up from 200.
+
 ### 0.5.3
 
 - **Fix: the window no longer exits with "out of memory" after a few builds**
