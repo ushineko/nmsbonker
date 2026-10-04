@@ -2,7 +2,14 @@
 
 **Issue**: #21
 
-## Status: INCOMPLETE
+## Status: COMPLETE
+
+## Executive Summary
+
+A new built-in, `FleetExpeditionRefresh` (Ships page), sets the fleet globals'
+`OverrideExpeditionSecondsPerDay` so expeditions refresh every few minutes
+instead of once a real-world day, and `NumberOfExpeditionChoices` for how many
+are offered. The game honours both (checked in game). Value edits only.
 
 ## Context
 
@@ -37,10 +44,10 @@ closed.
   `WORKING` with nothing skipped (`TestEveryBuiltInFindsEveryKeyInTheInstalledGame`).
 - [x] AC3 The compiled MBIN shows `OverrideExpeditionSecondsPerDay` 600 and
   `NumberOfExpeditionChoices` 5 at the defaults, nothing else changed.
-- [ ] AC4 In game: after the expeditions offered are used up, new ones appear
-  within the configured minutes. Recorded by the user.
-- [ ] AC5 In game: `CHOICES` above 5 offers that many expeditions. Recorded by
-  the user.
+- [x] AC4 In game: after the expeditions offered are used up, new ones appear
+  within the configured minutes. Recorded by the user, 2026-10-04.
+- [x] AC5 In game: `CHOICES` above 5 offers that many expeditions. Recorded by
+  the user, 2026-10-04.
 
 ## Risks & Assumptions
 
