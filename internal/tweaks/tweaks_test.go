@@ -16,7 +16,7 @@ import (
 // one listed but not embedded is a name the interface offers and cannot load.
 func TestEveryEmbeddedScriptIsListedAndEveryListedScriptIsEmbedded(t *testing.T) {
 	files := tweaks.Files()
-	require.Len(t, files, 27, "the built-in set is twenty-seven scripts (specs 014, 015)")
+	require.Len(t, files, 28, "the built-in set is twenty-eight scripts (specs 014, 015, 016)")
 
 	listed := map[string]bool{}
 	for _, n := range tweaks.Names() {
@@ -44,6 +44,7 @@ difference between a test and a bug report.
 func TestEveryBuiltInDeclaresAHeaderAndUsableParameters(t *testing.T) {
 	switchOnly := map[string]bool{
 		"AtmosphereHover": true, "ChefKeepsTalking": true, "FreighterAccessAnywhere": true,
+		"FleetNoDamage": true,
 	}
 
 	groups := map[string]bool{tweaks.GroupOther: true}

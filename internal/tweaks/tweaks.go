@@ -74,6 +74,7 @@ var order = []string{
 	"PulseEngineSpeed",
 	"AtmosphereHover",
 	"FleetExpeditionTime",
+	"FleetNoDamage",
 	"FrigateRewards",
 	"InstantText",
 	"QuickConfirm",
