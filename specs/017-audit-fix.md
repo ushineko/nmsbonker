@@ -2,7 +2,15 @@
 
 **Issue**: #20
 
-## Status: INCOMPLETE
+## Status: COMPLETE
+
+## Executive Summary
+
+The amount audit now names the built-in multipliers to lower and the value
+for each, and Lower multipliers… (or `nmsbonker audit --fix`) saves them for
+the next build. Parameters declare what they scale with `scales="..."`.
+Reviewers should look first at `audit.Recommend` and its prediction of a
+cap-held contributor, then the stale-parameter refusal in `core.PlanAuditFix`.
 
 ## Context
 
@@ -64,8 +72,8 @@ lowering that one parameter to 10 clears all 408.
 - [x] AC4 GUI: with a plan, the audit block shows the headline and each change
   and offers Lower multipliers… (`TestAFlaggedAmountNamesItsContributorsAndTheWayOut`);
   rendered off-screen and inspected.
-- [ ] AC5 In the window: Lower multipliers…, then rebuild, and the audit
-  reports no flagged amounts. Recorded by the user.
+- [x] AC5 In the window: Lower multipliers…, then rebuild, and the audit
+  reports no flagged amounts. Recorded by the user, 2026-10-04.
 
 ## Risks & Assumptions
 
