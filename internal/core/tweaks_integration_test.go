@@ -21,8 +21,8 @@ The unit tests prove a script loads and declares what it edits. Only the game
 can say whether those keys still exist: the scanner's range and recharge left
 GCGAMEPLAYGLOBALS for SCANDATATABLE in an update, and a script written against
 the old layout loads, plans and reports OK on the keys it still finds. So this
-builds all twenty-six with the real compiler and fails on any row that is not
-WORKING with nothing skipped.
+builds every built-in with the real compiler and fails on any row that is not
+WORKING (or WORKING*, for one that adds entries) with nothing skipped.
 
 Library, workspace and cache are throwaway; only the game and the compiler
 the user already installed are real.
@@ -70,7 +70,10 @@ func TestEveryBuiltInFindsEveryKeyInTheInstalledGame(t *testing.T) {
 		if name == "MaterialYield10x" {
 			continue
 		}
-		require.Equalf(t, report.Working, m.Verdict, "%s: keys not found %v", name, m.NotFound)
+		// Spec 015 retired 014 R1.3, so a built-in may add entries. That
+		// one reports WORKING*, and a dropped ADD would make it PARTIAL.
+		require.Containsf(t, []string{report.Working, report.WorkingStructural}, m.Verdict,
+			"%s: keys not found %v", name, m.NotFound)
 		require.Zerof(t, m.Skipped, "%s skipped edits", name)
 	}
 	require.Zero(t, res.Report.Dropped, "a built-in's file failed to recompile")

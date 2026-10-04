@@ -76,7 +76,8 @@ common library filename:
   zero `keys not found` in the build report.
 - R1.3 No new built-in carries an `ADD` or `REMOVE` key. The original instant
   text mod's ADD blob is not reproduced, because `DefaultDelay` already covers
-  every character without one.
+  every character without one. *Retired by spec 015: a built-in may add
+  entries.*
 
 ### R2 Pages
 

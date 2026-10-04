@@ -70,6 +70,7 @@ var order = []string{
 	"ScannerBoost",
 	"TechStacking",
 	"ShipTransferRange",
+	"FreighterAccessAnywhere",
 	"PulseEngineSpeed",
 	"AtmosphereHover",
 	"FleetExpeditionTime",
