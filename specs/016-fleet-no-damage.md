@@ -2,7 +2,15 @@
 
 **Issue**: #19
 
-## Status: INCOMPLETE
+## Status: COMPLETE
+
+## Executive Summary
+
+A new switch-only built-in, `FleetNoDamage` (Ships page), zeroes the two values
+that decide frigate damage: the failed-event damage chance range in
+`GCFLEETGLOBALS` and every intervention event's `FailureDamageChance`. Value
+edits only. Reviewers should look first at the `PRECEDING_KEY_WORDS` anchor on
+`PercentChanceOfDamageOnFailedEvent`.
 
 ## Context
 
@@ -42,8 +50,9 @@ Two values in the game data decide whether a frigate is damaged:
   `PercentChanceOfDamageOnFailedEvent` at 0 and 0, every `FailureDamageChance`
   at 0, and no other value changed. Stock `X` is already 0, so the diff is
   `Y` 20 to 0 and 23 `FailureDamageChance` entries to 0.
-- [ ] AC4 In game, several expeditions return with failed events and no frigate
-  damaged. Recorded by the user.
+- [x] AC4 In game, several expeditions return with failed events and no frigate
+  damaged. Recorded by the user, 2026-10-04 ("I believe the freighter damage
+  tweak is working").
 
 ## Risks & Assumptions
 
@@ -62,3 +71,6 @@ Two values in the game data decide whether a frigate is damaged:
 1. Enable the tweak, build, deploy.
 2. In game, send several frigates on expeditions; debriefs with failed events
    show no damaged frigates (AC4).
+
+Result, 2026-10-04: no damaged frigates observed by the user on a dev build of
+this branch.
