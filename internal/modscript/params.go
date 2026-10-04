@@ -63,6 +63,10 @@ type Param struct {
 	// script, whose parameters were inferred rather than declared, and which
 	// therefore gets a numeric field instead of a slider (R2.2).
 	Bounded bool `json:"bounded"`
+	// Scales names the amount-audit categories this parameter multiplies
+	// ("product", "units", ...), from a `scales="..."` attribute. Only a
+	// parameter that declares it is one the audit's fix may lower (spec 017).
+	Scales []string `json:"scales,omitempty"`
 }
 
 // Header is the `-- @tweak` block a built-in carries (R1.1).
@@ -307,6 +311,12 @@ func declaredParams(src []byte) []Param {
 			case "kind":
 				if attrText(a) == ParamFloat {
 					p.Kind = ParamFloat
+				}
+			case "scales":
+				for _, c := range strings.Split(attrText(a), ",") {
+					if c = strings.TrimSpace(c); c != "" {
+						p.Scales = append(p.Scales, c)
+					}
 				}
 			}
 		}

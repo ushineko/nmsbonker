@@ -1,7 +1,7 @@
 -- @tweak name="Units and nanites" group="Rewards"
 -- @desc Multiplies every Units and Nanites reward exactly once per reward
 -- @desc block, so a mixed units-and-nanites jackpot is not multiplied twice.
--- @param CUR_MULT label="Units and nanites multiplier" min=1 max=100 step=1 default=5
+-- @param CUR_MULT label="Units and nanites multiplier" min=1 max=100 step=1 default=5 scales="units,nanites"
 -- @param UNITS_CAP label="Largest units reward" min=0 max=2000000000 step=1000000 default=50000000
 -- @param NANITES_CAP label="Largest nanites reward" min=0 max=10000000 step=10000 default=250000
 -- Multiply Units AND Nanites reward amounts x5. Uses the deterministic

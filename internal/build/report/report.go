@@ -474,10 +474,10 @@ func writeAudit(w func(string, ...any), r *Result) {
 	}
 	w("")
 	w("Limits are checked to stop multipliers causing game issues or instability, " +
-		"such as a counter that goes negative past its maximum. To fix, lower the mod " +
-		"named in Contributors or set a tweak's cap (`nmsbonker tweaks set NAME " +
-		"LOOT_CAP 50000`). Limits: `nmsbonker config set audit.max_ratio 5`, then " +
-		"`nmsbonker audit`.")
+		"such as a counter that goes negative past its maximum. `nmsbonker audit` lists " +
+		"the built-in multipliers to lower and what to lower them to, and " +
+		"`nmsbonker audit --fix` (or Fix in the Report section) saves them; then " +
+		"rebuild. Limits: `nmsbonker config set audit.max_ratio 5`.")
 	w("")
 }
 

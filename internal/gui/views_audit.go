@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	fd "github.com/ushineko/fynedesygn"
+	"github.com/ushineko/fynedesygn/dialogs"
 	"github.com/ushineko/fynedesygn/table"
 	"github.com/ushineko/fynedesygn/widgets"
 
@@ -79,7 +81,7 @@ func (u *ui) auditBlock() fyne.CanvasObject {
 				"%d further flagged amount(s) are not shown; the report file has all of them.",
 				len(a.Flags)-len(shown)), fd.StatusWarn))
 		}
-		rows = append(rows, widgets.Note(auditAdvice, fd.StatusWarn))
+		rows = append(rows, u.auditFixRows()...)
 	}
 	if a != nil && a.Unauditable > 0 {
 		rows = append(rows, widgets.Note(fmt.Sprintf(
@@ -107,11 +109,86 @@ func auditCells(f audit.Flag) []string {
 	}
 }
 
-// auditAdvice is the paragraph that says what to do, worded as the report file
-// words it. Three renderings of one finding must not suggest three fixes.
-const auditAdvice = "Limits are checked to stop multipliers causing game issues or " +
-	"instability, such as a counter that goes negative past its maximum. To fix, lower " +
-	"the mod named in Contributors or set a tweak's cap."
+// auditWhy is the one sentence on why the limits exist.
+const auditWhy = "Limits are checked to stop multipliers causing game issues or " +
+	"instability, such as a counter that goes negative past its maximum."
+
+/*
+auditFixRows say what to change (spec 017): the plan's headline, one line per
+multiplier it lowers, and one per mod it cannot bring down. Worded by the plan
+itself, so the CLI and this section say the same thing.
+*/
+func (u *ui) auditFixRows() []fyne.CanvasObject {
+	rows := []fyne.CanvasObject{widgets.Note(auditWhy, fd.StatusInfo)}
+	if u.auditPlanNote != "" {
+		return append(rows, widgets.Note(u.auditPlanNote, fd.StatusInfo))
+	}
+	p := u.auditPlan
+	if p.Fixed+p.Remaining == 0 {
+		// Not worked out yet: the load that fills it in refreshes the section.
+		return rows
+	}
+	return append(rows, widgets.Note(strings.Join(p.Lines(), "\n"), fd.StatusWarn))
+}
+
+/*
+planAuditFix works out the fix for an audit. It reads the settings, so it runs
+off the render thread; the note it returns stands in for a plan it could not
+make.
+*/
+func (u *ui) planAuditFix(a *audit.Result) (audit.Plan, string) {
+	if a == nil || len(a.Flags) == 0 {
+		return audit.Plan{}, ""
+	}
+	plan, err := core.PlanAuditFix(context.Background(),
+		core.PlanAuditFixRequest{Request: u.request(), Result: a})
+	switch {
+	case errors.Is(err, core.ErrParamsChangedSinceBuild):
+		return plan, "Tweak parameters have changed since this build. Rebuild, and the " +
+			"recommended changes are worked out against the new one."
+	case err != nil:
+		return plan, "No recommendation: " + err.Error()
+	}
+	return plan, ""
+}
+
+/*
+confirmAuditFix lists exactly what Fix will change before it changes it, then
+saves the new values. Nothing is rebuilt: the section says so, and the next
+build is the user's to start.
+*/
+func (u *ui) confirmAuditFix() {
+	p := u.auditPlan
+	body := container.NewVBox(widgets.Wrapped(strings.Join(p.Lines(), "\n")))
+	body.Add(widgets.Wrapped("A new value applies to every reward that tweak multiplies, not " +
+		"only the flagged ones. Nothing is rebuilt: build again to apply the changes, and the " +
+		"audit re-checks the result."))
+	dialogs.ConfirmWithBody(u.sh.Window, "Lower these multipliers?",
+		container.NewVScroll(body), "Lower them", func() { u.applyAuditFix(p) }).Show()
+}
+
+// applyAuditFix saves the plan's values through the same operation the
+// Tweaks section's sliders use.
+func (u *ui) applyAuditFix(p audit.Plan) {
+	u.sh.Perform("Saving the new multipliers…", func(ctx context.Context) error {
+		for _, c := range p.Changes {
+			if _, err := core.SetTweakParam(ctx, core.SetTweakParamRequest{
+				Request: u.request(), Name: c.Mod, Param: c.Param, Value: c.New,
+			}); err != nil {
+				return err
+			}
+		}
+		fyne.Do(func() {
+			u.tweaksOK = false
+			u.auditPlan = audit.Plan{}
+			u.auditPlanNote = fmt.Sprintf("Lowered %d multiplier(s). Rebuild to apply them.",
+				len(p.Changes))
+			u.sh.Flash(u.auditPlanNote, fd.StatusGood)
+			u.sh.Rebuild()
+		})
+		return nil
+	})
+}
 
 // auditVerdict is the one row that is there in every state.
 func (u *ui) auditVerdict(a *audit.Result, fresh bool) fyne.CanvasObject {
@@ -144,11 +221,15 @@ func (u *ui) auditActions() fyne.CanvasObject {
 		u.sh.App.Clipboard().SetContent(auditText(a))
 		u.sh.Flash("The amount audit is on the clipboard.", fd.StatusGood)
 	})
+	fix := widget.NewButtonWithIcon("Lower multipliers…", theme.ConfirmIcon(), func() { u.confirmAuditFix() })
 	if a, _ := u.auditResult(); a == nil {
 		copyAudit.Disable()
 	}
-	u.sh.Gate(recheck, copyAudit)
-	return container.NewHBox(recheck, copyAudit)
+	if len(u.auditPlan.Changes) == 0 {
+		fix.Disable()
+	}
+	u.sh.Gate(recheck, copyAudit, fix)
+	return container.NewHBox(fix, recheck, copyAudit)
 }
 
 /*
@@ -164,8 +245,10 @@ func (u *ui) recheckAmounts() {
 		if err != nil {
 			return err
 		}
+		plan, note := u.planAuditFix(res.Run.Result)
 		fyne.Do(func() {
 			u.freshAudit = &res
+			u.auditPlan, u.auditPlanNote = plan, note
 			u.sh.Flash("Amount audit: "+res.Run.Result.Summary()+".",
 				auditStatus(len(res.Run.Result.Flags)))
 			u.sh.Rebuild()

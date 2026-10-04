@@ -80,9 +80,26 @@ func TestAFlaggedAmountNamesItsContributorsAndTheWayOut(t *testing.T) {
 			"ChestAndLootMaterials10x x10 -> 2500000",
 	}, auditCells(flaggedAudit().Flags[0]))
 
-	text := fynetest.Text(auditUI(t, flaggedAudit()).auditBlock())
+	u := auditUI(t, flaggedAudit())
+	text := fynetest.Text(u.auditBlock())
 	require.Contains(t, text, "game issues or instability", "the block says why, not only what")
-	require.Contains(t, text, "set a tweak's cap", "and how to stop it")
+
+	// Spec 017: with a plan, it says what to change, and Fix is offered.
+	u.auditPlan = audit.Plan{
+		Fixed: 1, Remaining: 1,
+		Changes: []audit.Change{{
+			Knob: audit.Knob{
+				Mod: "ChestAndLootMaterials10x", ModLabel: "Chest and loot materials",
+				Param: "LOOT_MULTIPLIER", ParamLabel: "Reward amount multiplier", Current: 10,
+			},
+			New: 4, Flags: 1,
+		}},
+		Unfixed: []audit.Unfixed{{Mod: "BetterRewards", Flags: 1}},
+	}
+	text = fynetest.Text(u.auditBlock())
+	require.Contains(t, text, "Lowering 1 multiplier(s) brings 1 of 2 flagged amount(s)")
+	require.Contains(t, text, "Chest and loot materials: Reward amount multiplier 10 -> 4")
+	require.Contains(t, text, "BetterRewards: 1 flagged amount(s) it multiplies stay over")
 }
 
 // Copy audit puts the same finding on the clipboard, with the limits it was

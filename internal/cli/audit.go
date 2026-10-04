@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"io"
 	"strings"
 
@@ -28,26 +29,39 @@ func newAuditCmd() *cobra.Command {
 	var (
 		asJSON  bool
 		modName string
+		fix     bool
 	)
 	cmd := &cobra.Command{
 		Use:   "audit",
 		Short: "Re-check the last build's reward amounts against the configured limits",
 		Args:  noArgs(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			res, err := core.Audit(cmd.Context(), core.AuditRequest{
-				Request: request(), ModName: modName,
+			res, err := core.AuditFix(cmd.Context(), core.AuditFixRequest{
+				Request: request(), ModName: modName, Apply: fix,
 			})
-			if err != nil {
+			// A plan that cannot be made (parameters changed since the
+			// build) still leaves the audit itself worth printing; any
+			// other error means there is no audit to print.
+			if err != nil && !errors.Is(err, core.ErrParamsChangedSinceBuild) {
 				return err
 			}
 			if asJSON {
-				return writeJSON(cmd.OutOrStdout(), res)
+				if jerr := writeJSON(cmd.OutOrStdout(), res); jerr != nil {
+					return jerr
+				}
+				return err
 			}
-			printAudit(cmd.OutOrStdout(), res)
+			printAudit(cmd.OutOrStdout(), res.Audit)
+			printFix(cmd.OutOrStdout(), res, err)
+			if fix {
+				return err
+			}
 			return nil
 		},
 	}
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
+	cmd.Flags().BoolVar(&fix, "fix", false,
+		"lower the built-in multipliers behind the flagged amounts (spec 017); rebuild afterwards")
 	cmd.Flags().StringVar(&modName, "mod-name", "",
 		"output folder name whose kept merge to audit, overriding the mod_name setting")
 	return cmd
@@ -86,11 +100,29 @@ func printAudit(w io.Writer, res core.AuditResult) {
 	fact(w, "merged MXML", res.MergeDir)
 	fact(w, "pristine cache", res.CacheDir)
 	fact(w, "took", res.Run.Duration.Round(1e6))
-	if a != nil && len(a.Flags) > 0 {
-		say(w, "")
-		say(w, "%s", "Every edit applied; the amounts compound. Disable or re-tune the script "+
-			"named most often above, or cap the built-in that multiplies it "+
-			"(`nmsbonker tweaks set ChestAndLootMaterials10x LOOT_CAP 50000`).")
+}
+
+// printFix renders the plan under the audit: what it changes, what it cannot,
+// and whether it was saved.
+func printFix(w io.Writer, res core.AuditFixResult, fixErr error) {
+	a := res.Audit.Run.Result
+	if a == nil || len(a.Flags) == 0 {
+		return
+	}
+	say(w, "")
+	if fixErr != nil {
+		say(w, "fix: %v", fixErr)
+		return
+	}
+	for _, line := range res.Plan.Lines() {
+		say(w, "%s", line)
+	}
+	switch {
+	case len(res.Plan.Changes) == 0:
+	case res.Applied:
+		say(w, "Saved. Run `nmsbonker build` to apply them.")
+	default:
+		say(w, "Run `nmsbonker audit --fix` to save these, then `nmsbonker build`.")
 	}
 }
 

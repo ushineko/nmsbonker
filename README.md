@@ -96,7 +96,9 @@ built-in in the same build order — so the build now parses the merged reward
 tables, compares every amount against configurable limits, and names the mods
 that moved each flagged one, in build order, with the value after each of them.
 `nmsbonker audit` re-runs the check against different limits in about a second,
-without rebuilding.
+without rebuilding, and says which built-in multipliers to lower and to what;
+`nmsbonker audit --fix`, or Lower multipliers… in the Report section, saves
+those values for the next build.
 
 **Comes with twenty-eight mods of its own,** each with declared parameters, on
 five pages:
@@ -327,6 +329,7 @@ nmsbonker build --recache            # re-extract the game files first
 nmsbonker build --deploy             # and install it when it succeeds
 nmsbonker report                     # the last build's verdicts
 nmsbonker audit                      # re-check the last build's reward amounts
+nmsbonker audit --fix                # lower the built-in multipliers behind them
 
 nmsbonker deploy                     # install the last build
 nmsbonker undeploy                   # take it back out, keeping a copy
@@ -455,6 +458,15 @@ nmsbonker audit
 
 A flagged amount never fails a build. It is a warning about a value, the mod
 folder is installable either way, and `audit` exits 0 whatever it finds.
+
+When the amounts come from built-in tweaks, `audit` also works out the fix: for
+each flagged amount it takes the last built-in multiplier in the chain that
+made it and lowers it to the largest whole number that brings the amount under
+every limit, moving to the one before it when that is not enough. A multiplier
+shared by many amounts takes the lowest value any of them needs, and applies to
+every reward that tweak multiplies. Library scripts are named and never
+edited. `audit --fix` saves the new values; nothing is rebuilt until you build.
+
 
 ![The Report section. A table of the last build's verdicts: ChestAndLootMaterials10x,
 ExampleAsteroidYield, ExampleRicherChests, ItemValueBoost, LearnMoreWords,
@@ -673,9 +685,11 @@ flow in more detail, including how the golden fixtures are regenerated.
   plants) give their material through a destruction reward in the reward
   table, which Chest and loot materials already multiplies. They are off its
   list, so nothing it yields changes and the row is WORKING.
-- **The amount audit's advice is two sentences.** Limits exist to stop
-  multipliers breaking the game (a counter past its maximum goes negative);
-  the fix is to lower the mod named in Contributors or set a tweak's cap.
+- **The amount audit says what to change, and can change it** (#20). It names
+  the built-in multipliers to lower and the value for each, and Lower
+  multipliers… in the Report section (or `nmsbonker audit --fix`) saves them
+  for the next build. Library scripts are named, never edited. The advice
+  paragraph is gone; one line says why the limits exist.
 
 ### 0.5.5
 

@@ -2,10 +2,10 @@
 -- @desc Multiplies what frigate expeditions bring back: units, nanites,
 -- @desc products and raw materials, each on its own multiplier. After
 -- @desc MrTrack's "BetterFrigateRewards".
--- @param FRIGATE_UNITS label="Units multiplier" min=1 max=100 step=1 default=10
--- @param FRIGATE_NANITES label="Nanites multiplier" min=1 max=100 step=1 default=10
--- @param FRIGATE_PRODUCTS label="Products multiplier" min=1 max=100 step=1 default=10
--- @param FRIGATE_SUBSTANCES label="Raw materials multiplier" min=1 max=100 step=1 default=10
+-- @param FRIGATE_UNITS label="Units multiplier" min=1 max=100 step=1 default=10 scales="units"
+-- @param FRIGATE_NANITES label="Nanites multiplier" min=1 max=100 step=1 default=10 scales="nanites"
+-- @param FRIGATE_PRODUCTS label="Products multiplier" min=1 max=100 step=1 default=10 scales="product"
+-- @param FRIGATE_SUBSTANCES label="Raw materials multiplier" min=1 max=100 step=1 default=10 scales="substance"
 FRIGATE_UNITS      = 10
 FRIGATE_NANITES    = 10
 FRIGATE_PRODUCTS   = 10
