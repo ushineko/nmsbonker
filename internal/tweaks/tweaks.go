@@ -59,6 +59,7 @@ var order = []string{
 	"MissionStandingBuff",
 	"NexusRewards",
 	"MissionBoardRewards",
+	"FavouredRewards",
 	// Spec 014: the effects people were fetching from the library, each
 	// rewritten for this project. They touch files the twelve above do not,
 	// apart from MiningSpeed (Health, beside MaterialYield10x's amounts), so

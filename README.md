@@ -10,7 +10,7 @@ Python, no `hgpaktool.exe`.
 
 Rebuilds AMUMSS-format `.lua` mod scripts against the game files you have
 installed, merges every enabled mod into one collision-free mod folder, and
-deploys it. It also ships twenty-nine mods of its own — the "tweaks" — with a
+deploys it. It also ships thirty mods of its own — the "tweaks" — with a
 slider for every number they change, so a fresh install has something to build
 without downloading anything first.
 
@@ -100,12 +100,12 @@ without rebuilding, and says which built-in multipliers to lower and to what;
 `nmsbonker audit --fix`, or Lower multipliers… in the Report section, saves
 those values for the next build.
 
-**Comes with twenty-nine mods of its own,** each with declared parameters, on
+**Comes with thirty mods of its own,** each with declared parameters, on
 five pages:
 
 | Page | Tweaks |
 |------|--------|
-| Rewards | chest and loot amounts, units and nanites, nanites again on top, item value, scan payouts, words learned, mission standing, Nexus and mission-board rewards |
+| Rewards | chest and loot amounts, units and nanites, nanites again on top, item value, scan payouts, words learned, mission standing, Nexus and mission-board rewards, chosen items coming up more often |
 | Gathering | material yield, asteroid yield, mining speed, mining laser and terrain yield, refiner speed, stack limits |
 | Player | running, jetpack and swimming speed; analysis visor and scanner range and recharge; how many upgrade modules of one kind count |
 | Ships | ship inventory transfer range, the freighter as if the Matter Beam were installed, pulse engine speed, atmospheric hover, frigate expedition time, frigates that never come back damaged, new expeditions more often, frigate rewards |
@@ -645,7 +645,7 @@ are never committed.
 | `internal/build` | The target plan, the merge and recompile gate, the report |
 | `internal/build/audit` | The reward-amount audit: reward blocks parsed, limits applied, contributors attributed |
 | `internal/save` | The save file codec: the chunked LZ4 container, the encrypted manifest, a byte-preserving JSON tree, the key mapping and the typed edits |
-| `internal/tweaks` | The twenty-nine built-in mod scripts, embedded, and the pages they are drawn on |
+| `internal/tweaks` | The thirty built-in mod scripts, embedded, and the pages they are drawn on |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
 | `packaging` | The desktop entry, the application icon, and `arch/PKGBUILD` |
@@ -672,6 +672,13 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ### Unreleased
 
+- **New tweak: Favoured rewards** (Rewards page, #22). Storage Augmentations,
+  Multi-tool Expansion Slots, Exosuit Expansion Units, Spawning Sacs, Salvaged
+  Frigate Modules, S- and A-Class Reactors, Fusion Ignitors and Stasis
+  Devices, and Storm Crystals come up more often wherever a reward is picked
+  from a list, mission board, Nexus and frigate expeditions among them. Each
+  has a weight slider (default x5), and one amount multiplier covers them
+  all.
 - **New tweak: Fleet expedition refresh** (Ships page, #21).
   Frigate expeditions are offered every so many minutes (default 10) instead of
   once a real-world day, and the board can offer up to ten at once. It sets
