@@ -109,14 +109,9 @@ func auditCells(f audit.Flag) []string {
 
 // auditAdvice is the paragraph that says what to do, worded as the report file
 // words it. Three renderings of one finding must not suggest three fixes.
-const auditAdvice = "Every one of these edits applied correctly; the amounts are large because " +
-	"they compound. Each mod multiplies what the mod before it left, so two reasonable " +
-	"multipliers make an unreasonable amount and nothing in the mod table below can see it. " +
-	"Two ways out, and they combine: disable or re-tune the script named most often in " +
-	"Contributors, which is the one doing most of the multiplying; or put a ceiling on it " +
-	"with a built-in tweak's cap parameter in the Tweaks section, which clamps the result " +
-	"whatever ran before it. The limits themselves are in Settings, and Re-check applies a " +
-	"new limit to this build without rebuilding."
+const auditAdvice = "Limits are checked to stop multipliers causing game issues or " +
+	"instability, such as a counter that goes negative past its maximum. To fix, lower " +
+	"the mod named in Contributors or set a tweak's cap."
 
 // auditVerdict is the one row that is there in every state.
 func (u *ui) auditVerdict(a *audit.Result, fresh bool) fyne.CanvasObject {

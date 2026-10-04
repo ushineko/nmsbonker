@@ -81,9 +81,8 @@ func TestAFlaggedAmountNamesItsContributorsAndTheWayOut(t *testing.T) {
 	}, auditCells(flaggedAudit().Flags[0]))
 
 	text := fynetest.Text(auditUI(t, flaggedAudit()).auditBlock())
-	require.Contains(t, text, "they compound", "the block says why, not only what")
-	require.Contains(t, text, "cap parameter", "and how to stop it")
-	require.Contains(t, text, "Re-check applies a new limit to this build without rebuilding")
+	require.Contains(t, text, "game issues or instability", "the block says why, not only what")
+	require.Contains(t, text, "set a tweak's cap", "and how to stop it")
 }
 
 // Copy audit puts the same finding on the clipboard, with the limits it was

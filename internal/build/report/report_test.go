@@ -71,12 +71,12 @@ func TestMarkdownRendersTheWholeReferenceStructure(t *testing.T) {
 		"| Mod | Status | Edits | Skipped | Notes |",
 		"| Clean | WORKING | 7 | 0 |  |",
 		"| Renamed | WORKING~ | 12 | 6 | keys not found: ChargeTime, PulseRange |",
-		"| Adds | WORKING* | 3 | 0 | adds/removes reward or text entries — confirm in game |",
+		"| Adds | WORKING* | 3 | 0 | adds or removes entries, not only values |",
 		"| BetterRewards | PARTIAL | 148 | 0 | new-entry add/remove not applied; base value edits kept |",
 		"| Nothing | NOT BUILT | 0 | 39 |  |",
 		"## Files where structural edits were skipped",
 		"- `METADATA/REALITY/TABLES/REWARDTABLE.MBIN` — from BetterRewards, Crashed Freighter Loot",
-		"## How to fix a PARTIAL / WORKING(star) mod",
+		"## How to fix a PARTIAL mod",
 		"## NOT BUILT / limited",
 	} {
 		require.Contains(t, md, want)
@@ -212,7 +212,7 @@ func TestTheAuditSectionSaysWhichOfThreeThingsHappened(t *testing.T) {
 		"| REWARDTABLE | R_CHEST | BP_SALVAGE | 2-4 | 1250000-2500000 | x625000 | "+
 			"product amount 2500000 over the 99999 limit | "+
 			"BetterRewards x250 -> 1000, ChestAndLootMaterials10x x10 -> 2500000 |")
-	require.Contains(t, flagged, "the amounts are large because they compound",
+	require.Contains(t, flagged, "To fix, lower the mod named in Contributors",
 		"the section says what to do about it, not only what happened")
 	require.Contains(t, flagged, "nmsbonker config set audit.max_ratio 5")
 }

@@ -65,11 +65,6 @@ func TestEveryBuiltInFindsEveryKeyInTheInstalledGame(t *testing.T) {
 		m, ok := rows[name]
 		require.Truef(t, ok, "%s has no row in the report", name)
 		require.Positivef(t, m.Applied, "%s applied nothing", name)
-		// MaterialYield10x reaches into entity files some of which hold no
-		// amounts; that is spec 004's known WORKING~, not a regression here.
-		if name == "MaterialYield10x" {
-			continue
-		}
 		// Spec 015 retired 014 R1.3, so a built-in may add entries. That
 		// one reports WORKING*, and a dropped ADD would make it PARTIAL.
 		require.Containsf(t, []string{report.Working, report.WorkingStructural}, m.Verdict,

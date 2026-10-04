@@ -65,7 +65,7 @@ func TestTheModTableTellsEnabledDisabledAndMissingApart(t *testing.T) {
 func TestEveryReportVerdictIsRanked(t *testing.T) {
 	require.Equal(t, fd.StatusGood, verdictStatus(report.Working))
 	require.Equal(t, fd.StatusWarn, verdictStatus(report.WorkingSkipped))
-	require.Equal(t, fd.StatusWarn, verdictStatus(report.WorkingStructural))
+	require.Equal(t, fd.StatusGood, verdictStatus(report.WorkingStructural))
 	require.Equal(t, fd.StatusBad, verdictStatus(report.Partial))
 	require.Equal(t, fd.StatusBad, verdictStatus(report.NotBuilt))
 	require.Equal(t, fd.StatusInfo, verdictStatus(""))

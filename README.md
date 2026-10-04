@@ -10,7 +10,7 @@ Python, no `hgpaktool.exe`.
 
 Rebuilds AMUMSS-format `.lua` mod scripts against the game files you have
 installed, merges every enabled mod into one collision-free mod folder, and
-deploys it. It also ships twenty-seven mods of its own — the "tweaks" — with a
+deploys it. It also ships twenty-eight mods of its own — the "tweaks" — with a
 slider for every number they change, so a fresh install has something to build
 without downloading anything first.
 
@@ -98,7 +98,7 @@ that moved each flagged one, in build order, with the value after each of them.
 `nmsbonker audit` re-runs the check against different limits in about a second,
 without rebuilding.
 
-**Comes with twenty-seven mods of its own,** each with declared parameters, on
+**Comes with twenty-eight mods of its own,** each with declared parameters, on
 five pages:
 
 | Page | Tweaks |
@@ -106,7 +106,7 @@ five pages:
 | Rewards | chest and loot amounts, units and nanites, nanites again on top, item value, scan payouts, words learned, mission standing, Nexus and mission-board rewards |
 | Gathering | material yield, asteroid yield, mining speed, mining laser and terrain yield, refiner speed, stack limits |
 | Player | running, jetpack and swimming speed; analysis visor and scanner range and recharge; how many upgrade modules of one kind count |
-| Ships | ship inventory transfer range, the freighter as if the Matter Beam were installed, pulse engine speed, atmospheric hover, frigate expedition time, frigate rewards |
+| Ships | ship inventory transfer range, the freighter as if the Matter Beam were installed, pulse engine speed, atmospheric hover, frigate expedition time, frigates that never come back damaged, frigate rewards |
 | Interface | instant dialogue text, a shorter hold-to-confirm, the Nexus chef's conversation staying open |
 
 They are ordinary AMUMSS scripts, MIT-licensed with the rest of this
@@ -531,8 +531,10 @@ turning the limit off: a limit of zero would flag every reward in the game.
 - **The ADD and REMOVE edits are heuristic.** The engine finds the block to add
   to or remove by matching keywords and counting braces, the way the pipeline
   this is a rewrite of did. A file whose structure a game update has changed can
-  produce an edit that recompiles and is not what the mod's author meant, which
-  is why any mod carrying one is reported as WORKING\* — verify it in game.
+  produce an edit that recompiles and is not what the mod's author meant. A mod
+  carrying one is reported as WORKING\*, which says only that it changes the
+  shape of a file rather than just its values; like any mod, it is proven in
+  game.
 - **Some AMUMSS script keys are ignored:** `FSKWG`, `LINE_OFFSET`,
   `SECTION_ACTIVE`, `VALUE_MATCH`, `VALUE_MATCH_OPTIONS`, `VALUE_MATCH_TYPE`.
   The build report names them and names the mods relying on them; the edits
@@ -631,7 +633,7 @@ are never committed.
 | `internal/build` | The target plan, the merge and recompile gate, the report |
 | `internal/build/audit` | The reward-amount audit: reward blocks parsed, limits applied, contributors attributed |
 | `internal/save` | The save file codec: the chunked LZ4 container, the encrypted manifest, a byte-preserving JSON tree, the key mapping and the typed edits |
-| `internal/tweaks` | The twenty-seven built-in mod scripts, embedded, and the pages they are drawn on |
+| `internal/tweaks` | The twenty-eight built-in mod scripts, embedded, and the pages they are drawn on |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
 | `packaging` | The desktop entry, the application icon, and `arch/PKGBUILD` |
@@ -655,6 +657,25 @@ flow in more detail, including how the golden fixtures are regenerated.
 > tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
 
 ## Changelog
+
+### Unreleased
+
+- **New tweak: Fleet takes no damage** (Ships page, #19). Frigates never come
+  back from an expedition damaged, so there is nothing to fly round and
+  repair. A failed event still costs its rewards. It zeroes the damage chance
+  on failed events in the fleet globals and on every intervention event.
+  Frigates damaged before the tweak was enabled still need repairing once.
+- **WORKING\* no longer says "verify in game".** Every mod is proven in game;
+  the star now only says the mod adds or removes entries rather than changing
+  values, and the row is green like WORKING.
+- **Material yield no longer reports "keys not found: AmountMin, AmountMax".**
+  Sixteen of its entities (most crystals, the medium tree, the underwater
+  plants) give their material through a destruction reward in the reward
+  table, which Chest and loot materials already multiplies. They are off its
+  list, so nothing it yields changes and the row is WORKING.
+- **The amount audit's advice is two sentences.** Limits exist to stop
+  multipliers breaking the game (a counter past its maximum goes negative);
+  the fix is to lower the mod named in Contributors or set a tweak's cap.
 
 ### 0.5.5
 
