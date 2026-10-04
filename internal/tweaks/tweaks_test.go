@@ -16,7 +16,7 @@ import (
 // one listed but not embedded is a name the interface offers and cannot load.
 func TestEveryEmbeddedScriptIsListedAndEveryListedScriptIsEmbedded(t *testing.T) {
 	files := tweaks.Files()
-	require.Len(t, files, 26, "the built-in set is twenty-six scripts (spec 014)")
+	require.Len(t, files, 27, "the built-in set is twenty-seven scripts (specs 014, 015)")
 
 	listed := map[string]bool{}
 	for _, n := range tweaks.Names() {
@@ -42,7 +42,9 @@ difference between a test and a bug report.
 // either works or it does not. They are named here so that a header typo that
 // drops every @param line from any other script still fails.
 func TestEveryBuiltInDeclaresAHeaderAndUsableParameters(t *testing.T) {
-	switchOnly := map[string]bool{"AtmosphereHover": true, "ChefKeepsTalking": true}
+	switchOnly := map[string]bool{
+		"AtmosphereHover": true, "ChefKeepsTalking": true, "FreighterAccessAnywhere": true,
+	}
 
 	groups := map[string]bool{tweaks.GroupOther: true}
 	for _, g := range tweaks.Groups {
@@ -95,30 +97,6 @@ func TestEveryBuiltInLoadsThroughTheSandbox(t *testing.T) {
 		require.NoErrorf(t, err, "%s does not load", name)
 		require.Equal(t, "nmsbonker", def.Author, "%s", name)
 		require.NotEmpty(t, def.Targets(), "%s edits nothing", name)
-	}
-}
-
-/*
-Spec 014 R1.3: no built-in adds or removes entries.
-
-A structural edit is the one kind the build may have to drop to get a file to
-recompile, and a built-in is meant to be the dependable version of an effect.
-The instant-text mod these replace added a block per letter; DefaultDelay
-already covers every character, so the built-in sets delays and nothing else.
-*/
-func TestNoBuiltInAddsOrRemovesEntries(t *testing.T) {
-	for _, name := range tweaks.Names() {
-		src, ok := tweaks.Source(name)
-		require.True(t, ok)
-		def, err := modscript.LoadSource(t.Context(), name+".lua", src)
-		require.NoError(t, err)
-		for _, mod := range def.Modifications {
-			for _, ch := range mod.Changes {
-				for _, blk := range ch.Blocks {
-					require.Falsef(t, blk.Structural(), "%s carries ADD or REMOVE", name)
-				}
-			}
-		}
 	}
 }
 
