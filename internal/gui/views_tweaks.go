@@ -33,10 +33,10 @@ A tweak is a mod with declared parameters, which is the whole difference: the
 Mods section can only offer a mod's name and its place in the order, and here
 there is a slider with a range and a label saying what the number means.
 
-Pages because there are twenty-eight of them (spec 014). One flat list was the
+Pages because there are twenty-nine of them (spec 014). One flat list was the
 right shape at twelve -- a layout that filed cards under Mining and Loot hid the
 build order that decides which of two tweaks editing the same value wins -- and
-at twenty-eight it is a scroll nobody reads to the end. The pages are subjects a
+at twenty-nine it is a scroll nobody reads to the end. The pages are subjects a
 reader goes looking for ("make the ship better"), and within a page the cards
 are still in build order with the position on every card, so the rule that
 decides a conflict is still printed where the conflict is. The page last shown
