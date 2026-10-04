@@ -2,7 +2,15 @@
 
 **Issue**: #22
 
-## Status: INCOMPLETE
+## Status: COMPLETE
+
+## Executive Summary
+
+A new built-in, `FavouredRewards` (Rewards page), multiplies the reward-list
+weight of nine commonly farmed items wherever they appear in the reward and
+expedition reward tables, with one amount multiplier for all of them.
+Reviewers should look first at the anchor (the whole ID line as one keyword,
+R5) and why the `{"ID", id}` pair was not used.
 
 ## Context
 
@@ -47,8 +55,8 @@ spec takes a fixed list of common farm targets instead.
   target occurrence edited (REWARDTABLE 37/37, 29/29, 14/14, 17/17, 7/7, 7/7,
   1/1, 1/1, 20/20; EXPEDITIONREWARDTABLE 4/4, 6/6, 4/4) and every changed line
   is a target's PercentageChance, AmountMin or AmountMax.
-- [ ] AC4 In game: a favoured item comes up noticeably more often from mission
-  board rewards. Recorded by the user.
+- [x] AC4 In game: a favoured item comes up noticeably more often from mission
+  board rewards. Recorded by the user, 2026-10-04.
 
 ## Risks & Assumptions
 
