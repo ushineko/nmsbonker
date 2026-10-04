@@ -531,8 +531,10 @@ turning the limit off: a limit of zero would flag every reward in the game.
 - **The ADD and REMOVE edits are heuristic.** The engine finds the block to add
   to or remove by matching keywords and counting braces, the way the pipeline
   this is a rewrite of did. A file whose structure a game update has changed can
-  produce an edit that recompiles and is not what the mod's author meant, which
-  is why any mod carrying one is reported as WORKING\* — verify it in game.
+  produce an edit that recompiles and is not what the mod's author meant. A mod
+  carrying one is reported as WORKING\*, which says only that it changes the
+  shape of a file rather than just its values; like any mod, it is proven in
+  game.
 - **Some AMUMSS script keys are ignored:** `FSKWG`, `LINE_OFFSET`,
   `SECTION_ACTIVE`, `VALUE_MATCH`, `VALUE_MATCH_OPTIONS`, `VALUE_MATCH_TYPE`.
   The build report names them and names the mods relying on them; the edits
@@ -663,6 +665,14 @@ flow in more detail, including how the golden fixtures are regenerated.
   repair. A failed event still costs its rewards. It zeroes the damage chance
   on failed events in the fleet globals and on every intervention event.
   Frigates damaged before the tweak was enabled still need repairing once.
+- **WORKING\* no longer says "verify in game".** Every mod is proven in game;
+  the star now only says the mod adds or removes entries rather than changing
+  values, and the row is green like WORKING.
+- **Material yield no longer reports "keys not found: AmountMin, AmountMax".**
+  Sixteen of its entities (most crystals, the medium tree, the underwater
+  plants) give their material through a destruction reward in the reward
+  table, which Chest and loot materials already multiplies. They are off its
+  list, so nothing it yields changes and the row is WORKING.
 
 ### 0.5.5
 

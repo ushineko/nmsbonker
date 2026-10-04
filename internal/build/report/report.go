@@ -30,8 +30,8 @@ const (
 	// WorkingSkipped means the mod applied edits but some keys were missing,
 	// usually because a game update renamed or removed them.
 	WorkingSkipped = "WORKING~"
-	// WorkingStructural means the mod adds or removes whole entries and the
-	// result recompiled; it needs verifying in game.
+	// WorkingStructural means every edit landed and some of them add or remove
+	// whole entries rather than only changing values.
 	WorkingStructural = "WORKING*"
 	// Partial means the value edits shipped but the structural ones were
 	// dropped to get the file to recompile.
@@ -369,8 +369,8 @@ func Markdown(r *Result) string {
 	w("")
 	writeAudit(w, r)
 	w("Legend: **WORKING** all edits applied; **WORKING~** applied, some keys not " +
-		"found (renamed/removed by a game update — verify); **WORKING(star)** applies " +
-		"structural add/remove that recompiled — verify in-game; **PARTIAL** value edits " +
+		"found (renamed/removed by a game update — verify); **WORKING(star)** all edits " +
+		"applied, some add or remove entries rather than only changing values; **PARTIAL** value edits " +
 		"applied but structural add/remove skipped; **NOT BUILT** nothing applied.")
 	w("")
 	w("| Mod | Status | Edits | Skipped | Notes |")
@@ -389,7 +389,7 @@ func Markdown(r *Result) string {
 		w("")
 	}
 
-	w("## How to fix a PARTIAL / WORKING(star) mod")
+	w("## How to fix a PARTIAL mod")
 	w("- These add or remove whole reward/table entries, which this builder applies heuristically.")
 	w("- If in-game behaviour is wrong, download the updated mod from Nexus and drop its built "+
 		"`.MBIN` into `MODS/%s/` (same relative path), or rebuild that one script in AMUMSS on Windows.", r.ModName)
@@ -517,7 +517,7 @@ func verdictNote(m ModResult) string {
 	case Partial:
 		return "new-entry add/remove not applied; base value edits kept"
 	case WorkingStructural:
-		return "adds/removes reward or text entries — confirm in game"
+		return "adds or removes entries, not only values"
 	case WorkingSkipped:
 		seen := map[string]bool{}
 		var keys []string

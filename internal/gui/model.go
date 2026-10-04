@@ -53,9 +53,9 @@ func compatStatus(v string) fd.Status {
 // section reproduces rather than paraphrasing.
 func verdictStatus(v string) fd.Status {
 	switch v {
-	case report.Working:
+	case report.Working, report.WorkingStructural:
 		return fd.StatusGood
-	case report.WorkingSkipped, report.WorkingStructural:
+	case report.WorkingSkipped:
 		return fd.StatusWarn
 	case report.Partial, report.NotBuilt:
 		return fd.StatusBad
@@ -85,6 +85,6 @@ func modsStateStatus(state string) fd.Status {
 // re-worded (R6). The report file and this section must not explain the same
 // five verdicts differently.
 const reportLegend = "WORKING all edits applied · WORKING~ applied, some keys not found " +
-	"(renamed or removed by a game update — verify) · WORKING* applies structural " +
-	"add/remove that recompiled — verify in game · PARTIAL value edits applied but " +
+	"(renamed or removed by a game update — verify) · WORKING* all edits applied, some " +
+	"add or remove entries rather than only changing values · PARTIAL value edits applied but " +
 	"structural add/remove skipped · NOT BUILT nothing applied."

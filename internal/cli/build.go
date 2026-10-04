@@ -156,7 +156,7 @@ func verdictNote(m report.ModResult) string {
 	case report.Partial:
 		return "structural add/remove skipped; value edits kept"
 	case report.WorkingStructural:
-		return "adds/removes entries — verify in game"
+		return "adds or removes entries, not only values"
 	case report.WorkingSkipped:
 		seen := map[string]bool{}
 		var keys []string
