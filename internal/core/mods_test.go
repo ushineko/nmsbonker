@@ -302,7 +302,7 @@ func TestTheBuiltInsAreListedInOrderAndStartDisabled(t *testing.T) {
 		names = append(names, m.Name)
 	}
 	require.Equal(t, tweaks.Names(), names)
-	require.Contains(t, notices(list), "added 28 built-in tweak(s), disabled")
+	require.Contains(t, notices(list), "added 29 built-in tweak(s), disabled")
 
 	// Persisted, so the second call has nothing to add and nothing to say.
 	again, err := core.ListMods(t.Context(), core.ListModsRequest{})

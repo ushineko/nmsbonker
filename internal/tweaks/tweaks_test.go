@@ -16,7 +16,7 @@ import (
 // one listed but not embedded is a name the interface offers and cannot load.
 func TestEveryEmbeddedScriptIsListedAndEveryListedScriptIsEmbedded(t *testing.T) {
 	files := tweaks.Files()
-	require.Len(t, files, 28, "the built-in set is twenty-eight scripts (specs 014, 015, 016)")
+	require.Len(t, files, 29, "the built-in set is twenty-nine scripts (specs 014, 015, 016, 018)")
 
 	listed := map[string]bool{}
 	for _, n := range tweaks.Names() {

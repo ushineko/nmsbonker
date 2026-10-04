@@ -75,6 +75,7 @@ var order = []string{
 	"AtmosphereHover",
 	"FleetExpeditionTime",
 	"FleetNoDamage",
+	"FleetExpeditionRefresh",
 	"FrigateRewards",
 	"InstantText",
 	"QuickConfirm",
