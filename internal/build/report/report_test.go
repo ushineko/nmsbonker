@@ -212,7 +212,7 @@ func TestTheAuditSectionSaysWhichOfThreeThingsHappened(t *testing.T) {
 		"| REWARDTABLE | R_CHEST | BP_SALVAGE | 2-4 | 1250000-2500000 | x625000 | "+
 			"product amount 2500000 over the 99999 limit | "+
 			"BetterRewards x250 -> 1000, ChestAndLootMaterials10x x10 -> 2500000 |")
-	require.Contains(t, flagged, "To fix, lower the mod named in Contributors",
+	require.Contains(t, flagged, "`nmsbonker audit --fix`",
 		"the section says what to do about it, not only what happened")
 	require.Contains(t, flagged, "nmsbonker config set audit.max_ratio 5")
 }

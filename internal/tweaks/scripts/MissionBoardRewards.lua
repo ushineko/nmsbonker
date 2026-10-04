@@ -2,9 +2,9 @@
 -- @desc Multiplies what station mission board and corvette missions pay, on top
 -- @desc of the global reward tweaks: the item lists and the units and nanites.
 -- @desc Ships neutral; only the eight mission board entries are touched.
--- @param ITEM_MULT label="Item amount multiplier" min=1 max=100 step=1 default=1
--- @param UNITS_MULT label="Units multiplier" min=1 max=100 step=1 default=1
--- @param NANITE_MULT label="Nanites multiplier" min=1 max=100 step=1 default=1
+-- @param ITEM_MULT label="Item amount multiplier" min=1 max=100 step=1 default=1 scales="product,substance"
+-- @param UNITS_MULT label="Units multiplier" min=1 max=100 step=1 default=1 scales="units"
+-- @param NANITE_MULT label="Nanites multiplier" min=1 max=100 step=1 default=1 scales="nanites"
 -- @param ITEM_CAP label="Largest item amount" min=0 max=1000000 step=1000 default=50000
 -- @param UNITS_CAP label="Largest units reward" min=0 max=2000000000 step=1000000 default=50000000
 -- @param NANITES_CAP label="Largest nanites reward" min=0 max=10000000 step=10000 default=250000

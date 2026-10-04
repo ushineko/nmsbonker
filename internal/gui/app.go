@@ -25,6 +25,7 @@ import (
 	fdtheme "github.com/ushineko/fynedesygn/theme"
 	"github.com/ushineko/fynedesygn/widgets"
 
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 )
@@ -107,6 +108,11 @@ type ui struct {
 	configOK     bool
 	lastReport   core.ReportResult
 	lastReportOK bool
+	// auditPlan is the fix for the audit the Report section shows (spec
+	// 017), worked out off the render thread whenever that audit changes;
+	// auditPlanNote replaces it when there is no plan to offer.
+	auditPlan     audit.Plan
+	auditPlanNote string
 	/*
 		compat is the round-trip compatibility check (spec 002 R3.4), which the
 		Overview's Tools card reports.

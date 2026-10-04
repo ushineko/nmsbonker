@@ -2,10 +2,10 @@
 -- @desc Multiplies what Nexus missions pay, on top of the global reward tweaks:
 -- @desc the item lists, and the units, nanites and quicksilver that come with
 -- @desc them. Nothing outside the seven Nexus reward entries is touched.
--- @param ITEM_MULT label="Item amount multiplier" min=1 max=100 step=1 default=5
--- @param UNITS_MULT label="Units multiplier" min=1 max=100 step=1 default=5
--- @param NANITE_MULT label="Nanites multiplier" min=1 max=100 step=1 default=1
--- @param QS_MULT label="Quicksilver multiplier" min=1 max=100 step=1 default=5
+-- @param ITEM_MULT label="Item amount multiplier" min=1 max=100 step=1 default=5 scales="product,substance"
+-- @param UNITS_MULT label="Units multiplier" min=1 max=100 step=1 default=5 scales="units"
+-- @param NANITE_MULT label="Nanites multiplier" min=1 max=100 step=1 default=1 scales="nanites"
+-- @param QS_MULT label="Quicksilver multiplier" min=1 max=100 step=1 default=5 scales="specials"
 -- @param ITEM_CAP label="Largest item amount" min=0 max=1000000 step=1000 default=50000
 -- @param UNITS_CAP label="Largest units reward" min=0 max=2000000000 step=1000000 default=50000000
 -- @param NANITES_CAP label="Largest nanites reward" min=0 max=10000000 step=10000 default=250000

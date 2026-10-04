@@ -2,7 +2,7 @@
 -- @desc Multiplies the substance and product amounts handed out by the reward
 -- @desc tables: chests, cargo drops, salvage, containers and mission material
 -- @desc rewards. Units and nanites are deliberately left alone.
--- @param LOOT_MULTIPLIER label="Reward amount multiplier" min=1 max=100 step=1 default=10
+-- @param LOOT_MULTIPLIER label="Reward amount multiplier" min=1 max=100 step=1 default=10 scales="product,substance"
 -- @param LOOT_CAP label="Largest reward amount" min=0 max=1000000 step=1000 default=50000
 LOOT_MULTIPLIER = 10  -- multiply MATERIAL amounts (substance + product) from reward tables
                       -- (chests, cargo drops, salvage, containers, mission material rewards).

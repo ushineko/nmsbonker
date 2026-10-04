@@ -11,6 +11,7 @@ import (
 	"github.com/ushineko/fynedesygn/dialogs"
 	"github.com/ushineko/fynedesygn/steps"
 
+	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/core"
 )
 
@@ -279,8 +280,14 @@ func (u *ui) loadReport() {
 			})
 			return
 		}
+		var a *audit.Result
+		if res.Report != nil {
+			a = res.Report.Audit
+		}
+		plan, note := u.planAuditFix(a)
 		fyne.Do(func() {
 			u.lastReport, u.lastReportErr = res, ""
+			u.auditPlan, u.auditPlanNote = plan, note
 			u.sh.Refresh()
 		})
 	})
