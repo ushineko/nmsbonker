@@ -17,7 +17,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories.*
 
-**Version**: 0.5.5
+**Version**: 0.6.0
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -670,7 +670,7 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
-### Unreleased
+### 0.6.0
 
 - **New tweak: Favoured rewards** (Rewards page, #22). Storage Augmentations,
   Multi-tool Expansion Slots, Exosuit Expansion Units, Spawning Sacs, Salvaged
