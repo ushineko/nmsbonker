@@ -340,6 +340,7 @@ nmsbonker mods-off                   # stop the game loading any mod
 nmsbonker mods-on                    # let it again
 
 nmsbonker mods show "Some Mod"       # print a script; mods write replaces it, keeping a .bak
+nmsbonker mods export FavouredRewards -o ~/  # write it, with your parameter values, to a .lua
 nmsbonker saves backup               # copy the save profiles out of the prefix
 nmsbonker saves list
 nmsbonker saves slots                # the game's save slots, newest marked
@@ -672,6 +673,12 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ### Unreleased
 
+- **Export any mod's script** (#28). Export… on every Tweaks card and in the
+  Mods section, or `nmsbonker mods export NAME`, writes the script exactly as
+  the next build would load it, with the parameter values set in nmsbonker
+  written in, for editing by hand or running in another AMUMSS toolchain. A
+  comment at the end says where it came from and names any keys only
+  nmsbonker understands (`CAP`, `CURRENCY_MULT`, `WRAPPER_MULT`).
 - **Favoured rewards now reaches Nexus missions and every frigate
   expedition** (#27). Weighting only helps where an item is listed, and the
   lists those two pay from held almost none of the favoured items: Nexus

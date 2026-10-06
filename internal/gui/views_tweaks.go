@@ -146,8 +146,12 @@ func (u *ui) tweakCard(tw core.TweakInfo) fyne.CanvasObject {
 		unbuilt.SetText("changed since the last build — build to apply")
 	}
 
+	export := widget.NewButtonWithIcon("Export…", theme.DocumentSaveIcon(),
+		func() { u.exportModDialog(tw.Name) })
+	export.Importance = widget.LowImportance
+	u.sh.Gate(export)
 	head := container.NewBorder(nil, nil,
-		container.NewHBox(on, widgets.Dim(tweakTag(tw))), nil, unbuilt)
+		container.NewHBox(on, widgets.Dim(tweakTag(tw))), export, unbuilt)
 
 	desc := widget.NewLabel(tw.Desc)
 	desc.Wrapping = fyne.TextWrapWord

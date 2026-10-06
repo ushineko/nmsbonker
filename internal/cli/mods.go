@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +16,7 @@ import (
 func newModsCmd() *cobra.Command {
 	cmd := group("mods", "Manage the mod library and the build order")
 	cmd.AddCommand(
-		newModsShowCmd(), newModsWriteCmd(),
+		newModsShowCmd(), newModsWriteCmd(), newModsExportCmd(),
 		newModsListCmd(), newModsAddCmd(), newModsRemoveCmd(),
 		newModsEnableCmd(true), newModsEnableCmd(false),
 		newModsMoveCmd(), newModsImportCmd(), newModsCheckCmd(),
@@ -298,6 +299,50 @@ func newModsShowCmd() *cobra.Command {
 			return err //nolint:wrapcheck // the writer's own error
 		},
 	}
+	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
+	return cmd
+}
+
+// newModsExportCmd writes a mod's script, as the build would load it, to a
+// file (spec 022).
+func newModsExportCmd() *cobra.Command {
+	var (
+		out           string
+		force, asJSON bool
+	)
+	cmd := &cobra.Command{
+		Use:   "export <name>",
+		Short: "Write a mod's script, with its parameter values, to a .lua file",
+		Long: "Writes the script exactly as the next build would load it: a built-in tweak or a\n" +
+			"library script, with the parameter values set in nmsbonker written in. It can be\n" +
+			"edited by hand or run by another AMUMSS toolchain. A comment at the end says where\n" +
+			"it came from and names any keys only nmsbonker understands.",
+		Args: exactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			res, err := core.ExportMod(cmd.Context(), core.ExportModRequest{
+				Request: request(), Name: args[0], Out: out, Force: force,
+			})
+			if errors.Is(err, core.ErrExportExists) {
+				return fmt.Errorf("%w (--force overwrites it)", err)
+			}
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return writeJSON(cmd.OutOrStdout(), res)
+			}
+			w := cmd.OutOrStdout()
+			fact(w, "exported", res.Name)
+			fact(w, "to", res.Path)
+			fact(w, "bytes", res.Bytes)
+			if len(res.NmsbonkerOnly) > 0 {
+				fact(w, "nmsbonker-only keys", strings.Join(res.NmsbonkerOnly, ", "))
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&out, "out", "o", "", "directory or file to write (default: NAME.lua here)")
+	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing file")
 	cmd.Flags().BoolVar(&asJSON, "json", false, "print the result as JSON")
 	return cmd
 }
