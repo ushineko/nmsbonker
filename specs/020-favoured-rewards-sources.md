@@ -36,10 +36,13 @@ favoured items:
   apply to added items as to listed ones.
 - R4 The per-list missing items and base weights are a static table in the
   script, generated from the stock tables (game build 25625620).
-- R5 Tabs and newlines in the added XML are built with `string.char`: the
-  loader doubles backslashes before Lua runs, so `"\t"` arrives as two
-  characters (the first attempt put the whole ADD on one line, and the
-  weighting then ran away to int32 maximum).
+- R5 The added item is written once, verbatim, as a Lua long-bracket string
+  (`[[ ... ]]`) with real tabs and `{ID}`, `{WEIGHT}`, `{AMOUNT}` placeholders
+  filled by `gsub`. The script stays a plain AMUMSS script a person can read,
+  edit, and run elsewhere. Escapes such as `"\t"` are not usable: the loader
+  doubles backslashes before Lua runs (AMUMSS paths are written with single
+  ones), and the first attempt put the whole ADD on one line, after which the
+  weighting ran away to int32 maximum.
 
 ## Acceptance Criteria
 

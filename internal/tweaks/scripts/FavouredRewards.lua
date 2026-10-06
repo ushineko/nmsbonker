@@ -58,61 +58,228 @@ local function favour(ids, weight)
     return out
 end
 
--- Generated from the stock tables (game build 25625620): for each list, the
--- items it lacks and the base weight each goes in at.
+-- For each list, the items it lacks and the base weight each goes in at:
+-- the item's usual share times the list's stock weight total. Worked out from
+-- the stock tables of game build 25625620.
 local NEXUS_ADDS = {
-    {"R_NEXUS_MED", { {"SHIP_INV_TOKEN", 9.15}, {"WEAP_INV_TOKEN", 5.92}, {"SUIT_INV_TOKEN", 4.04}, {"ALIEN_INV_TOKEN", 1.34}, {"SHIP_CORE_S", 0.81}, {"SHIP_CORE_A", 1.75}, {"ULTRAPROD1", 0.4}, {"ULTRAPROD2", 0.4}, {"STORM_CRYSTAL", 1.08} }},  -- stock weights add up to 134.5
+    {"R_NEXUS_MED", {  -- stock weights add up to 134.5
+        {"SHIP_INV_TOKEN", 9.15},
+        {"WEAP_INV_TOKEN", 5.92},
+        {"SUIT_INV_TOKEN", 4.04},
+        {"ALIEN_INV_TOKEN", 1.34},
+        {"SHIP_CORE_S", 0.81},
+        {"SHIP_CORE_A", 1.75},
+        {"ULTRAPROD1", 0.4},
+        {"ULTRAPROD2", 0.4},
+        {"STORM_CRYSTAL", 1.08},
+    }},
 }
 local EXPEDITION_ADDS = {
-    {"R_DIPLOMATIC_0", { {"WEAP_INV_TOKEN", 46.46}, {"SUIT_INV_TOKEN", 31.68}, {"ALIEN_INV_TOKEN", 10.56}, {"FRIG_TOKEN", 71.81}, {"SHIP_CORE_S", 6.34}, {"SHIP_CORE_A", 13.73}, {"ULTRAPROD1", 3.17}, {"ULTRAPROD2", 3.17}, {"STORM_CRYSTAL", 8.45} }},  -- stock weights add up to 1056
-    {"R_DIPLOMATIC_1", { {"SHIP_INV_TOKEN", 6.8}, {"WEAP_INV_TOKEN", 4.4}, {"SUIT_INV_TOKEN", 3}, {"ALIEN_INV_TOKEN", 1}, {"FRIG_TOKEN", 6.8}, {"SHIP_CORE_S", 0.6}, {"SHIP_CORE_A", 1.3}, {"ULTRAPROD1", 0.3}, {"ULTRAPROD2", 0.3}, {"STORM_CRYSTAL", 0.8} }},  -- stock weights add up to 100
-    {"R_DIPLOMATIC_2", { {"SHIP_INV_TOKEN", 6.8}, {"WEAP_INV_TOKEN", 4.4}, {"SUIT_INV_TOKEN", 3}, {"ALIEN_INV_TOKEN", 1}, {"FRIG_TOKEN", 6.8}, {"SHIP_CORE_S", 0.6}, {"SHIP_CORE_A", 1.3}, {"ULTRAPROD1", 0.3}, {"ULTRAPROD2", 0.3}, {"STORM_CRYSTAL", 0.8} }},  -- stock weights add up to 100
-    {"R_DIPLOMATIC_3", { {"SHIP_INV_TOKEN", 6.8}, {"WEAP_INV_TOKEN", 4.4}, {"SUIT_INV_TOKEN", 3}, {"ALIEN_INV_TOKEN", 1}, {"FRIG_TOKEN", 6.8}, {"SHIP_CORE_S", 0.6}, {"SHIP_CORE_A", 1.3}, {"ULTRAPROD1", 0.3}, {"ULTRAPROD2", 0.3}, {"STORM_CRYSTAL", 0.8} }},  -- stock weights add up to 100
-    {"R_COMBAT_0", { {"SHIP_INV_TOKEN", 6.8}, {"WEAP_INV_TOKEN", 4.4}, {"SUIT_INV_TOKEN", 3}, {"ALIEN_INV_TOKEN", 1}, {"FRIG_TOKEN", 6.8}, {"SHIP_CORE_S", 0.6}, {"SHIP_CORE_A", 1.3}, {"ULTRAPROD1", 0.3}, {"ULTRAPROD2", 0.3}, {"STORM_CRYSTAL", 0.8} }},  -- stock weights add up to 100
-    {"R_COMBAT_1", { {"SHIP_INV_TOKEN", 41.14}, {"WEAP_INV_TOKEN", 26.62}, {"SUIT_INV_TOKEN", 18.15}, {"ALIEN_INV_TOKEN", 6.05}, {"FRIG_TOKEN", 41.14}, {"SHIP_CORE_S", 3.63}, {"SHIP_CORE_A", 7.86}, {"ULTRAPROD1", 1.81}, {"ULTRAPROD2", 1.81}, {"STORM_CRYSTAL", 4.84} }},  -- stock weights add up to 605
-    {"R_COMBAT_2", { {"SHIP_INV_TOKEN", 6.8}, {"WEAP_INV_TOKEN", 4.4}, {"SUIT_INV_TOKEN", 3}, {"ALIEN_INV_TOKEN", 1}, {"FRIG_TOKEN", 6.8}, {"SHIP_CORE_S", 0.6}, {"SHIP_CORE_A", 1.3}, {"ULTRAPROD1", 0.3}, {"ULTRAPROD2", 0.3}, {"STORM_CRYSTAL", 0.8} }},  -- stock weights add up to 100
-    {"R_EXPLORATION_0", { {"SHIP_INV_TOKEN", 14.96}, {"WEAP_INV_TOKEN", 9.68}, {"SUIT_INV_TOKEN", 6.6}, {"ALIEN_INV_TOKEN", 2.2}, {"FRIG_TOKEN", 14.96}, {"SHIP_CORE_S", 1.32}, {"SHIP_CORE_A", 2.86}, {"ULTRAPROD1", 0.66}, {"ULTRAPROD2", 0.66}, {"STORM_CRYSTAL", 1.76} }},  -- stock weights add up to 220
-    {"R_EXPLORATION_1", { {"SHIP_INV_TOKEN", 27.88}, {"WEAP_INV_TOKEN", 18.04}, {"SUIT_INV_TOKEN", 12.3}, {"ALIEN_INV_TOKEN", 4.1}, {"FRIG_TOKEN", 27.88}, {"SHIP_CORE_S", 2.46}, {"SHIP_CORE_A", 5.33}, {"ULTRAPROD1", 1.23}, {"ULTRAPROD2", 1.23}, {"STORM_CRYSTAL", 3.28} }},  -- stock weights add up to 410
-    {"R_EXPLORATION_2", { {"SHIP_INV_TOKEN", 24.48}, {"WEAP_INV_TOKEN", 15.84}, {"SUIT_INV_TOKEN", 10.8}, {"ALIEN_INV_TOKEN", 3.6}, {"FRIG_TOKEN", 24.48}, {"SHIP_CORE_S", 2.16}, {"SHIP_CORE_A", 4.68}, {"ULTRAPROD1", 1.08}, {"ULTRAPROD2", 1.08}, {"STORM_CRYSTAL", 2.88} }},  -- stock weights add up to 360
-    {"R_EXPLORATION_3", { {"SHIP_INV_TOKEN", 24.48}, {"WEAP_INV_TOKEN", 15.84}, {"SUIT_INV_TOKEN", 10.8}, {"ALIEN_INV_TOKEN", 3.6}, {"FRIG_TOKEN", 24.48}, {"SHIP_CORE_S", 2.16}, {"SHIP_CORE_A", 4.68}, {"ULTRAPROD1", 1.08}, {"ULTRAPROD2", 1.08}, {"STORM_CRYSTAL", 2.88} }},  -- stock weights add up to 360
-    {"R_MINING_0", { {"SHIP_INV_TOKEN", 34}, {"WEAP_INV_TOKEN", 22}, {"SUIT_INV_TOKEN", 15}, {"ALIEN_INV_TOKEN", 5}, {"FRIG_TOKEN", 34}, {"SHIP_CORE_S", 3}, {"SHIP_CORE_A", 6.5}, {"ULTRAPROD1", 1.5}, {"ULTRAPROD2", 1.5}, {"STORM_CRYSTAL", 4} }},  -- stock weights add up to 500
-    {"R_MINING_1", { {"WEAP_INV_TOKEN", 42.77}, {"SUIT_INV_TOKEN", 29.16}, {"ALIEN_INV_TOKEN", 9.72}, {"SHIP_CORE_S", 5.83}, {"SHIP_CORE_A", 12.64}, {"ULTRAPROD1", 2.92}, {"ULTRAPROD2", 2.92}, {"STORM_CRYSTAL", 7.78} }},  -- stock weights add up to 972
-    {"R_MINING_2", { {"WEAP_INV_TOKEN", 42.5}, {"SUIT_INV_TOKEN", 28.98}, {"ALIEN_INV_TOKEN", 9.66}, {"FRIG_TOKEN", 65.69}, {"SHIP_CORE_S", 5.8}, {"SHIP_CORE_A", 12.56}, {"ULTRAPROD1", 2.9}, {"ULTRAPROD2", 2.9}, {"STORM_CRYSTAL", 7.73} }},  -- stock weights add up to 966
-    {"R_MINING_3", { {"WEAP_INV_TOKEN", 36.61}, {"SUIT_INV_TOKEN", 24.96}, {"ALIEN_INV_TOKEN", 8.32}, {"SHIP_CORE_S", 4.99}, {"SHIP_CORE_A", 10.82}, {"ULTRAPROD1", 2.5}, {"ULTRAPROD2", 2.5}, {"STORM_CRYSTAL", 6.66} }},  -- stock weights add up to 832
+    {"R_DIPLOMATIC_0", {  -- stock weights add up to 1056
+        {"WEAP_INV_TOKEN", 46.46},
+        {"SUIT_INV_TOKEN", 31.68},
+        {"ALIEN_INV_TOKEN", 10.56},
+        {"FRIG_TOKEN", 71.81},
+        {"SHIP_CORE_S", 6.34},
+        {"SHIP_CORE_A", 13.73},
+        {"ULTRAPROD1", 3.17},
+        {"ULTRAPROD2", 3.17},
+        {"STORM_CRYSTAL", 8.45},
+    }},
+    {"R_DIPLOMATIC_1", {  -- stock weights add up to 100
+        {"SHIP_INV_TOKEN", 6.8},
+        {"WEAP_INV_TOKEN", 4.4},
+        {"SUIT_INV_TOKEN", 3},
+        {"ALIEN_INV_TOKEN", 1},
+        {"FRIG_TOKEN", 6.8},
+        {"SHIP_CORE_S", 0.6},
+        {"SHIP_CORE_A", 1.3},
+        {"ULTRAPROD1", 0.3},
+        {"ULTRAPROD2", 0.3},
+        {"STORM_CRYSTAL", 0.8},
+    }},
+    {"R_DIPLOMATIC_2", {  -- stock weights add up to 100
+        {"SHIP_INV_TOKEN", 6.8},
+        {"WEAP_INV_TOKEN", 4.4},
+        {"SUIT_INV_TOKEN", 3},
+        {"ALIEN_INV_TOKEN", 1},
+        {"FRIG_TOKEN", 6.8},
+        {"SHIP_CORE_S", 0.6},
+        {"SHIP_CORE_A", 1.3},
+        {"ULTRAPROD1", 0.3},
+        {"ULTRAPROD2", 0.3},
+        {"STORM_CRYSTAL", 0.8},
+    }},
+    {"R_DIPLOMATIC_3", {  -- stock weights add up to 100
+        {"SHIP_INV_TOKEN", 6.8},
+        {"WEAP_INV_TOKEN", 4.4},
+        {"SUIT_INV_TOKEN", 3},
+        {"ALIEN_INV_TOKEN", 1},
+        {"FRIG_TOKEN", 6.8},
+        {"SHIP_CORE_S", 0.6},
+        {"SHIP_CORE_A", 1.3},
+        {"ULTRAPROD1", 0.3},
+        {"ULTRAPROD2", 0.3},
+        {"STORM_CRYSTAL", 0.8},
+    }},
+    {"R_COMBAT_0", {  -- stock weights add up to 100
+        {"SHIP_INV_TOKEN", 6.8},
+        {"WEAP_INV_TOKEN", 4.4},
+        {"SUIT_INV_TOKEN", 3},
+        {"ALIEN_INV_TOKEN", 1},
+        {"FRIG_TOKEN", 6.8},
+        {"SHIP_CORE_S", 0.6},
+        {"SHIP_CORE_A", 1.3},
+        {"ULTRAPROD1", 0.3},
+        {"ULTRAPROD2", 0.3},
+        {"STORM_CRYSTAL", 0.8},
+    }},
+    {"R_COMBAT_1", {  -- stock weights add up to 605
+        {"SHIP_INV_TOKEN", 41.14},
+        {"WEAP_INV_TOKEN", 26.62},
+        {"SUIT_INV_TOKEN", 18.15},
+        {"ALIEN_INV_TOKEN", 6.05},
+        {"FRIG_TOKEN", 41.14},
+        {"SHIP_CORE_S", 3.63},
+        {"SHIP_CORE_A", 7.86},
+        {"ULTRAPROD1", 1.81},
+        {"ULTRAPROD2", 1.81},
+        {"STORM_CRYSTAL", 4.84},
+    }},
+    {"R_COMBAT_2", {  -- stock weights add up to 100
+        {"SHIP_INV_TOKEN", 6.8},
+        {"WEAP_INV_TOKEN", 4.4},
+        {"SUIT_INV_TOKEN", 3},
+        {"ALIEN_INV_TOKEN", 1},
+        {"FRIG_TOKEN", 6.8},
+        {"SHIP_CORE_S", 0.6},
+        {"SHIP_CORE_A", 1.3},
+        {"ULTRAPROD1", 0.3},
+        {"ULTRAPROD2", 0.3},
+        {"STORM_CRYSTAL", 0.8},
+    }},
+    {"R_EXPLORATION_0", {  -- stock weights add up to 220
+        {"SHIP_INV_TOKEN", 14.96},
+        {"WEAP_INV_TOKEN", 9.68},
+        {"SUIT_INV_TOKEN", 6.6},
+        {"ALIEN_INV_TOKEN", 2.2},
+        {"FRIG_TOKEN", 14.96},
+        {"SHIP_CORE_S", 1.32},
+        {"SHIP_CORE_A", 2.86},
+        {"ULTRAPROD1", 0.66},
+        {"ULTRAPROD2", 0.66},
+        {"STORM_CRYSTAL", 1.76},
+    }},
+    {"R_EXPLORATION_1", {  -- stock weights add up to 410
+        {"SHIP_INV_TOKEN", 27.88},
+        {"WEAP_INV_TOKEN", 18.04},
+        {"SUIT_INV_TOKEN", 12.3},
+        {"ALIEN_INV_TOKEN", 4.1},
+        {"FRIG_TOKEN", 27.88},
+        {"SHIP_CORE_S", 2.46},
+        {"SHIP_CORE_A", 5.33},
+        {"ULTRAPROD1", 1.23},
+        {"ULTRAPROD2", 1.23},
+        {"STORM_CRYSTAL", 3.28},
+    }},
+    {"R_EXPLORATION_2", {  -- stock weights add up to 360
+        {"SHIP_INV_TOKEN", 24.48},
+        {"WEAP_INV_TOKEN", 15.84},
+        {"SUIT_INV_TOKEN", 10.8},
+        {"ALIEN_INV_TOKEN", 3.6},
+        {"FRIG_TOKEN", 24.48},
+        {"SHIP_CORE_S", 2.16},
+        {"SHIP_CORE_A", 4.68},
+        {"ULTRAPROD1", 1.08},
+        {"ULTRAPROD2", 1.08},
+        {"STORM_CRYSTAL", 2.88},
+    }},
+    {"R_EXPLORATION_3", {  -- stock weights add up to 360
+        {"SHIP_INV_TOKEN", 24.48},
+        {"WEAP_INV_TOKEN", 15.84},
+        {"SUIT_INV_TOKEN", 10.8},
+        {"ALIEN_INV_TOKEN", 3.6},
+        {"FRIG_TOKEN", 24.48},
+        {"SHIP_CORE_S", 2.16},
+        {"SHIP_CORE_A", 4.68},
+        {"ULTRAPROD1", 1.08},
+        {"ULTRAPROD2", 1.08},
+        {"STORM_CRYSTAL", 2.88},
+    }},
+    {"R_MINING_0", {  -- stock weights add up to 500
+        {"SHIP_INV_TOKEN", 34},
+        {"WEAP_INV_TOKEN", 22},
+        {"SUIT_INV_TOKEN", 15},
+        {"ALIEN_INV_TOKEN", 5},
+        {"FRIG_TOKEN", 34},
+        {"SHIP_CORE_S", 3},
+        {"SHIP_CORE_A", 6.5},
+        {"ULTRAPROD1", 1.5},
+        {"ULTRAPROD2", 1.5},
+        {"STORM_CRYSTAL", 4},
+    }},
+    {"R_MINING_1", {  -- stock weights add up to 972
+        {"WEAP_INV_TOKEN", 42.77},
+        {"SUIT_INV_TOKEN", 29.16},
+        {"ALIEN_INV_TOKEN", 9.72},
+        {"SHIP_CORE_S", 5.83},
+        {"SHIP_CORE_A", 12.64},
+        {"ULTRAPROD1", 2.92},
+        {"ULTRAPROD2", 2.92},
+        {"STORM_CRYSTAL", 7.78},
+    }},
+    {"R_MINING_2", {  -- stock weights add up to 966
+        {"WEAP_INV_TOKEN", 42.5},
+        {"SUIT_INV_TOKEN", 28.98},
+        {"ALIEN_INV_TOKEN", 9.66},
+        {"FRIG_TOKEN", 65.69},
+        {"SHIP_CORE_S", 5.8},
+        {"SHIP_CORE_A", 12.56},
+        {"ULTRAPROD1", 2.9},
+        {"ULTRAPROD2", 2.9},
+        {"STORM_CRYSTAL", 7.73},
+    }},
+    {"R_MINING_3", {  -- stock weights add up to 832
+        {"WEAP_INV_TOKEN", 36.61},
+        {"SUIT_INV_TOKEN", 24.96},
+        {"ALIEN_INV_TOKEN", 8.32},
+        {"SHIP_CORE_S", 4.99},
+        {"SHIP_CORE_A", 10.82},
+        {"ULTRAPROD1", 2.5},
+        {"ULTRAPROD2", 2.5},
+        {"STORM_CRYSTAL", 6.66},
+    }},
 }
 
--- The loader doubles every backslash before Lua sees the script (AMUMSS paths
--- are written with single ones), so "\t" and "\n" would arrive as two
--- characters each. Tabs and newlines are built from their codes instead.
-local TAB, NL = string.char(9), string.char(10)
-local function ind(n) return string.rep(TAB, n) end
+-- One reward item, exactly as the tables write it (tab-indented to the
+-- GcRewardTableItem depth). {ID}, {WEIGHT} and {AMOUNT} are filled in below.
+local ITEM = [[
+					<Property name="List" value="GcRewardTableItem">
+						<Property name="PercentageChance" value="{WEIGHT}" />
+						<Property name="LabelID" value="" />
+						<Property name="Reward" value="GcRewardSpecificProduct">
+							<Property name="GcRewardSpecificProduct">
+								<Property name="Default" value="GcDefaultMissionProductEnum">
+									<Property name="DefaultProductType" value="None" />
+								</Property>
+								<Property name="ID" value="{ID}" />
+								<Property name="AmountMin" value="{AMOUNT}" />
+								<Property name="AmountMax" value="{AMOUNT}" />
+								<Property name="HideAmountInMessage" value="false" />
+								<Property name="ForceSpecialMessage" value="false" />
+								<Property name="HideInSeasonRewards" value="false" />
+								<Property name="Silent" value="false" />
+								<Property name="SeasonRewardListFormat" value="" />
+								<Property name="RequiresTech" value="" />
+							</Property>
+						</Property>
+					</Property>
+]]
 
--- A reward item in the shape the tables use, at the GcRewardTableItem depth.
 local function item(id, weight)
     local amount = 1
     if id == "STORM_CRYSTAL" then amount = 10 end
-    return table.concat({
-        ind(5) .. '<Property name="List" value="GcRewardTableItem">',
-        ind(6) .. '<Property name="PercentageChance" value="' .. weight .. '" />',
-        ind(6) .. '<Property name="LabelID" value="" />',
-        ind(6) .. '<Property name="Reward" value="GcRewardSpecificProduct">',
-        ind(7) .. '<Property name="GcRewardSpecificProduct">',
-        ind(8) .. '<Property name="Default" value="GcDefaultMissionProductEnum">',
-        ind(9) .. '<Property name="DefaultProductType" value="None" />',
-        ind(8) .. '</Property>',
-        ind(8) .. '<Property name="ID" value="' .. id .. '" />',
-        ind(8) .. '<Property name="AmountMin" value="' .. amount .. '" />',
-        ind(8) .. '<Property name="AmountMax" value="' .. amount .. '" />',
-        ind(8) .. '<Property name="HideAmountInMessage" value="false" />',
-        ind(8) .. '<Property name="ForceSpecialMessage" value="false" />',
-        ind(8) .. '<Property name="HideInSeasonRewards" value="false" />',
-        ind(8) .. '<Property name="Silent" value="false" />',
-        ind(8) .. '<Property name="SeasonRewardListFormat" value="" />',
-        ind(8) .. '<Property name="RequiresTech" value="" />',
-        ind(7) .. '</Property>',
-        ind(6) .. '</Property>',
-        ind(5) .. '</Property>',
-    }, NL)
+    return (ITEM:gsub("{ID}", id):gsub("{WEIGHT}", tostring(weight)):gsub("{AMOUNT}", tostring(amount)))
 end
 
 -- One ADD per list, inserted after its first item: the anchor is the list's
@@ -120,11 +287,13 @@ end
 local function adds(lists)
     local out = {}
     for _, l in ipairs(lists) do
-        local xml = {}
-        for _, w in ipairs(l[2]) do table.insert(xml, item(w[1], w[2])) end
+        local xml = ""
+        for _, w in ipairs(l[2]) do xml = xml .. item(w[1], w[2]) end
         table.insert(out, {
             ["SPECIAL_KEY_WORDS"] = {'_id="' .. l[1] .. '"', 'value="GcRewardTableItem" _index="0"'},
-            ["ADD"] = table.concat(xml, NL)
+            -- Each item ends in a newline; the last one is dropped so the
+            -- block ends on its closing tag.
+            ["ADD"] = xml:sub(1, -2)
         })
     end
     return out
