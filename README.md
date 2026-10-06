@@ -670,6 +670,16 @@ flow in more detail, including how the golden fixtures are regenerated.
 
 ## Changelog
 
+### Unreleased
+
+- **Favoured rewards now reaches Nexus missions and every frigate
+  expedition** (#27). Weighting only helps where an item is listed, and the
+  lists those two pay from held almost none of the favoured items: Nexus
+  missions all pay from one list with only the frigate module, and combat and
+  exploration expeditions had none. The items are now added to those lists at
+  the share they have elsewhere, then weighted like the rest; the row reads
+  WORKING\* because entries are added.
+
 ### 0.6.0
 
 - **New tweak: Favoured rewards** (Rewards page, #22). Storage Augmentations,
