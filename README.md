@@ -18,7 +18,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories (AppData on Windows).*
 
-**Version**: 0.7.0
+**Version**: 0.8.0
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -734,6 +734,28 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/023`](specs/023-windows-support.md) for Windows.
 
 ## Changelog
+
+### 0.8.0
+
+- **Runs on Windows** (#31). No Man's Sky installed through Steam on Windows
+  10/11 is found through the registry, mods build with the Windows
+  MBINCompiler, deploy writes `GAMEDATA\MODS`, and the saves in
+  `%APPDATA%\HelloGames\NMS` are backed up and edited as on Linux. Settings
+  live in `%APPDATA%\nmsbonker`, everything else in
+  `%LOCALAPPDATA%\nmsbonker`. Every release now carries
+  `nmsbonker-<version>-windows-amd64.zip` with `nmsbonker.exe` and
+  `nmsbonker-gui.exe`; unzip and run, no installer. Both Windows MBINCompiler
+  builds need a .NET runtime: install .NET 10
+  (`winget install Microsoft.DotNet.Runtime.10`), and `tools ensure` says so
+  when it is missing.
+- **On Windows, deploy, rollback and undeploy refuse while the game is
+  running.** The running game holds its mod files open and Windows will not
+  move them, so the change would fail halfway. Linux is unchanged.
+- **The .NET runtime is found where it is installed, not only on `PATH`.** A
+  terminal opened before the runtime was installed no longer reports it
+  missing.
+- **Nothing changes on Linux** apart from wording: messages say "save folder"
+  where they said "Proton prefix", and `--help` prints the real settings path.
 
 ### 0.7.0
 
