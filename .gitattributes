@@ -1,0 +1,7 @@
+# One checkout on every platform: LF in the working tree whatever core.autocrlf
+# says, so a Windows build reads the same bytes a Linux one does (spec 020 R7).
+* text=auto eol=lf
+
+*.png binary
+*.ico binary
+*.syso binary
