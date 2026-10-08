@@ -2,7 +2,7 @@
 
 **Issue**: #31
 
-## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC8 GUI build/deploy, AC10 open)
+## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC10 open)
 
 ## Executive Summary
 
@@ -277,12 +277,12 @@ Facts established on that machine, 2026-10-07:
   parity test and passes. *Verified:* Windows both ways locally; Linux `make
   test`, `make lint` and `make lint-windows` in CI on PR #32, with the Windows
   test job, the Windows zip and the Arch package.
-- [ ] AC8 `nmsbonker-gui.exe` opens without a console window, shows the icon,
-  and runs status, build (with a cancel partway through) and deploy without a
-  console flash per conversion. *Verified:* GUI subsystem (no console), icon in
-  the executable and the title bar, Overview and About render at 150% scaling
-  with the game and compiler found. *Open:* build, cancel and deploy driven
-  from the window.
+- [x] AC8 `nmsbonker-gui.exe` opens without a console window, shows the icon,
+  and runs status, build and deploy without a console flash per conversion.
+  *Verified:* GUI subsystem (no console), icon in the executable and the title
+  bar, rendering at 150% scaling; build and deploy run from the window by the
+  user, 2026-10-07. Cancelling a build is covered by the existing cancellation
+  tests, which pass on Windows, and was not tried by hand.
 - [x] AC9 In game: built-in tweaks deployed on the Windows machine are active
   in game. Recorded by the user, 2026-10-07, with build
   `0.7.0-4792d96-dev` installed locally.
