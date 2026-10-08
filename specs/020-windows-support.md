@@ -2,7 +2,7 @@
 
 **Issue**: #31
 
-## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC7 Linux run, AC8 GUI build/deploy, AC9, AC10 open)
+## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC8 GUI build/deploy, AC9, AC10 open)
 
 ## Executive Summary
 
@@ -272,11 +272,11 @@ Facts established on that machine, 2026-10-07:
   `saves export` on the real Windows profile; an upper-cased export path into
   the save folder refused; edit, backup and refusal pass in the unit tests on
   NTFS. *Open:* an edit of a real profile, left to the user.
-- [ ] AC7 `go test ./...` passes on Windows (cgo with `-race -tags parity`,
+- [x] AC7 `go test ./...` passes on Windows (cgo with `-race -tags parity`,
   and no-cgo, R8.3) and on Linux. `make test` on Linux still includes the
-  parity test and passes. *Verified:* Windows both ways; Linux `go vet` and
-  golangci-lint (non-GUI packages, cross-checked from Windows). *Open:* the
-  Linux test run, which is CI's on the pull request.
+  parity test and passes. *Verified:* Windows both ways locally; Linux `make
+  test`, `make lint` and `make lint-windows` in CI on PR #32, with the Windows
+  test job, the Windows zip and the Arch package.
 - [ ] AC8 `nmsbonker-gui.exe` opens without a console window, shows the icon,
   and runs status, build (with a cancel partway through) and deploy without a
   console flash per conversion. *Verified:* GUI subsystem (no console), icon in
