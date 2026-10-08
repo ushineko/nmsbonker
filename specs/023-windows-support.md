@@ -2,7 +2,7 @@
 
 **Issue**: #31
 
-## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC8 GUI build/deploy, AC9, AC10 open)
+## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC8 GUI build/deploy, AC10 open)
 
 ## Executive Summary
 
@@ -283,8 +283,9 @@ Facts established on that machine, 2026-10-07:
   the executable and the title bar, Overview and About render at 150% scaling
   with the game and compiler found. *Open:* build, cancel and deploy driven
   from the window.
-- [ ] AC9 In game: the built-in mod deployed by AC5 is active on the Windows
-  machine (one visible tweak checked). Recorded by the user.
+- [x] AC9 In game: built-in tweaks deployed on the Windows machine are active
+  in game. Recorded by the user, 2026-10-07, with build
+  `0.7.0-4792d96-dev` installed locally.
 - [ ] AC10 A pushed tag produces the Windows zip on the Release page alongside
   the existing assets (checked on the next release, not by a throwaway tag).
 
