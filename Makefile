@@ -82,6 +82,17 @@ lint: install-lint ## Lint files
 	@go version
 	$(BINDIR)/bin/$(LINT_PROGRAM) run --timeout 5m0s --config config/.golangci-$(LINT_VERSION).yml ./...
 
+# `lint` type-checks for the host, so on Linux it never sees a *_windows.go.
+# This lints them by checking as Windows. Without cgo, which is why the window
+# is left out: it does not type-check without a C toolchain for the target.
+.PHONY: lint-windows
+lint-windows: export GOTOOLCHAIN = $(LINT_GO_TOOLCHAIN)
+lint-windows: export GOOS = windows
+lint-windows: export CGO_ENABLED = 0
+lint-windows: install-lint ## Lint files as Windows sees them (spec 023)
+	$(BINDIR)/bin/$(LINT_PROGRAM) run --timeout 5m0s --config config/.golangci-$(LINT_VERSION).yml \
+		$$(go list -e ./... | grep -v -e /internal/gui -e /cmd/nmsbonker-gui | sed 's|^$(MODULE)|.|')
+
 # The parity test carries a build tag so that a plain `go test ./...` does not
 # need it, and `make test` always does: it is the guard that the CLI and the GUI
 # expose the same operations, and a guard that runs only when someone remembers
@@ -106,12 +117,12 @@ build-gui: ## Build the desktop front end for the host platform (requires CGO)
 
 .PHONY: build-all
 build-all: ## Build static CLI binaries for every platform, plus the host's GUI
-	@set -e; for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do \
-		os=$${p%/*}; arch=$${p#*/}; \
+	@set -e; for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do \
+		os=$${p%/*}; arch=$${p#*/}; ext=; [ "$$os" = windows ] && ext=.exe; \
 		echo "building $$os/$$arch ..."; \
 		mkdir -p dist; \
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
-			go build -ldflags='$(LDFLAGS)' -trimpath -o dist/nmsbonker-$$os-$$arch ./cmd/nmsbonker; \
+			go build -ldflags='$(LDFLAGS)' -trimpath -o dist/nmsbonker-$$os-$$arch$$ext ./cmd/nmsbonker; \
 	done
 	@# The GUI is built for this machine only. It needs CGO, so cross-compiling
 	@# it would need a C toolchain per target. Nothing about the tool's job
@@ -138,7 +149,7 @@ uninstall: ## Remove what install put in ~/.local, leaving your data alone
 # CGO), so it is packaged only for the platform it was built on.
 .PHONY: release
 release: build-all ## Package dist/ into per-target tar.gz archives with SHA256SUMS
-	@set -e; 	rm -f dist/*.tar.gz dist/SHA256SUMS; 	stage=$$(mktemp -d); trap 'rm -rf "$$stage"' EXIT; 	for bin in dist/nmsbonker-*; do 		case "$$bin" in *.tar.gz|*SHA256SUMS) continue;; esac; 		name=$$(basename "$$bin"); 		target=$${name#nmsbonker-}; target=$${target#gui-}; 		dir="$$stage/nmsbonker-$(VERSION)-$$target"; 		mkdir -p "$$dir"; 		case "$$name" in 			nmsbonker-gui-*) cp "$$bin" "$$dir/nmsbonker-gui";; 			*) cp "$$bin" "$$dir/nmsbonker";; 		esac; 		cp README.md LICENSE "$$dir/"; 		mkdir -p "$$dir/packaging"; 		cp packaging/io.ushineko.nmsbonker.desktop packaging/nmsbonker.svg "$$dir/packaging/"; 	done; 	for dir in "$$stage"/*; do 		base=$$(basename "$$dir"); 		tar -C "$$stage" -czf "dist/$$base.tar.gz" "$$base"; 	done; 	cd dist && (sha256sum *.tar.gz 2>/dev/null || shasum -a 256 *.tar.gz) > SHA256SUMS
+	@set -e; 	rm -f dist/*.tar.gz dist/SHA256SUMS; 	stage=$$(mktemp -d); trap 'rm -rf "$$stage"' EXIT; 	for bin in dist/nmsbonker-*; do 		case "$$bin" in *.tar.gz|*SHA256SUMS|*windows*|*.zip) continue;; esac; 		name=$$(basename "$$bin"); 		target=$${name#nmsbonker-}; target=$${target#gui-}; 		dir="$$stage/nmsbonker-$(VERSION)-$$target"; 		mkdir -p "$$dir"; 		case "$$name" in 			nmsbonker-gui-*) cp "$$bin" "$$dir/nmsbonker-gui";; 			*) cp "$$bin" "$$dir/nmsbonker";; 		esac; 		cp README.md LICENSE "$$dir/"; 		mkdir -p "$$dir/packaging"; 		cp packaging/io.ushineko.nmsbonker.desktop packaging/nmsbonker.svg "$$dir/packaging/"; 	done; 	for dir in "$$stage"/*; do 		base=$$(basename "$$dir"); 		tar -C "$$stage" -czf "dist/$$base.tar.gz" "$$base"; 	done; 	cd dist && (sha256sum *.tar.gz 2>/dev/null || shasum -a 256 *.tar.gz) > SHA256SUMS
 	@ls -l dist/*.tar.gz dist/SHA256SUMS
 
 # The Arch package, built from this checkout by packaging/arch/PKGBUILD. The
@@ -149,6 +160,14 @@ pkg-arch: ## Build the Arch Linux package from this checkout (needs makepkg)
 	@# and has no business inside a Go module.
 	cd packaging/arch && BUILDDIR="$$(mktemp -d)" makepkg -sf --noconfirm
 	@ls -l packaging/arch/*.pkg.tar.zst
+
+# The GUI's Windows icon (spec 023 R9.2). The .ico and the .syso are committed,
+# so a Windows build needs neither tool; run this when nmsbonker.svg changes.
+# windres comes with MSYS2's MinGW toolchain, the same one the GUI builds with.
+.PHONY: winres
+winres: ## Regenerate the Windows icon resource from packaging/nmsbonker.svg (needs windres)
+	go run ./tools/winicon packaging/nmsbonker.svg packaging/windows/nmsbonker.ico
+	cd packaging/windows && windres -i nmsbonker.rc -O coff -o ../../cmd/nmsbonker-gui/rsrc_windows_amd64.syso
 
 .PHONY: screenshots
 screenshots: build-gui ## Refresh the README screenshots (KDE/Wayland; needs kdotool and spectacle)

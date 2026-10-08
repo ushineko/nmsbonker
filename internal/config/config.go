@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/ushineko/nmsbonker/internal/build/audit"
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 )
 
 // FileEnv names the environment variable that overrides the config file path.
@@ -125,22 +126,23 @@ type Config struct {
 }
 
 // FilePath is where the settings live: $NMSBONKER_CONFIG, else
-// $XDG_CONFIG_HOME/nmsbonker/config.json (R2.1).
+// $XDG_CONFIG_HOME/nmsbonker/config.json (R2.1), else the platform default
+// (spec 023 R1).
 func FilePath() string {
 	if p := os.Getenv(FileEnv); p != "" {
 		return ExpandPath(p)
 	}
-	return filepath.Join(configHome(), "nmsbonker", "config.json")
+	return filepath.Join(configDir(), "config.json")
 }
 
 // Defaults returns the settings a machine with no config file has.
 func Defaults() *Config {
-	data := dataHome()
+	data := dataDir()
 	return &Config{
-		LibraryDir:   filepath.Join(data, "nmsbonker", "library"),
-		ToolsDir:     filepath.Join(data, "nmsbonker", "tools"),
-		CacheDir:     filepath.Join(cacheHome(), "nmsbonker"),
-		WorkspaceDir: filepath.Join(data, "nmsbonker", "build"),
+		LibraryDir:   filepath.Join(data, "library"),
+		ToolsDir:     filepath.Join(data, "tools"),
+		CacheDir:     cacheDir(),
+		WorkspaceDir: filepath.Join(data, "build"),
 		ModName:      DefaultModName,
 		MBINCompiler: MBINCompiler{Flavor: FlavorAuto},
 		Mods:         []ModEntry{},
@@ -329,7 +331,7 @@ func (c *Config) Save() error {
 	if err := os.Chmod(tmpName, 0o600); err != nil {
 		return fmt.Errorf("chmod %s: %w", tmpName, err)
 	}
-	if err := os.Rename(tmpName, c.path); err != nil {
+	if err := fsutil.Rename(tmpName, c.path); err != nil {
 		return fmt.Errorf("replace %s: %w", c.path, err)
 	}
 	return nil
@@ -371,8 +373,8 @@ func (c *Config) Paths() Paths {
 	}
 	cache := abs(c.CacheDir)
 	return Paths{
-		Archive:    filepath.Join(dataHome(), "nmsbonker", "archive"),
-		SaveBackup: filepath.Join(dataHome(), "nmsbonker", "save-backup"),
+		Archive:    filepath.Join(dataDir(), "archive"),
+		SaveBackup: filepath.Join(dataDir(), "save-backup"),
 		Config:     abs(c.path),
 		Library:    abs(c.LibraryDir),
 		Tools:      abs(c.ToolsDir),

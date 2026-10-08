@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ushineko/nmsbonker/internal/config"
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 	"github.com/ushineko/nmsbonker/internal/mbin"
 	"github.com/ushineko/nmsbonker/internal/save"
 )
@@ -37,23 +38,15 @@ knows the paths and delegates every byte-level question to it.
 const SteamCloudNote = "If Steam shows a cloud sync conflict when the game next starts, choose the " +
 	"local file: it is the edited one. Choosing the cloud copy discards the edit."
 
-// ErrGameRunning reports a write refused because the game is open (R6.2).
-var ErrGameRunning = errors.New("the game is running; close it before editing a save")
+// ErrGameRunning reports a write refused because the game is open (R6.2,
+// spec 023 R5.1).
+var ErrGameRunning = errors.New("the game is running")
 
 // ErrNoProfile reports a save directory with no st_* profile in it.
 var ErrNoProfile = errors.New("no save profile (st_*) found")
 
 // ErrNoSave reports a slot with no file behind it.
 var ErrNoSave = errors.New("no save in that slot")
-
-// procRoot is where running processes are looked up. A variable so a test can
-// point it at a fixture (AC6).
-//
-//nolint:gochecknoglobals // test seam
-var procRoot = "/proc"
-
-// gameProcess is the executable name the game runs as under Proton.
-const gameProcess = "NMS.exe"
 
 // SlotSelector names a save. Kind "" means whichever half of the slot the game
 // would load: the more recently written one.
@@ -226,11 +219,11 @@ func readMeta(profile string, ref save.SlotRef) (*save.Meta, error) {
 // saveProfiles lists the st_* directories, most recently written first.
 func saveProfiles(dir string) ([]string, error) {
 	if dir == "" {
-		return nil, errors.New("no Proton prefix for this game; the game has not been run yet")
+		return nil, errors.New(noSaveFolder)
 	}
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("no save folder in the Proton prefix (%s)", dir)
+		return nil, errors.New(missingSaveFolder(dir))
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", dir, err)
@@ -418,7 +411,7 @@ func InspectSave(_ context.Context, req InspectSaveRequest) (InspectSaveResult, 
 	return out, nil
 }
 
-// ExportSaveRequest writes a save's JSON somewhere outside the prefix (R5.3).
+// ExportSaveRequest writes a save's JSON somewhere outside the game (R5.3).
 type ExportSaveRequest struct {
 	Request
 	Slot SlotSelector
@@ -482,21 +475,23 @@ func ExportSave(_ context.Context, req ExportSaveRequest) (ExportSaveResult, err
 }
 
 /*
-insideTheGame says whether a path lies under the Proton prefix or the game
-directory, and which (R5.3, R6.5).
+insideTheGame says whether a path lies under the Proton prefix, the save
+folder or the game directory, and which (R5.3, R6.5, spec 023 R4.2).
 
 Both sides are resolved through symlinks first, as far as they exist, so a
 link out of a scratch directory into the save folder, a relative spelling, or
-a `..` in the middle cannot slip a write past the check. The whole compatdata
-tree is refused rather than only the save folder: nothing this program exports
-belongs anywhere in the prefix.
+a `..` in the middle cannot slip a write past the check. On Linux the whole
+compatdata tree is refused rather than only the save folder: nothing this
+program exports belongs anywhere in the prefix. On Windows there is no prefix
+and the save folder is checked on its own; filepath.Rel compares without case
+there, so a differently cased spelling is caught too.
 */
 func (s *session) insideTheGame(path string) (string, bool) {
 	if s.install == nil {
 		return "", false
 	}
 	target := resolveExisting(path)
-	for _, root := range []string{s.install.CompatDataDir, s.install.Dir} {
+	for _, root := range []string{s.install.CompatDataDir, s.install.SaveDir, s.install.Dir} {
 		if root == "" {
 			continue
 		}
@@ -679,7 +674,7 @@ func (s *session) writeSave(ev Events, l *loaded, payload []byte, force bool) (S
 	}
 	if gameRunning() {
 		if !force {
-			return out, ErrGameRunning
+			return out, fmt.Errorf("%w; close it before editing a save", ErrGameRunning)
 		}
 		out.Forced = true
 		ev.logf(LevelWarn, "the game is running and the write was forced; it may overwrite this save on its next autosave")
@@ -763,47 +758,11 @@ func replaceFile(path string, data []byte) error {
 		cleanup()
 		return fmt.Errorf("chmod %s: %w", name, err)
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := fsutil.Rename(name, path); err != nil {
 		cleanup()
 		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil
-}
-
-/*
-gameRunning looks for the game's process (R6.2).
-
-/proc is read directly rather than through a process library: the check is one
-directory listing and a short file per process, and the name Proton gives the
-game is stable. `comm` is truncated to fifteen characters, which NMS.exe fits
-inside; `cmdline` is checked too for the case of a launcher whose comm differs.
-*/
-func gameRunning() bool {
-	entries, err := os.ReadDir(procRoot)
-	if err != nil {
-		return false
-	}
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
-		}
-		if _, err := strconv.Atoi(e.Name()); err != nil {
-			continue
-		}
-		dir := filepath.Join(procRoot, e.Name())
-		if comm, err := os.ReadFile(filepath.Join(dir, "comm")); err == nil &&
-			strings.TrimSpace(string(comm)) == gameProcess {
-			return true
-		}
-		if cmd, err := os.ReadFile(filepath.Join(dir, "cmdline")); err == nil {
-			for _, arg := range strings.Split(string(cmd), "\x00") {
-				if filepath.Base(strings.ReplaceAll(arg, `\`, "/")) == gameProcess {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }
 
 // ParseSlotSelector reads a slot the way the command line spells it: "9",

@@ -4,8 +4,18 @@ package mbin
 
 import (
 	"os/exec"
+	"strings"
 	"syscall"
 )
+
+// envKeep is the allow-list minimalEnv passes through (R5.4).
+//
+//nolint:gochecknoglobals // a fixed list, read-only
+var envKeep = []string{"PATH", "HOME", "LANG", "LC_ALL", "TMPDIR"}
+
+// envPrefix matches an environment entry's name the way the platform does:
+// exactly, on unix.
+func envPrefix(kv, prefix string) bool { return strings.HasPrefix(kv, prefix) }
 
 /*
 setProcessGroup makes a cancelled conversion kill the whole subtree.
@@ -27,3 +37,16 @@ func setProcessGroup(cmd *exec.Cmd) {
 		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 }
+
+// findDotnet returns the dotnet host on PATH, or "".
+func findDotnet() string {
+	p, err := exec.LookPath("dotnet")
+	if err != nil {
+		return ""
+	}
+	return p
+}
+
+// runtimeHint adds nothing on unix: the self-contained build needs no runtime,
+// and the attempts already say which flavor failed.
+func runtimeHint(error) string { return "" }

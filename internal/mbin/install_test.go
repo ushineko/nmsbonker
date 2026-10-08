@@ -5,11 +5,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 )
 
 // assetServer serves the fake compiler as both flavors' assets. brokenBin makes
@@ -17,16 +19,16 @@ import (
 func assetServer(t *testing.T, brokenBin bool) (*httptest.Server, mbin.Release) {
 	t.Helper()
 	mux := http.NewServeMux()
-	body := fakeScript
+	body := mbintest.Bytes(t)
 	mux.HandleFunc("/dotnet10/bin", func(w http.ResponseWriter, _ *http.Request) {
 		if brokenBin {
 			_, _ = w.Write([]byte("\x7fELF this is not a runnable binary"))
 			return
 		}
-		_, _ = w.Write([]byte(body))
+		_, _ = w.Write(body)
 	})
 	mux.HandleFunc("/dotnet10/lib", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("stub")) })
-	mux.HandleFunc("/sc/bin", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) })
+	mux.HandleFunc("/sc/bin", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(body) })
 	mux.HandleFunc("/sc/lib", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("stub")) })
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -36,13 +38,34 @@ func assetServer(t *testing.T, brokenBin bool) (*httptest.Server, mbin.Release) 
 	return srv, mbin.Release{
 		Tag:     "v7.01.0-pre1",
 		Version: version,
-		Assets: []mbin.Asset{
-			{Name: "MBINCompiler-linux-dotnet10", URL: srv.URL + "/dotnet10/bin"},
-			{Name: "libMBIN-linux-dotnet10.so", URL: srv.URL + "/dotnet10/lib"},
-			{Name: "MBINCompiler-linux", URL: srv.URL + "/sc/bin"},
-			{Name: "libMBIN-linux.so", URL: srv.URL + "/sc/lib"},
-		},
+		Assets: releaseAssets(t, func(flavor, part string) string {
+			if flavor == mbin.FlavorDotnet10 {
+				return srv.URL + "/dotnet10/" + part
+			}
+			return srv.URL + "/sc/" + part
+		}),
 	}
+}
+
+// releaseAssets lists both flavors' binary and library under this platform's
+// asset names, at the URL url gives each ("bin" or "lib").
+func releaseAssets(t *testing.T, url func(flavor, part string) string) []mbin.Asset {
+	t.Helper()
+	var assets []mbin.Asset
+	for _, flavor := range []string{mbin.FlavorDotnet10, mbin.FlavorSelfContained} {
+		bin, lib := assetName(t, flavor)
+		assets = append(assets,
+			mbin.Asset{Name: bin, URL: url(flavor, "bin")},
+			mbin.Asset{Name: lib, URL: url(flavor, "lib")})
+	}
+	return assets
+}
+
+func assetName(t *testing.T, flavor string) (bin, lib string) {
+	t.Helper()
+	bin, lib, err := mbin.AssetNames(flavor)
+	require.NoError(t, err)
+	return bin, lib
 }
 
 // AC3: the first `tools ensure` installs and verifies, the second says the
@@ -59,12 +82,15 @@ func TestInstallDownloadsVerifiesAndIsANoOpTheSecondTime(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, got.AlreadyPresent)
 	require.Equal(t, mbin.FlavorDotnet10, got.Flavor)
-	require.FileExists(t, filepath.Join(tools, "mbincompiler", "v7.01.0-pre1", "MBINCompiler-linux-dotnet10"))
-	require.FileExists(t, filepath.Join(tools, "mbincompiler", "v7.01.0-pre1", "libMBIN-linux-dotnet10.so"))
+	bin, lib := assetName(t, mbin.FlavorDotnet10)
+	require.FileExists(t, filepath.Join(tools, "mbincompiler", "v7.01.0-pre1", bin))
+	require.FileExists(t, filepath.Join(tools, "mbincompiler", "v7.01.0-pre1", lib))
 
-	fi, err := os.Stat(got.Compiler.Bin)
-	require.NoError(t, err)
-	require.NotZero(t, fi.Mode()&0o100, "the binary has to be executable")
+	if runtime.GOOS != "windows" { // Windows has no execute bit; the extension is what counts
+		fi, err := os.Stat(got.Compiler.Bin)
+		require.NoError(t, err)
+		require.NotZero(t, fi.Mode()&0o100, "the binary has to be executable")
+	}
 
 	again, err := mbin.Install(t.Context(), tools, release, mbin.FlavorDotnet10, srv.Client())
 	require.NoError(t, err)
@@ -102,12 +128,7 @@ func TestAFailedVerificationLeavesNothingBehind(t *testing.T) {
 	tools := t.TempDir()
 	_, err := mbin.Install(t.Context(), tools, mbin.Release{
 		Tag: "v7.01.0-pre1", Version: version,
-		Assets: []mbin.Asset{
-			{Name: "MBINCompiler-linux-dotnet10", URL: srv.URL},
-			{Name: "libMBIN-linux-dotnet10.so", URL: srv.URL},
-			{Name: "MBINCompiler-linux", URL: srv.URL},
-			{Name: "libMBIN-linux.so", URL: srv.URL},
-		},
+		Assets: releaseAssets(t, func(string, string) string { return srv.URL }),
 	}, mbin.FlavorAuto, srv.Client())
 	require.Error(t, err)
 	dir, err := mbin.Dir(tools, "v7.01.0-pre1")
@@ -136,8 +157,9 @@ func TestLocateFindsTheHighestInstalledReleaseAndHonoursAPin(t *testing.T) {
 	for _, tag := range []string{"v6.45.0", "v7.01.0-pre1", "v7.02.0-pre1", "not-a-version"} {
 		dir := filepath.Join(tools, "mbincompiler", tag)
 		require.NoError(t, os.MkdirAll(dir, 0o750))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "MBINCompiler-linux-dotnet10"), []byte("x"), 0o700))
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "libMBIN-linux-dotnet10.so"), []byte("x"), 0o600))
+		bin, lib := assetName(t, mbin.FlavorDotnet10)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, bin), []byte("x"), 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, lib), []byte("x"), 0o600))
 	}
 
 	require.Equal(t, []string{"v7.02.0-pre1", "v7.01.0-pre1", "v6.45.0"}, mbin.Installed(tools))
@@ -165,7 +187,8 @@ func TestAHalfPopulatedToolsDirectoryIsNotAnInstall(t *testing.T) {
 	dir, err := mbin.Dir(tools, "v7.01.0-pre1")
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(dir, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "MBINCompiler-linux-dotnet10"), []byte("x"), 0o700))
+	bin, _ := assetName(t, mbin.FlavorDotnet10)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, bin), []byte("x"), 0o700))
 
 	_, err = mbin.Locate(tools, "")
 	require.ErrorIs(t, err, mbin.ErrNoCompiler)

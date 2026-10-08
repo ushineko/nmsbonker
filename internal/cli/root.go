@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ushineko/nmsbonker/internal/buildinfo"
+	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 )
 
@@ -81,10 +82,11 @@ func events() core.Events {
 func Root() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "nmsbonker",
-		Short: "Build No Man's Sky mods from AMUMSS Lua scripts, on Linux",
+		Short: "Build No Man's Sky mods from AMUMSS Lua scripts, on Linux and Windows",
 		Long: "nmsbonker rebuilds AMUMSS-format .lua mod scripts against the game files you\n" +
 			"actually have installed, merges every enabled mod into one collision-free mod\n" +
-			"folder, and deploys it. No Wine, no Windows VM, no Python.",
+			"folder, and deploys it. Native on Linux (Steam/Proton) and Windows (Steam):\n" +
+			"no Wine, no Windows VM, no Python.",
 		Version: fmt.Sprintf("%s (%s)", buildinfo.Version, buildinfo.Commit),
 		// Errors are reported once, by main, with the program name. Leaving
 		// cobra's own reporting on prints every failure twice.
@@ -103,7 +105,7 @@ func Root() *cobra.Command {
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return &UsageError{Err: err} })
 
 	pf := root.PersistentFlags()
-	pf.StringVar(&global.configPath, "config", "", "settings file (default $XDG_CONFIG_HOME/nmsbonker/config.json)")
+	pf.StringVar(&global.configPath, "config", "", "settings file (default "+config.FilePath()+")")
 	pf.StringVar(&global.gameDir, "game-dir", "", "game directory, overriding the setting and $NMSBONKER_GAME_DIR")
 	pf.BoolVarP(&global.verbose, "verbose", "v", false, "report what nmsbonker is doing on stderr")
 	pf.BoolVar(&global.noNetwork, "no-network", false, "never contact GitHub; use the cached release listing")

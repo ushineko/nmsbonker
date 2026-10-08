@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 	"github.com/ushineko/nmsbonker/internal/hgpak"
 	"github.com/ushineko/nmsbonker/internal/mbin"
 )
@@ -206,7 +207,7 @@ func (c *Cache) save() error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", name, err)
 	}
-	if err := os.Rename(name, path); err != nil {
+	if err := fsutil.Rename(name, path); err != nil {
 		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil
@@ -483,7 +484,7 @@ func statPak(p string) (pakInfo, error) {
 
 // move renames a file, falling back to copy-and-remove across filesystems.
 func move(from, to string) error {
-	if err := os.Rename(from, to); err == nil {
+	if err := fsutil.Rename(from, to); err == nil {
 		return nil
 	}
 	data, err := os.ReadFile(from)

@@ -10,48 +10,25 @@ import (
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/hgpak/hgpaktest"
+	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 )
 
 /*
-stubCompilerScript is a compiler that converts by copying, with a mode deciding
-how faithfully it comes back.
+stubTools installs a compiler that converts by copying, with a mode deciding
+how faithfully it comes back (mbintest's roundtrip kind), where mbin.Locate will
+find it.
 
 The compatibility check's whole question is "does what comes out equal what went
 in", so a stub that can be told to be faithful, to differ in the header, or to
 differ in the body exercises every verdict without the real 2 MB .NET binary.
 */
-const stubCompilerScript = `#!/bin/sh
-here=$(dirname "$0")
-mode=$(cat "$here/mode" 2>/dev/null || echo ok)
-outdir=""; input=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -d) outdir="$2"; shift 2;;
-    -y|-q|-Q) shift;;
-    version) shift;;
-    *) input="$1"; shift;;
-  esac
-done
-[ -z "$input" ] && { echo "MBINCompiler v9.99.0-stub"; exit 0; }
-base=$(basename "$input"); stem=${base%.*}
-case "$base" in
-  *.MBIN|*.mbin) cat "$input" > "$outdir/$stem.MXML"; exit 0;;
-esac
-out="$outdir/$stem.MBIN"
-cat "$input" > "$out"
-[ "$mode" = "body" ] && printf 'X' | dd of="$out" bs=1 seek=300 conv=notrunc 2>/dev/null
-exit 0
-`
-
-// stubTools installs the stub where mbin.Locate will find it.
 func stubTools(t *testing.T, mode string) {
 	t.Helper()
 	dir := filepath.Join(config.Defaults().Paths().Tools, "mbincompiler", "v9.99.0-stub")
-	require.NoError(t, os.MkdirAll(dir, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "MBINCompiler-linux-dotnet10"),
-		[]byte(stubCompilerScript), 0o700)) //nolint:gosec // a test stub that has to be executable
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "libMBIN-linux-dotnet10.so"), []byte("stub"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "mode"), []byte(mode), 0o600))
+	mbintest.Install(t, dir, mbin.FlavorDotnet10, mbintest.KindRoundTrip, map[string]string{
+		"mode": mode, "version": "MBINCompiler v9.99.0-stub", "body-offset": "300",
+	})
 }
 
 // probeGame builds a fake install whose single pak holds the two files the
@@ -146,11 +123,7 @@ func TestAProbeFileTheInstallDoesNotHoldIsSkipped(t *testing.T) {
 func installTag(t *testing.T, tag string) string {
 	t.Helper()
 	dir := filepath.Join(config.Defaults().Paths().Tools, "mbincompiler", tag)
-	require.NoError(t, os.MkdirAll(dir, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "MBINCompiler-linux-dotnet10"),
-		[]byte("#!/bin/sh\nexit 0\n"), 0o700)) //nolint:gosec // a test stub that has to be executable
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "libMBIN-linux-dotnet10.so"),
-		[]byte("stub"), 0o600))
+	mbintest.Install(t, dir, mbin.FlavorDotnet10, mbintest.KindBuild, nil)
 	return dir
 }
 

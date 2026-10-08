@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,69 +14,24 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 )
 
 /*
-fakeScript stands in for MBINCompiler.
+fakeCompiler stands in for MBINCompiler (mbintest's runner kind).
 
 The real binary is 2 MB of .NET that this repository may not download during a
-unit-test run, so the runner is tested against a shell script that reproduces
-the behaviours the runner actually depends on: the two `version` forms, the
+unit-test run, so the runner is tested against a fake that reproduces the
+behaviours the runner actually depends on: the two `version` forms, the
 `-y -q -d <dir> <path>` conversion, the upper-cased output extension, a failing
 exit with output on stderr, and a zero exit that produces nothing. Its mode is
 read from a file beside it, not from the environment, because the runner
 deliberately strips the environment (R5.4) and an env-driven fake could not tell
 that apart from a bug.
 */
-const fakeScript = `#!/bin/sh
-here=$(dirname "$0")
-mode=$(cat "$here/mode" 2>/dev/null || echo ok)
-env > "$here/seen-env"
-
-if [ "$1" = "version" ]; then
-  if [ -n "$2" ]; then echo "Compiled with MBINCompiler v7.1.0.1"; else echo "MBINCompiler v7.01.0-pre1"; fi
-  exit 0
-fi
-
-outdir=""; input=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -d) outdir="$2"; shift 2;;
-    -y|-q|-Q) shift;;
-    *) input="$1"; shift;;
-  esac
-done
-
-case "$mode" in
-  slow)
-    d="$here/running"; mkdir -p "$d"; : > "$d/$$"
-    ls "$d" | wc -l >> "$here/concurrency"
-    sleep 0.4
-    rm -f "$d/$$"
-    ;;
-  hang) sleep 30 ;;
-  fail)
-    echo "[ERROR]: Invalid file type." >&2
-    exit 1
-    ;;
-  no-output) exit 0 ;;
-esac
-
-base=$(basename "$input"); stem=${base%.*}
-case "$base" in
-  *.MXML|*.mxml|*.EXML|*.exml) printf 'compiled' > "$outdir/$stem.MBIN" ;;
-  *) printf '<?xml version="1.0"?>' > "$outdir/$stem.MXML" ;;
-esac
-exit 0
-`
-
 func fakeCompiler(t *testing.T, mode string) *mbin.Compiler {
 	t.Helper()
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "MBINCompiler-linux-dotnet10")
-	require.NoError(t, os.WriteFile(bin, []byte(fakeScript), 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "mode"), []byte(mode), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "libMBIN-linux-dotnet10.so"), []byte("stub"), 0o600))
+	bin := mbintest.Install(t, t.TempDir(), mbin.FlavorDotnet10, mbintest.KindRunner, map[string]string{"mode": mode})
 	mbin.SetMaxProcesses(4)
 	return &mbin.Compiler{Bin: bin, Tag: "v7.01.0-pre1", Flavor: mbin.FlavorDotnet10}
 }
@@ -174,7 +130,13 @@ func TestTheChildProcessGetsAnAllowListEnvironmentAndNothingElse(t *testing.T) {
 	require.NotContains(t, env, "WINEDEBUG")
 	require.Contains(t, env, "DOTNET_ROOT=/usr/share/dotnet", "the .NET runtime still needs its own")
 	require.Contains(t, env, "PATH=")
-	require.Contains(t, env, "HOME=")
+	if runtime.GOOS == "windows" {
+		// Windows sets no HOME; what a process cannot start without is these.
+		require.Contains(t, env, "SystemRoot=")
+		require.Contains(t, env, "TEMP=")
+	} else {
+		require.Contains(t, env, "HOME=")
+	}
 }
 
 // A build the user stopped must not leave .NET runtimes chewing cores until

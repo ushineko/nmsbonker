@@ -69,9 +69,9 @@ func (u *ui) saveBackupText() string {
 }
 
 /*
-backupSaves copies the game's saves out of the Proton prefix.
+backupSaves copies the game's saves out of their folder.
 
-No confirmation: it reads the prefix and writes into this tool's own directory,
+No confirmation: it reads the save folder and writes into this tool's own directory,
 and there is no state it can damage. The banner says where the copy went,
 because the only thing a user can do with a backup is find it again.
 */

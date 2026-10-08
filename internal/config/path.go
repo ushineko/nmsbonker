@@ -16,13 +16,13 @@ import (
 	"strings"
 )
 
-// ExpandPath resolves a leading "~" (R2.3).
+// ExpandPath resolves a leading "~" (R2.3), and a leading `~\` on Windows (spec 023 R1.4).
 //
 // Only a leading one: a tilde in the middle of a path is an ordinary filename
 // to every shell, and quietly rewriting it would move a directory the user
 // actually named.
 func ExpandPath(p string) string {
-	if p != "~" && !strings.HasPrefix(p, "~/") {
+	if p != "~" && !strings.HasPrefix(p, "~/") && !hasBackslashTilde(p) {
 		return p
 	}
 	home, err := os.UserHomeDir()
@@ -76,18 +76,33 @@ func MkdirAll(dir string) error {
 	return nil
 }
 
-// xdgDir resolves an XDG base directory variable with its specified fallback.
-func xdgDir(env, fallback string) string {
+// appName is the directory every nmsbonker base directory is named after.
+const appName = "nmsbonker"
+
+/*
+xdgAppDir resolves one of the program's base directories (spec 023 R1).
+
+An XDG variable that is set wins on every platform: the tests isolate
+themselves that way, and someone who sets one on Windows means it. Otherwise
+the platform's own default applies -- the XDG fallback under the home
+directory on Linux and macOS, AppData on Windows.
+*/
+func xdgAppDir(env string, platform func() (string, bool), fallback string) string {
 	if v := os.Getenv(env); v != "" {
-		return ExpandPath(v)
+		return filepath.Join(ExpandPath(v), appName)
+	}
+	if dir, ok := platform(); ok {
+		return dir
 	}
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return fallback
+		return filepath.Join(fallback, appName)
 	}
-	return filepath.Join(home, fallback)
+	return filepath.Join(home, fallback, appName)
 }
 
-func configHome() string { return xdgDir("XDG_CONFIG_HOME", ".config") }
-func dataHome() string   { return xdgDir("XDG_DATA_HOME", filepath.Join(".local", "share")) }
-func cacheHome() string  { return xdgDir("XDG_CACHE_HOME", ".cache") }
+func configDir() string { return xdgAppDir("XDG_CONFIG_HOME", platformConfigDir, ".config") }
+func dataDir() string {
+	return xdgAppDir("XDG_DATA_HOME", platformDataDir, filepath.Join(".local", "share"))
+}
+func cacheDir() string { return xdgAppDir("XDG_CACHE_HOME", platformCacheDir, ".cache") }

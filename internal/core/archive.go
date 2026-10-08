@@ -312,6 +312,9 @@ func Rollback(_ context.Context, req RollbackRequest) (RollbackResult, error) {
 	if err := s.requireInstall(); err != nil {
 		return RollbackResult{}, err
 	}
+	if err := refuseModChangeWhileRunning(); err != nil {
+		return RollbackResult{}, err
+	}
 	modName := req.ModName
 	if modName == "" {
 		modName = s.cfg.ModName
@@ -427,6 +430,9 @@ func Undeploy(_ context.Context, req UndeployRequest) (UndeployResult, error) {
 		return UndeployResult{}, err
 	}
 	if err := s.requireInstall(); err != nil {
+		return UndeployResult{}, err
+	}
+	if err := refuseModChangeWhileRunning(); err != nil {
 		return UndeployResult{}, err
 	}
 	modName := req.ModName

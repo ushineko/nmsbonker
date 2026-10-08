@@ -3,6 +3,7 @@ package core_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -412,6 +413,27 @@ func TestTheFirstDeployBacksUpTheSaves(t *testing.T) {
 	require.Nil(t, second.SaveBackup, "once per process, not once per press")
 }
 
+// Spec 023 R5.1: on Windows the running game holds its mod files open, so
+// deploy and rollback refuse rather than fail halfway. Linux does not lock
+// open files and deploys as before.
+func TestDeployingWhileTheGameRuns(t *testing.T) {
+	root := bare(t)
+	game, _ := steamGame(t, root)
+	builtOutput(t, config.DefaultModName, map[string]string{"A.MBIN": "one"})
+	t.Cleanup(core.SetGameRunning(true))
+
+	_, err := core.Deploy(t.Context(), core.DeployRequest{Request: core.Request{GameDir: game}})
+	if runtime.GOOS != "windows" {
+		require.NoError(t, err)
+		return
+	}
+	require.ErrorIs(t, err, core.ErrGameRunning)
+	require.NoDirExists(t, filepath.Join(game, "GAMEDATA", "MODS"), "nothing under MODS changed")
+
+	_, err = core.Rollback(t.Context(), core.RollbackRequest{Request: core.Request{GameDir: game}})
+	require.ErrorIs(t, err, core.ErrGameRunning)
+}
+
 // R5.2: save_backup=false turns it off.
 func TestSaveBackupCanBeTurnedOff(t *testing.T) {
 	root := bare(t)
@@ -437,16 +459,25 @@ func TestSaveBackupCanBeTurnedOff(t *testing.T) {
 // --- helpers ---------------------------------------------------------------
 
 /*
-fakeSaves builds the Proton prefix the game keeps its saves in.
+gameSaveDir is where the game keeps its saves for a game in library lib.
 
-The path is long and exact, and that is the point of building it in a test: the
-save folder is eight directories inside compatdata, and a tool that gets one of
-them wrong reports "no saves" on a machine that has plenty.
+The path is long and exact, and that is the point of spelling it out in a test:
+under Proton the save folder is eight directories inside compatdata, and a tool
+that gets one of them wrong reports "no saves" on a machine that has plenty. On
+Windows it is under %APPDATA%, which bare() has pointed at a scratch directory.
 */
+func gameSaveDir(lib string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(os.Getenv("APPDATA"), "HelloGames", "NMS")
+	}
+	return filepath.Join(lib, "steamapps", "compatdata", "275850",
+		"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS")
+}
+
+// fakeSaves builds the game's save folder with two profiles.
 func fakeSaves(t *testing.T, lib string) string {
 	t.Helper()
-	dir := filepath.Join(lib, "steamapps", "compatdata", "275850",
-		"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS")
+	dir := gameSaveDir(lib)
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "st_1"), 0o750))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "st_2"), 0o750))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "st_1", "save.hg"), []byte("one"), 0o600))

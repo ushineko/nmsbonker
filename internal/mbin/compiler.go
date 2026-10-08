@@ -82,18 +82,17 @@ mixed into the tool's output or a child process that thought it was inside an
 agent session. Passing a small allow-list instead of the parent's environment
 makes that class of leak impossible rather than remembered: the .NET runtime
 needs PATH, HOME and its own DOTNET_* variables, and nothing else here is a
-correctness input.
+correctness input. Windows needs more to start a process at all (envKeep).
 */
 func minimalEnv() []string {
-	keep := []string{"PATH", "HOME", "LANG", "LC_ALL", "TMPDIR"}
-	out := make([]string, 0, len(keep)+4)
-	for _, name := range keep {
+	out := make([]string, 0, len(envKeep)+4)
+	for _, name := range envKeep {
 		if v, ok := os.LookupEnv(name); ok {
 			out = append(out, name+"="+v)
 		}
 	}
 	for _, kv := range os.Environ() {
-		if strings.HasPrefix(kv, "DOTNET_") {
+		if envPrefix(kv, "DOTNET_") {
 			out = append(out, kv)
 		}
 	}

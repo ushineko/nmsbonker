@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 )
 
 /*
@@ -293,7 +295,7 @@ func saveIndex(cachePath string, records []pakRecord) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("write %s: %w", name, err)
 	}
-	if err := os.Rename(name, cachePath); err != nil {
+	if err := fsutil.Rename(name, cachePath); err != nil {
 		return fmt.Errorf("replace %s: %w", cachePath, err)
 	}
 	return nil

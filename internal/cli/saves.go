@@ -28,7 +28,7 @@ func newSavesBackupCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "backup",
 		Short: "Copy every save profile to a timestamped folder",
-		Long: "Copies the st_* folders out of the game's Proton prefix into nmsbonker's own\n" +
+		Long: "Copies the st_* folders out of the game's save folder into nmsbonker's own\n" +
 			"backup directory. Restoring is a manual copy; `saves edit` and `saves import`\n" +
 			"take one of these automatically before they write.",
 		Args: noArgs(),

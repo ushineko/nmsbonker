@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 )
 
 // Entry is one mod the game knows about.
@@ -381,7 +383,7 @@ func (f *File) Write(path string) error {
 	if err := os.WriteFile(tmp, f.Bytes(), 0o644); err != nil { //nolint:gosec // read by the game
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := fsutil.Rename(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("replace %s: %w", path, err)
 	}

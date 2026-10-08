@@ -44,6 +44,77 @@ jobs:
       - name: Build the CLI without CGO
         run: CGO_ENABLED=0 make build
 
+      - name: Lint the Windows-only files
+        # The step above type-checks for Linux, which skips every *_windows.go.
+        run: make lint-windows
+
+  test-windows:
+    name: Test on Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - name: Test
+        # Without cgo, so everything but the window (spec 023 R8.4); the
+        # windows-zip job below compiles the window with MinGW.
+        shell: bash
+        env:
+          CGO_ENABLED: '0'
+        run: go test $(go list -e ./... | grep -v -e /internal/gui -e /cmd/nmsbonker-gui)
+
+  windows-zip:
+    name: Windows zip
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27'
+          cache: true
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          install: mingw-w64-ucrt-x86_64-gcc zip
+
+      - name: Build nmsbonker.exe and nmsbonker-gui.exe
+        # The version rule is the Makefile's: plain on a tag, VERSION-COMMIT-dev
+        # otherwise, so a zip from a pull request cannot pass for the release.
+        run: |
+          tag="$(tr -d '[:space:]' < VERSION)"
+          commit="$(git rev-parse --short HEAD)"
+          version="${tag}-${commit}-dev"
+          if [ "${GITHUB_REF}" = "refs/tags/v${tag}" ]; then version="${tag}"; fi
+          ldflags="-w -s -X github.com/ushineko/nmsbonker/internal/buildinfo.Version=${version} -X github.com/ushineko/nmsbonker/internal/buildinfo.Commit=${commit}"
+          dir="nmsbonker-${version}-windows-amd64"
+          mkdir -p "dist/${dir}"
+          CGO_ENABLED=0 go build -trimpath -ldflags="${ldflags}" -o "dist/${dir}/nmsbonker.exe" ./cmd/nmsbonker
+          CGO_ENABLED=1 go build -trimpath -tags migrated_fynedo -ldflags="${ldflags} -H windowsgui"             -o "dist/${dir}/nmsbonker-gui.exe" ./cmd/nmsbonker-gui
+          cp README.md LICENSE "dist/${dir}/"
+          (cd dist && zip -r "${dir}.zip" "${dir}")
+          ls -l dist/*.zip
+
+      - name: Smoke-test the CLI
+        run: |
+          dist/nmsbonker-*-windows-amd64/nmsbonker.exe version
+          dist/nmsbonker-*-windows-amd64/nmsbonker.exe status || true   # no game on a runner
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: dist/*.zip
+          if-no-files-found: error
+
   build-arch:
     name: Arch package
     runs-on: ubuntu-latest
@@ -91,7 +162,7 @@ jobs:
 
   release:
     name: Release
-    needs: [test, build-arch]
+    needs: [test, test-windows, build-arch, windows-zip]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     permissions:
@@ -126,6 +197,14 @@ jobs:
           name: arch-package
           path: dist
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-zip
+          path: dist
+
+      - name: Add the Windows zip to SHA256SUMS
+        run: cd dist && sha256sum *.zip >> SHA256SUMS && cat SHA256SUMS
+
       # The release notes are this version's changelog entry, not a list of
       # commit subjects. The entry is written for someone deciding whether to
       # upgrade; the commit list is written for someone who already has the
@@ -146,6 +225,7 @@ jobs:
         with:
           files: |
             dist/*.tar.gz
+            dist/*.zip
             dist/SHA256SUMS
             dist/*.pkg.tar.zst
           body_path: dist/NOTES.md

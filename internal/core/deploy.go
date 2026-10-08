@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 	"github.com/ushineko/nmsbonker/internal/modsettings"
 	"github.com/ushineko/nmsbonker/internal/steam"
 )
@@ -82,6 +83,9 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 	if err := s.requireInstall(); err != nil {
 		return DeployResult{}, err
 	}
+	if err := refuseModChangeWhileRunning(); err != nil {
+		return DeployResult{}, err
+	}
 	modName := req.ModName
 	if modName == "" {
 		modName = s.cfg.ModName
@@ -147,7 +151,7 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 	if entry.HasMod {
 		out.Archived = entry.Dir
 	}
-	if err := os.Rename(staging, dest); err != nil {
+	if err := fsutil.Rename(staging, dest); err != nil {
 		return out, fmt.Errorf("install %s: %w", dest, err)
 	}
 	out.Dest = dest
@@ -300,7 +304,7 @@ func walkCopy(src, dest string) error {
 // archive lives on a different filesystem from the game (a common Steam layout:
 // game on a data drive, XDG data dir on the root filesystem).
 func moveTree(src, dest string) error {
-	if err := os.Rename(src, dest); err == nil {
+	if err := fsutil.Rename(src, dest); err == nil {
 		return nil
 	}
 	if err := copyTree(src, dest); err != nil {

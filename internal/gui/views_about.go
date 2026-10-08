@@ -33,7 +33,7 @@ func (u *ui) about() shell.About {
 		Version: u.version + " (" + u.commit + ")",
 		Blurb: "Builds AMUMSS-format .lua mods against the game files you have installed, merges " +
 			"them into one mod folder, and deploys it. Reads and edits your saves. Native Go " +
-			"on a Steam/Proton install: no Wine, no Windows VM, no Python.",
+			"on Steam, under Proton on Linux or natively on Windows: no Wine, no Windows VM, no Python.",
 		URL:     projectURL,
 		URLText: "Project documentation",
 		Notes: []shell.Note{
@@ -47,7 +47,8 @@ func (u *ui) about() shell.About {
 				"never are."},
 			{Title: "Keep files where you expect", Detail: "Scripts in the library, compilers in tools, extracted game files in the cache, " +
 				"merged output in the workspace, replaced deployments in the archive, save " +
-				"copies in save-backup. All under your XDG directories; all listed in Settings."},
+				"copies in save-backup. All under your XDG directories (AppData on Windows); all " +
+				"listed in Settings."},
 			{Title: "Survive a game update", Detail: "After an update, the build report is your re-download list: a mod whose keys the " +
 				"update renamed comes out WORKING~ or NOT BUILT, with the keys it could not find."},
 		},

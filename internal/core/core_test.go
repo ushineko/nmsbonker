@@ -10,6 +10,7 @@ import (
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/steam"
 )
 
 // bare points every directory at a scratch tree and hides any real Steam
@@ -22,6 +23,14 @@ func bare(t *testing.T) string {
 	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
 	t.Setenv("STEAM_ROOT", filepath.Join(root, "no-steam-here"))
+	// Windows finds Steam in the registry and the saves under AppData, neither
+	// of which follows HOME: a test that did not redirect both would find the
+	// real game and could write to the real saves (spec 023 R4.1).
+	t.Setenv("APPDATA", filepath.Join(root, "appdata"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
+	t.Cleanup(steam.OverridePlatformRoots(nil))
+	// Nor may a test depend on whether this machine has the game open.
+	t.Cleanup(core.SetGameRunning(false))
 	t.Setenv(config.FileEnv, "")
 	t.Setenv(config.GameDirEnv, "")
 	return root

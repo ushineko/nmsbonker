@@ -8,10 +8,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 )
 
 /*
-roundTripScript is a compiler that converts by copying, with a mode that decides
+roundTripCompiler is a compiler that converts by copying, with a mode that decides
 how faithfully.
 
 The real check is "does what comes back equal what went in", so a fake that can
@@ -19,49 +20,9 @@ be told to come back identical, to differ only in the header, to differ in the
 body, to change length, or to fail outright covers every branch of the verdict
 without needing the 2 MB .NET binary or a copy of the game.
 */
-const roundTripScript = `#!/bin/sh
-here=$(dirname "$0")
-mode=$(cat "$here/mode" 2>/dev/null || echo ok)
-
-outdir=""; input=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -d) outdir="$2"; shift 2;;
-    -y|-q|-Q) shift;;
-    version) shift;;
-    *) input="$1"; shift;;
-  esac
-done
-[ -z "$input" ] && { echo "MBINCompiler v0.0.0-fake"; exit 0; }
-
-base=$(basename "$input"); stem=${base%.*}
-case "$base" in
-  *.MBIN|*.mbin)
-    [ "$mode" = "faildecompile" ] && { echo "[ERROR]: unknown template" >&2; exit 1; }
-    cat "$input" > "$outdir/$stem.MXML"
-    exit 0
-    ;;
-esac
-
-[ "$mode" = "failcompile" ] && { echo "[ERROR]: unexpected element" >&2; exit 1; }
-out="$outdir/$stem.MBIN"
-case "$mode" in
-  short) head -c 200 "$input" > "$out" ;;
-  *)     cat "$input" > "$out" ;;
-esac
-case "$mode" in
-  header) printf 'X' | dd of="$out" bs=1 seek=24 conv=notrunc 2>/dev/null ;;
-  body)   printf 'X' | dd of="$out" bs=1 seek=200 conv=notrunc 2>/dev/null ;;
-esac
-exit 0
-`
-
 func roundTripCompiler(t *testing.T, mode string) *mbin.Compiler {
 	t.Helper()
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "MBINCompiler-linux-dotnet10")
-	require.NoError(t, os.WriteFile(bin, []byte(roundTripScript), 0o700)) //nolint:gosec // a test stub
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "mode"), []byte(mode), 0o600))
+	bin := mbintest.Install(t, t.TempDir(), mbin.FlavorDotnet10, mbintest.KindRoundTrip, map[string]string{"mode": mode})
 	mbin.SetMaxProcesses(2)
 	return &mbin.Compiler{Bin: bin, Tag: "v0.0.0-fake", Flavor: mbin.FlavorDotnet10}
 }

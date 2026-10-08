@@ -35,6 +35,8 @@ type InstallSummary struct {
 	DisableAllMods  bool
 	Mods            []steam.ModSetting
 	CompatDataDir   string
+	// SaveDir is the game's save folder, "" when none is known (spec 023 R4.1).
+	SaveDir string
 }
 
 // CompilerSummary is the tool side of `status` (R7.2).
@@ -121,6 +123,7 @@ func Status(ctx context.Context, req StatusRequest) (StatusResult, error) {
 		out.Install.ModSettingsPath = in.ModSettingsPath
 		out.Install.ModSettingsOK = in.ModSettingsOK
 		out.Install.CompatDataDir = in.CompatDataDir
+		out.Install.SaveDir = in.SaveDir
 
 		paks, err := in.PakFiles()
 		if err != nil {
