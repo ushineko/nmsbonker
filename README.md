@@ -340,6 +340,7 @@ nmsbonker mods-off                   # stop the game loading any mod
 nmsbonker mods-on                    # let it again
 
 nmsbonker mods show "Some Mod"       # print a script; mods write replaces it, keeping a .bak
+nmsbonker mods export FavouredRewards -o ~/  # write it, with your parameter values, to a .lua
 nmsbonker saves backup               # copy the save profiles out of the prefix
 nmsbonker saves list
 nmsbonker saves slots                # the game's save slots, newest marked
@@ -669,6 +670,30 @@ flow in more detail, including how the golden fixtures are regenerated.
 > tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
 
 ## Changelog
+
+### Unreleased
+
+- **Export any mod's script** (#28). Export… on every Tweaks card and in the
+  Mods section, or `nmsbonker mods export NAME`, writes the script exactly as
+  the next build would load it, with the parameter values set in nmsbonker
+  written in, for editing by hand or running in another AMUMSS toolchain. A
+  comment at the end says where it came from and names any keys only
+  nmsbonker understands (`CAP`, `CURRENCY_MULT`, `WRAPPER_MULT`).
+- **The currency multipliers are written as plain AMUMSS** (#28). Units and
+  nanites and Nanite rewards used `CURRENCY_MULT`, a key only nmsbonker
+  understands, so neither script ran in another toolchain and neither read as
+  the AMUMSS a person would write. Both now use the engine's own
+  `SPECIAL_KEY_WORDS` matching, where the Currency/Units and Currency/Nanites
+  anchors with `SECTION_UP` 2 each scope to one `GcRewardMoney` block, so a
+  mixed units-and-nanites jackpot is still multiplied once per currency. `CAP`
+  stays as the one key only nmsbonker reads.
+- **Favoured rewards now reaches Nexus missions and every frigate
+  expedition** (#27). Weighting only helps where an item is listed, and the
+  lists those two pay from held almost none of the favoured items: Nexus
+  missions all pay from one list with only the frigate module, and combat and
+  exploration expeditions had none. The items are now added to those lists at
+  the share they have elsewhere, then weighted like the rest; the row reads
+  WORKING\* because entries are added.
 
 ### 0.6.0
 

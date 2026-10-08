@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sort"
@@ -140,9 +141,10 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	details := widget.NewButtonWithIcon("Details…", theme.InfoIcon(), nil)
 	open := widget.NewButtonWithIcon("Open script", theme.DocumentIcon(), nil)
 	edit := widget.NewButtonWithIcon("Edit script…", theme.DocumentCreateIcon(), nil)
+	export := widget.NewButtonWithIcon("Export…", theme.DocumentSaveIcon(), nil)
 	remove := widget.NewButtonWithIcon("Remove…", theme.DeleteIcon(), nil)
 	remove.Importance = widget.DangerImportance
-	rowActions := []*widget.Button{enable, disable, up, down, details, open, edit, remove}
+	rowActions := []*widget.Button{enable, disable, up, down, details, open, edit, export, remove}
 	for _, b := range rowActions {
 		b.Disable()
 	}
@@ -246,6 +248,7 @@ func (u *ui) buildMods() fyne.CanvasObject {
 	details.OnTapped = func() { u.showModDetails(rows[selected]) }
 	open.OnTapped = func() { u.openPath(rows[selected].info.Path) }
 	edit.OnTapped = func() { u.editScriptDialog(rows[selected].info) }
+	export.OnTapped = func() { u.exportModDialog(rows[selected].info.Name) }
 	remove.OnTapped = func() { u.removeModDialog(rows[selected].info) }
 
 	add := widget.NewButtonWithIcon("Add…", theme.ContentAddIcon(), func() { u.addModDialog() })
@@ -440,6 +443,41 @@ func (u *ui) importModsDialog() {
 			fyne.Do(func() { u.sh.OK(msg) })
 			return nil
 		})
+	})
+}
+
+/*
+exportModDialog writes a mod's script, as the build would load it, into a
+folder the user picks (spec 022). An existing file of that name is replaced only
+after asking.
+*/
+func (u *ui) exportModDialog(name string) {
+	dialogs.ChooseFolder(u.sh.Window, "", func(dir string) { u.exportMod(name, dir, false) })
+}
+
+func (u *ui) exportMod(name, dir string, force bool) {
+	u.sh.Perform("Exporting "+name+"…", func(ctx context.Context) error {
+		res, err := core.ExportMod(ctx, core.ExportModRequest{
+			Request: u.request(), Name: name, Out: dir, Force: force,
+		})
+		if errors.Is(err, core.ErrExportExists) {
+			fyne.Do(func() {
+				dialogs.ConfirmDestructive(u.sh.Window, "Replace "+name+".lua?",
+					res.Path+" already exists. Exporting replaces it.", "Replace",
+					func() { u.exportMod(name, dir, true) })
+			})
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		msg := fmt.Sprintf("Exported %s to %s, with its parameter values.", name, res.Path)
+		if len(res.NmsbonkerOnly) > 0 {
+			msg += " It uses keys only nmsbonker understands (" +
+				strings.Join(res.NmsbonkerOnly, ", ") + "); the file says so at the end."
+		}
+		fyne.Do(func() { u.sh.OK(msg) })
+		return nil
 	})
 }
 

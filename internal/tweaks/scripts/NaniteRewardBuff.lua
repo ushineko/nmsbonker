@@ -23,7 +23,14 @@ NMS_MOD_DEFINITION_CONTAINER =
                     ["MBIN_FILE_SOURCE"] = "METADATA\REALITY\TABLES\REWARDTABLE.MBIN",
                     ["EXML_CHANGE_TABLE"] =
                     {
-                        { ["CURRENCY_MULT"] = { ["CURRENCY"]="Nanites", ["MULT"]=NANITE_MULT }, ["CAP"] = NANITES_CAP }
+                        {
+                            ["SPECIAL_KEY_WORDS"]  = {"Currency", "Nanites"},
+                            ["SECTION_UP"]         = 2,
+                            ["MATH_OPERATION"]     = "*",
+                            ["REPLACE_TYPE"]       = "ALL",
+                            ["CAP"]                = NANITES_CAP,
+                            ["VALUE_CHANGE_TABLE"] = { {"AmountMin", NANITE_MULT}, {"AmountMax", NANITE_MULT} }
+                        }
                     }
                 }
             }

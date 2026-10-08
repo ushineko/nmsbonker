@@ -107,6 +107,13 @@ This repository is **public**. The following hold without exception:
 - **Recompile gate**: a MBIN is shipped only if MBINCompiler recompiles the merged
   MXML cleanly. A failed structural edit is retried without it, then dropped and
   reported. Never ship a file the compiler rejected.
+- **Built-in tweaks are plain AMUMSS scripts.** The file in
+  `internal/tweaks/scripts/` is what the app shows, exports and runs, and
+  someone without this repository's tooling must be able to read and edit it
+  by hand. No generated Lua, no Go templates, no character-code string
+  building. XML a script adds is written verbatim in a long-bracket string
+  (`[[ ... ]]`, real tabs), with placeholders filled by `gsub` when it repeats.
+  Escapes like `"\t"` do not survive: the loader doubles backslashes first.
 - **Golden parity with the reference Python builder** is the correctness oracle for
   the edit engine (spec 002). Do not "improve" engine semantics without updating
   the golden fixtures and saying so in the spec.

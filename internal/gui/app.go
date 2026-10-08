@@ -385,6 +385,7 @@ func Actions() []string {
 		// Mods
 		"mods list", "mods add", "mods import", "mods remove",
 		"mods show", "mods write", // the script editor dialog (spec 010)
+		"mods export", // Export… on a Tweaks card and in Mods (spec 022)
 		"mods enable", "mods disable", "mods move", "mods check",
 		// Tweaks
 		"tweaks list", "tweaks set", "tweaks reset", "tweaks enable", "tweaks disable",
