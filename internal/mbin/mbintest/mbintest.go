@@ -1,5 +1,5 @@
 /*
-Package mbintest installs a fake MBINCompiler for tests (spec 020 R8.1).
+Package mbintest installs a fake MBINCompiler for tests (spec 023 R8.1).
 
 The fake is the Go program in ./fakembin, built once per test process with the
 toolchain running the tests, so it runs wherever the tests do -- the shell

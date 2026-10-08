@@ -6,7 +6,7 @@ import "fmt"
 // and under Proton on Linux.
 const gameProcess = "NMS.exe"
 
-// gameRunning reports whether the game is open (spec 007 R6.2, spec 020 R4.3).
+// gameRunning reports whether the game is open (spec 007 R6.2, spec 023 R4.3).
 // A variable so a test can say either way without the game installed, let
 // alone running.
 //
@@ -14,7 +14,7 @@ const gameProcess = "NMS.exe"
 var gameRunning = detectGame
 
 // refuseModChangeWhileRunning stops deploy, rollback and undeploy while the game
-// is open, where the platform needs it (spec 020 R5.1).
+// is open, where the platform needs it (spec 023 R5.1).
 //
 // Windows: the running game holds its mod files open, so moving the mod folder
 // into the archive fails partway and leaves the archive and GAMEDATA/MODS out

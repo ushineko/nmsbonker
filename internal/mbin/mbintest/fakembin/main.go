@@ -1,5 +1,5 @@
 /*
-Command fakembin stands in for MBINCompiler in tests (spec 020 R8.1).
+Command fakembin stands in for MBINCompiler in tests (spec 023 R8.1).
 
 It replaces the `#!/bin/sh` scripts the tests used to write, which Windows
 cannot execute. Each behaviour is a port of one of those scripts, chosen by a

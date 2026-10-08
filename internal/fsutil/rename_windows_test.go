@@ -14,7 +14,7 @@ import (
 )
 
 // A directory with a file held open cannot be moved on Windows; once the
-// holder lets go -- as a virus scan does -- the retry succeeds (spec 020 R5.2).
+// holder lets go -- as a virus scan does -- the retry succeeds (spec 023 R5.2).
 func TestARenameBlockedByAnOpenFileSucceedsOnceItCloses(t *testing.T) {
 	dir := t.TempDir()
 	src, dst := filepath.Join(dir, "mod"), filepath.Join(dir, "archived")

@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-// ExpandPath resolves a leading "~" (R2.3), and a leading `~\` on Windows (spec 020 R1.4).
+// ExpandPath resolves a leading "~" (R2.3), and a leading `~\` on Windows (spec 023 R1.4).
 //
 // Only a leading one: a tilde in the middle of a path is an ordinary filename
 // to every shell, and quietly rewriting it would move a directory the user
@@ -80,7 +80,7 @@ func MkdirAll(dir string) error {
 const appName = "nmsbonker"
 
 /*
-xdgAppDir resolves one of the program's base directories (spec 020 R1).
+xdgAppDir resolves one of the program's base directories (spec 023 R1).
 
 An XDG variable that is set wins on every platform: the tests isolate
 themselves that way, and someone who sets one on Windows means it. Otherwise

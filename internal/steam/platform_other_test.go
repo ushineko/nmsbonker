@@ -13,7 +13,7 @@ import (
 )
 
 // Under Proton the saves are inside the game's prefix, and a game that has
-// never run has no prefix and so no save folder (spec 020 R4.1).
+// never run has no prefix and so no save folder (spec 023 R4.1).
 func TestTheSaveFolderIsInsideTheProtonPrefix(t *testing.T) {
 	lib := t.TempDir()
 	game := writeInstall(t, lib)

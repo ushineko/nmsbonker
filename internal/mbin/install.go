@@ -17,7 +17,7 @@ import (
 )
 
 // Flavors are the two asset pairs MBINCompiler publishes per platform (R2.2,
-// R5.3, spec 020 R3.1).
+// R5.3, spec 023 R3.1).
 const (
 	FlavorAuto          = "auto"
 	FlavorDotnet10      = "dotnet10"

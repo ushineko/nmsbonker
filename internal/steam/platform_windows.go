@@ -11,7 +11,7 @@ import (
 )
 
 /*
-platformRoots finds the Windows Steam client (spec 020 R2.1).
+platformRoots finds the Windows Steam client (spec 023 R2.1).
 
 The registry is where Steam records itself: HKCU's SteamPath is written by the
 client on every start (lower-case, forward slashes), HKLM's InstallPath by the
@@ -61,7 +61,7 @@ func registryString(root registry.Key, path, name string) string {
 }
 
 // foldPath makes two spellings of one NTFS path compare equal: the file system
-// ignores case, and the registry and the VDF disagree on it (spec 020 R2.2).
+// ignores case, and the registry and the VDF disagree on it (spec 023 R2.2).
 func foldPath(p string) string { return strings.ToLower(filepath.Clean(filepath.FromSlash(p))) }
 
 // saveDir is where the Windows game keeps its saves: %APPDATA%\HelloGames\NMS.

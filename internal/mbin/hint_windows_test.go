@@ -13,7 +13,7 @@ import (
 
 // The .NET host exits 0x80008096 when the runtime a build needs is missing,
 // and says so only on a console nobody sees. The attempt line has to name what
-// to install instead (spec 020 R3).
+// to install instead (spec 023 R3).
 func TestAMissingRuntimeIsNamed(t *testing.T) {
 	// cmd's exit takes a signed 32-bit code; this is 0x80008096.
 	err := exec.CommandContext(t.Context(), "cmd", "/c", "exit", "-2147450730").Run()

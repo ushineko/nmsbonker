@@ -5,7 +5,7 @@ package mbin
 // platformName names this platform in messages about release assets.
 const platformName = "Windows"
 
-// platformAssets are the Windows binary and library per flavor (spec 020
+// platformAssets are the Windows binary and library per flavor (spec 023
 // R3.1). The "self-contained" pair has no platform suffix: it is the one
 // MBINCompiler has published for Windows since before the others existed.
 // Despite the flavor's name it is framework-dependent on Windows, on .NET 8

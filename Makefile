@@ -89,7 +89,7 @@ lint: install-lint ## Lint files
 lint-windows: export GOTOOLCHAIN = $(LINT_GO_TOOLCHAIN)
 lint-windows: export GOOS = windows
 lint-windows: export CGO_ENABLED = 0
-lint-windows: install-lint ## Lint files as Windows sees them (spec 020)
+lint-windows: install-lint ## Lint files as Windows sees them (spec 023)
 	$(BINDIR)/bin/$(LINT_PROGRAM) run --timeout 5m0s --config config/.golangci-$(LINT_VERSION).yml \
 		$$(go list -e ./... | grep -v -e /internal/gui -e /cmd/nmsbonker-gui | sed 's|^$(MODULE)|.|')
 
@@ -161,7 +161,7 @@ pkg-arch: ## Build the Arch Linux package from this checkout (needs makepkg)
 	cd packaging/arch && BUILDDIR="$$(mktemp -d)" makepkg -sf --noconfirm
 	@ls -l packaging/arch/*.pkg.tar.zst
 
-# The GUI's Windows icon (spec 020 R9.2). The .ico and the .syso are committed,
+# The GUI's Windows icon (spec 023 R9.2). The .ico and the .syso are committed,
 # so a Windows build needs neither tool; run this when nmsbonker.svg changes.
 # windres comes with MSYS2's MinGW toolchain, the same one the GUI builds with.
 .PHONY: winres

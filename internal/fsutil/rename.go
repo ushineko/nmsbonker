@@ -1,7 +1,7 @@
 /*
 Package fsutil holds the file-system operations whose behaviour differs by
 platform in ways the rest of the program should not have to know about
-(spec 020 R5).
+(spec 023 R5).
 */
 package fsutil
 
@@ -15,7 +15,7 @@ const renameBudget = 2 * time.Second
 
 /*
 Rename is os.Rename, retried while the platform reports the kind of refusal
-that goes away on its own (spec 020 R5.2).
+that goes away on its own (spec 023 R5.2).
 
 On Windows a file that was written a moment ago is often still open in
 something else -- Defender scanning it, the search indexer -- and the rename

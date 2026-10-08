@@ -12,7 +12,7 @@ import (
 // modChangesNeedGameClosed: see refuseModChangeWhileRunning.
 const modChangesNeedGameClosed = true
 
-// detectGame looks for NMS.exe among the running processes (spec 020 R4.3).
+// detectGame looks for NMS.exe among the running processes (spec 023 R4.3).
 func detectGame() bool { return processRunning(gameProcess) }
 
 /*

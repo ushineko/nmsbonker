@@ -12,7 +12,7 @@ import (
 
 /*
 A script saved with Windows line endings means what the same script means with
-Unix ones (spec 020 R7.2).
+Unix ones (spec 023 R7.2).
 
 Scripts downloaded from Nexus are usually CRLF, and a Windows editor saves one
 that way. Every built-in is loaded both ways and has to give the same change

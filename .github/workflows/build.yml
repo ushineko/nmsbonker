@@ -60,7 +60,7 @@ jobs:
           cache: true
 
       - name: Test
-        # Without cgo, so everything but the window (spec 020 R8.4); the
+        # Without cgo, so everything but the window (spec 023 R8.4); the
         # windows-zip job below compiles the window with MinGW.
         shell: bash
         env:

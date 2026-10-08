@@ -35,7 +35,7 @@ type InstallSummary struct {
 	DisableAllMods  bool
 	Mods            []steam.ModSetting
 	CompatDataDir   string
-	// SaveDir is the game's save folder, "" when none is known (spec 020 R4.1).
+	// SaveDir is the game's save folder, "" when none is known (spec 023 R4.1).
 	SaveDir string
 }
 

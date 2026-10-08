@@ -52,7 +52,7 @@ type Install struct {
 	ModSettingsPath string
 	ModSettingsOK   bool
 	CompatDataDir   string
-	// SaveDir is the folder holding the st_* save profiles (spec 020 R4.1):
+	// SaveDir is the folder holding the st_* save profiles (spec 023 R4.1):
 	// inside the Proton prefix on Linux, %APPDATA%\HelloGames\NMS on Windows.
 	// "" when no save folder is known; it may name a folder that does not
 	// exist yet, which callers report.
@@ -97,7 +97,7 @@ func OverridePlatformRoots(roots []string) (restore func()) {
 	return func() { platformRootsFunc = prev }
 }
 
-// Roots lists the Steam roots to examine, in order (R3.1, spec 020 R2.1):
+// Roots lists the Steam roots to examine, in order (R3.1, spec 023 R2.1):
 // $STEAM_ROOT, then the platform's own places, without repeats.
 func Roots() []string {
 	var roots []string
@@ -153,7 +153,7 @@ func Libraries(root string) []string {
 // ~/.steam/root (a symlink to ~/.local/share/Steam on most installs) is not
 // examined twice and reported twice in `detect`. foldPath then makes the
 // registry's "c:/program files (x86)/steam" and the VDF's
-// "C:\Program Files (x86)\Steam" one key on Windows (spec 020 R2.2).
+// "C:\Program Files (x86)\Steam" one key on Windows (spec 023 R2.2).
 func canonical(p string) string {
 	if resolved, err := filepath.EvalSymlinks(p); err == nil {
 		return foldPath(resolved)
@@ -304,7 +304,7 @@ func describe(root, lib, gameDir string) (*Install, Candidate) {
 	if li, err := os.Lstat(in.ModsDir); err == nil {
 		switch {
 		// A directory junction is reported as ModeIrregular rather than
-		// ModeSymlink, and is a link all the same (spec 020 R2.4).
+		// ModeSymlink, and is a link all the same (spec 023 R2.4).
 		case li.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0:
 			in.ModsState = ModsSymlink
 			if target, err := os.Readlink(in.ModsDir); err == nil {

@@ -25,7 +25,7 @@ func bare(t *testing.T) string {
 	t.Setenv("STEAM_ROOT", filepath.Join(root, "no-steam-here"))
 	// Windows finds Steam in the registry and the saves under AppData, neither
 	// of which follows HOME: a test that did not redirect both would find the
-	// real game and could write to the real saves (spec 020 R4.1).
+	// real game and could write to the real saves (spec 023 R4.1).
 	t.Setenv("APPDATA", filepath.Join(root, "appdata"))
 	t.Setenv("LOCALAPPDATA", filepath.Join(root, "localappdata"))
 	t.Cleanup(steam.OverridePlatformRoots(nil))

@@ -229,7 +229,7 @@ func TestEditSaveBacksUpThenRewritesThePairAndNothingElse(t *testing.T) {
 	dataTime, dataMode, dataSize := fileTimes(t, data)
 	mfTime, mfMode, _ := fileTimes(t, mf)
 	// The fixture wrote both 0755, which is what Linux keeps; Windows has only
-	// a read-only bit and reports any writable file as 0666 (spec 020 R4.4).
+	// a read-only bit and reports any writable file as 0666 (spec 023 R4.4).
 	gameMode := os.FileMode(0o755)
 	if runtime.GOOS == "windows" {
 		gameMode = 0o666
@@ -347,7 +347,7 @@ func TestExportAndImportRoundTripThroughANamedFile(t *testing.T) {
 		filepath.Join(game, "GAMEDATA", "dump.json"),
 	}
 	if runtime.GOOS == "windows" {
-		// NTFS ignores case, so the guard has to as well (spec 020 R4.2).
+		// NTFS ignores case, so the guard has to as well (spec 023 R4.2).
 		refused = append(refused,
 			filepath.Join(strings.ToUpper(profile), "dump.json"),
 			filepath.Join(strings.ToLower(game), "gamedata", "dump.json"))

@@ -14,7 +14,7 @@ import (
 )
 
 // The snapshot scan finds a process that is certainly running -- this test --
-// by its image name in any case, and does not find one that is not (spec 020
+// by its image name in any case, and does not find one that is not (spec 023
 // R4.3).
 func TestTheSnapshotScanFindsARunningProcessByName(t *testing.T) {
 	exe, err := os.Executable()

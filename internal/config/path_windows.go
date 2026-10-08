@@ -9,7 +9,7 @@ import (
 )
 
 /*
-Windows base directories (spec 020 R1.1).
+Windows base directories (spec 023 R1.1).
 
 Settings roam with the profile (%APPDATA%); everything else is gigabytes of
 machine-specific data and stays local (%LOCALAPPDATA%). The cache gets its own

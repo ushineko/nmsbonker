@@ -1,5 +1,5 @@
 /*
-Command winicon renders packaging/nmsbonker.svg into a Windows .ico (spec 020
+Command winicon renders packaging/nmsbonker.svg into a Windows .ico (spec 023
 R9.2).
 
 	go run ./tools/winicon packaging/nmsbonker.svg packaging/windows/nmsbonker.ico

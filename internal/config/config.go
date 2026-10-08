@@ -127,7 +127,7 @@ type Config struct {
 
 // FilePath is where the settings live: $NMSBONKER_CONFIG, else
 // $XDG_CONFIG_HOME/nmsbonker/config.json (R2.1), else the platform default
-// (spec 020 R1).
+// (spec 023 R1).
 func FilePath() string {
 	if p := os.Getenv(FileEnv); p != "" {
 		return ExpandPath(p)

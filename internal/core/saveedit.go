@@ -39,7 +39,7 @@ const SteamCloudNote = "If Steam shows a cloud sync conflict when the game next 
 	"local file: it is the edited one. Choosing the cloud copy discards the edit."
 
 // ErrGameRunning reports a write refused because the game is open (R6.2,
-// spec 020 R5.1).
+// spec 023 R5.1).
 var ErrGameRunning = errors.New("the game is running")
 
 // ErrNoProfile reports a save directory with no st_* profile in it.
@@ -476,7 +476,7 @@ func ExportSave(_ context.Context, req ExportSaveRequest) (ExportSaveResult, err
 
 /*
 insideTheGame says whether a path lies under the Proton prefix, the save
-folder or the game directory, and which (R5.3, R6.5, spec 020 R4.2).
+folder or the game directory, and which (R5.3, R6.5, spec 023 R4.2).
 
 Both sides are resolved through symlinks first, as far as they exist, so a
 link out of a scratch directory into the save folder, a relative spelling, or

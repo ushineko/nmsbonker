@@ -1,4 +1,4 @@
-# Spec 020: Windows support
+# Spec 023: Windows support
 
 **Issue**: #31
 

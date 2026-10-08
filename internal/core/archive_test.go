@@ -413,7 +413,7 @@ func TestTheFirstDeployBacksUpTheSaves(t *testing.T) {
 	require.Nil(t, second.SaveBackup, "once per process, not once per press")
 }
 
-// Spec 020 R5.1: on Windows the running game holds its mod files open, so
+// Spec 023 R5.1: on Windows the running game holds its mod files open, so
 // deploy and rollback refuse rather than fail halfway. Linux does not lock
 // open files and deploys as before.
 func TestDeployingWhileTheGameRuns(t *testing.T) {

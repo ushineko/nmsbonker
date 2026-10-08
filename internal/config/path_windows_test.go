@@ -14,7 +14,7 @@ import (
 
 // With no XDG variable set, Windows keeps settings in the roaming profile and
 // everything else in the local one, with the cache in its own folder so it is
-// not the data directory itself (spec 020 R1.1).
+// not the data directory itself (spec 023 R1.1).
 func TestWindowsDefaultsAreAppDataAndLocalAppData(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", "")

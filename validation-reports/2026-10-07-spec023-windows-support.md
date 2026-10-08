@@ -1,7 +1,7 @@
-# Validation report — spec 020, Windows support
+# Validation report — spec 023, Windows support
 
 **Date**: 2026-10-07 21:55
-**Spec**: [`specs/020-windows-support.md`](../specs/020-windows-support.md), issue #31
+**Spec**: [`specs/023-windows-support.md`](../specs/023-windows-support.md), issue #31
 **Branch**: `feat/windows-support`
 **Machine**: Windows 11 Pro 10.0.26200, Go 1.27.0 windows/amd64, MSYS2 UCRT64
 gcc 16.2.0, .NET runtime 10.0.12, Steam + No Man's Sky buildid 25732212

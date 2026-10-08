@@ -17,7 +17,7 @@ import (
 Save backup (spec 004 R5).
 
 No Man's Sky keeps its saves in one st_<id> folder per profile, under
-steam.Install.SaveDir (spec 020 R4.1):
+steam.Install.SaveDir (spec 023 R4.1):
 
 	Linux (Proton): <library>/steamapps/compatdata/275850/pfx/drive_c/users/
 	    steamuser/AppData/Roaming/HelloGames/NMS/st_<id>/

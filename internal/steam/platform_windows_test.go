@@ -16,7 +16,7 @@ import (
 
 // A junction is how a Windows user points GAMEDATA\MODS somewhere else, and Go
 // reports it as irregular rather than as a symlink. Deploy must still see a
-// link, or it writes through it (spec 020 R2.4).
+// link, or it writes through it (spec 023 R2.4).
 func TestAJunctionAtModsIsALink(t *testing.T) {
 	lib := t.TempDir()
 	game := writeInstall(t, lib)
@@ -36,7 +36,7 @@ func TestAJunctionAtModsIsALink(t *testing.T) {
 
 // The registry stores the Steam root lower-case with forward slashes; the VDF
 // and the environment spell it the Windows way. One root, examined once
-// (spec 020 R2.2).
+// (spec 023 R2.2).
 func TestRootsAreOneRootWhateverTheSpelling(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "Steam")
 	require.NoError(t, os.MkdirAll(root, 0o750))
@@ -49,7 +49,7 @@ func TestRootsAreOneRootWhateverTheSpelling(t *testing.T) {
 }
 
 // Windows keeps the saves under the roaming AppData folder, whatever library
-// the game is in (spec 020 R4.1).
+// the game is in (spec 023 R4.1).
 func TestTheSaveFolderIsUnderAppData(t *testing.T) {
 	appdata := t.TempDir()
 	t.Setenv("APPDATA", appdata)

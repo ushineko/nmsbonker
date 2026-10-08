@@ -731,7 +731,7 @@ flow in more detail, including how the golden fixtures are regenerated.
 > and the caps on the multiplier tweaks;
 > [`specs/006`](specs/006-mission-reward-tweaks.md) for the mission reward
 > tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor;
-> [`specs/020`](specs/020-windows-support.md) for Windows.
+> [`specs/023`](specs/023-windows-support.md) for Windows.
 
 ## Changelog
 
