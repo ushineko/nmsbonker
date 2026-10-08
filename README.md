@@ -679,6 +679,14 @@ flow in more detail, including how the golden fixtures are regenerated.
   written in, for editing by hand or running in another AMUMSS toolchain. A
   comment at the end says where it came from and names any keys only
   nmsbonker understands (`CAP`, `CURRENCY_MULT`, `WRAPPER_MULT`).
+- **The currency multipliers are written as plain AMUMSS** (#28). Units and
+  nanites and Nanite rewards used `CURRENCY_MULT`, a key only nmsbonker
+  understands, so neither script ran in another toolchain and neither read as
+  the AMUMSS a person would write. Both now use the engine's own
+  `SPECIAL_KEY_WORDS` matching, where the Currency/Units and Currency/Nanites
+  anchors with `SECTION_UP` 2 each scope to one `GcRewardMoney` block, so a
+  mixed units-and-nanites jackpot is still multiplied once per currency. `CAP`
+  stays as the one key only nmsbonker reads.
 - **Favoured rewards now reaches Nexus missions and every frigate
   expedition** (#27). Weighting only helps where an item is listed, and the
   lists those two pay from held almost none of the favoured items: Nexus
