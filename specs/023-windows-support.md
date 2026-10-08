@@ -278,11 +278,10 @@ Facts established on that machine, 2026-10-07:
   test`, `make lint` and `make lint-windows` in CI on PR #32, with the Windows
   test job, the Windows zip and the Arch package.
 - [x] AC8 `nmsbonker-gui.exe` opens without a console window, shows the icon,
-  and runs status, build and deploy without a console flash per conversion.
-  *Verified:* GUI subsystem (no console), icon in the executable and the title
-  bar, rendering at 150% scaling; build and deploy run from the window by the
-  user, 2026-10-07. Cancelling a build is covered by the existing cancellation
-  tests, which pass on Windows, and was not tried by hand.
+  and runs status, build (with a cancel partway through) and deploy without a
+  console flash per conversion. *Verified:* GUI subsystem (no console), icon
+  in the executable and the title bar, rendering at 150% scaling; build,
+  cancel and deploy run from the window by the user, 2026-10-07.
 - [x] AC9 In game: built-in tweaks deployed on the Windows machine are active
   in game. Recorded by the user, 2026-10-07, with build
   `0.7.0-4792d96-dev` installed locally.
