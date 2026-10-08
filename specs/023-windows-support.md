@@ -2,7 +2,7 @@
 
 **Issue**: #31
 
-## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC10 open)
+## Status: IMPLEMENTED (AC4, AC6 real-profile edit open); released in 0.8.0
 
 ## Executive Summary
 
@@ -285,8 +285,10 @@ Facts established on that machine, 2026-10-07:
 - [x] AC9 In game: built-in tweaks deployed on the Windows machine are active
   in game. Recorded by the user, 2026-10-07, with build
   `0.7.0-4792d96-dev` installed locally.
-- [ ] AC10 A pushed tag produces the Windows zip on the Release page alongside
-  the existing assets (checked on the next release, not by a throwaway tag).
+- [x] AC10 A pushed tag produces the Windows zip on the Release page alongside
+  the existing assets. *Verified:* v0.8.0 published
+  `nmsbonker-0.8.0-windows-amd64.zip`, listed in `SHA256SUMS` with the Linux
+  and macOS tarballs and the Arch package.
 
 ## Non-goals
 
