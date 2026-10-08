@@ -43,6 +43,13 @@ linters:
         linters:
           - gosec
           - wrapcheck
+      # Test support that cannot be a _test.go file: the fake MBINCompiler is
+      # its own program, and the package that builds and installs it is
+      # imported by tests in four packages (spec 020 R8.1).
+      - path: internal/mbin/mbintest/
+        linters:
+          - gosec
+          - wrapcheck
 
 formatters:
   enable:

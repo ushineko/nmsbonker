@@ -1,0 +1,4 @@
+// The GUI's Windows resources (spec 020 R9.2). Compiled by `make winres` into
+// cmd/nmsbonker-gui/rsrc_windows_amd64.syso, which the Go build links on
+// windows/amd64 only. Resource 1 is the icon Explorer and the taskbar show.
+1 ICON "nmsbonker.ico"

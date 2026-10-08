@@ -12,29 +12,36 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 )
 
-// Flavors are the two Linux asset pairs MBINCompiler publishes (R2.2, R5.3).
+// Flavors are the two asset pairs MBINCompiler publishes per platform (R2.2,
+// R5.3, spec 020 R3.1).
 const (
 	FlavorAuto          = "auto"
 	FlavorDotnet10      = "dotnet10"
 	FlavorSelfContained = "self-contained"
 )
 
-// assetNames returns the binary and library asset names for a flavor.
+// assetNames returns the binary and library asset names for a flavor on this
+// platform (platformAssets).
 //
 // Both are required: the framework-dependent binary loads libMBIN from beside
 // itself, and a directory holding only the executable produces a runtime error
 // that looks nothing like "the download was incomplete".
 func assetNames(flavor string) (bin, lib string, err error) {
-	switch flavor {
-	case FlavorDotnet10:
-		return "MBINCompiler-linux-dotnet10", "libMBIN-linux-dotnet10.so", nil
-	case FlavorSelfContained:
-		return "MBINCompiler-linux", "libMBIN-linux.so", nil
-	default:
+	return AssetNames(flavor)
+}
+
+// AssetNames is assetNames for other packages: what a flavor's binary and
+// library are called on this platform, for test fixtures in particular.
+func AssetNames(flavor string) (bin, lib string, err error) {
+	pair, ok := platformAssets[flavor]
+	if !ok {
 		return "", "", fmt.Errorf("unknown MBINCompiler flavor %q", flavor)
 	}
+	return pair[0], pair[1], nil
 }
 
 // HasDotnet10 reports whether a .NET 10 runtime is installed (R5.3).
@@ -43,13 +50,14 @@ func assetNames(flavor string) (bin, lib string, err error) {
 // the SDK, which a machine with only a runtime does not have, and this project
 // needs the runtime.
 func HasDotnet10(ctx context.Context) bool {
-	dotnet, err := exec.LookPath("dotnet")
-	if err != nil {
+	dotnet := findDotnet()
+	if dotnet == "" {
 		return false
 	}
 	//nolint:gosec // the path comes from exec.LookPath, and the argument is a constant
 	cmd := exec.CommandContext(ctx, dotnet, "--list-runtimes")
 	cmd.Env = minimalEnv()
+	setProcessGroup(cmd)
 	out, err := cmd.Output()
 	if err != nil {
 		return false
@@ -263,7 +271,7 @@ func Install(ctx context.Context, toolsDir string, release Release, configuredFl
 		out, err := compiler.Version(ctx)
 		if err != nil {
 			lastErr = err
-			result.Attempts = append(result.Attempts, fmt.Sprintf("%s: does not run: %v", flavor, err))
+			result.Attempts = append(result.Attempts, fmt.Sprintf("%s: does not run%s: %v", flavor, runtimeHint(err), err))
 			_ = os.RemoveAll(dir)
 			continue
 		}
@@ -282,7 +290,8 @@ func Install(ctx context.Context, toolsDir string, release Release, configuredFl
 	}
 
 	if lastErr == nil {
-		lastErr = fmt.Errorf("release %s publishes no Linux assets this build knows how to install", release.Tag)
+		lastErr = fmt.Errorf("release %s publishes no %s assets this build knows how to install",
+			release.Tag, platformName)
 	}
 	return result, fmt.Errorf("install MBINCompiler %s: %w", release.Tag, lastErr)
 }
@@ -370,7 +379,7 @@ func download(ctx context.Context, client *http.Client, url, dest string, mode o
 	if err := os.Chmod(tmpName, mode); err != nil {
 		return fmt.Errorf("chmod %s: %w", tmpName, err)
 	}
-	if err := os.Rename(tmpName, dest); err != nil {
+	if err := fsutil.Rename(tmpName, dest); err != nil {
 		return fmt.Errorf("place %s: %w", dest, err)
 	}
 	return nil

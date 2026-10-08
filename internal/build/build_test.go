@@ -11,6 +11,7 @@ import (
 
 	"github.com/ushineko/nmsbonker/internal/build/report"
 	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 	"github.com/ushineko/nmsbonker/internal/modscript"
 	"github.com/ushineko/nmsbonker/internal/mxml"
 )
@@ -176,31 +177,9 @@ all in a unit-test run.
 */
 const breakMarker = "BREAK-THE-COMPILER"
 
-const fakeCompilerScript = `#!/bin/sh
-outdir=""; input=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -d) outdir="$2"; shift 2;;
-    -y|-q|-Q) shift;;
-    version) shift;;
-    *) input="$1"; shift;;
-  esac
-done
-[ -z "$input" ] && { echo "MBINCompiler v0.0.0-fake"; exit 0; }
-if grep -q 'BREAK-THE-COMPILER' "$input"; then
-  echo "[ERROR]: unexpected element" >&2
-  exit 1
-fi
-base=$(basename "$input"); stem=${base%.*}
-printf 'MBIN' > "$outdir/$stem.MBIN"
-exit 0
-`
-
 func fakeCompiler(t *testing.T) *mbin.Compiler {
 	t.Helper()
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "MBINCompiler-linux-dotnet10")
-	require.NoError(t, os.WriteFile(bin, []byte(fakeCompilerScript), 0o700)) //nolint:gosec // a test stub
+	bin := mbintest.Install(t, t.TempDir(), mbin.FlavorDotnet10, mbintest.KindBuild, nil)
 	mbin.SetMaxProcesses(4)
 	return &mbin.Compiler{Bin: bin, Tag: "v0.0.0-fake", Flavor: mbin.FlavorDotnet10}
 }

@@ -52,6 +52,11 @@ type Install struct {
 	ModSettingsPath string
 	ModSettingsOK   bool
 	CompatDataDir   string
+	// SaveDir is the folder holding the st_* save profiles (spec 020 R4.1):
+	// inside the Proton prefix on Linux, %APPDATA%\HelloGames\NMS on Windows.
+	// "" when no save folder is known; it may name a folder that does not
+	// exist yet, which callers report.
+	SaveDir string
 	// Candidates is every place examined, in the order examined.
 	Candidates []Candidate
 }
@@ -76,21 +81,37 @@ func (in *Install) PakFiles() ([]string, error) {
 	return paks, nil
 }
 
-// Roots lists the Steam roots to examine, in order (R3.1).
+// platformRootsFunc is platformRoots behind a seam. A test cannot redirect the
+// Windows registry the way it redirects $HOME, so it swaps the function instead
+// (OverridePlatformRoots).
+//
+//nolint:gochecknoglobals // test seam
+var platformRootsFunc = platformRoots
+
+// OverridePlatformRoots replaces the platform's own Steam roots until the
+// returned function is called. For tests in other packages that must keep
+// discovery off the developer's real Steam install; nothing else calls it.
+func OverridePlatformRoots(roots []string) (restore func()) {
+	prev := platformRootsFunc
+	platformRootsFunc = func() []string { return roots }
+	return func() { platformRootsFunc = prev }
+}
+
+// Roots lists the Steam roots to examine, in order (R3.1, spec 020 R2.1):
+// $STEAM_ROOT, then the platform's own places, without repeats.
 func Roots() []string {
 	var roots []string
-	if v := os.Getenv("STEAM_ROOT"); v != "" {
-		roots = append(roots, v)
+	seen := map[string]bool{}
+	add := func(p string) {
+		if p == "" || seen[canonical(p)] {
+			return
+		}
+		seen[canonical(p)] = true
+		roots = append(roots, filepath.Clean(p))
 	}
-	home, err := os.UserHomeDir()
-	if err == nil && home != "" {
-		roots = append(roots,
-			filepath.Join(home, ".local", "share", "Steam"),
-			filepath.Join(home, ".steam", "steam"),
-			filepath.Join(home, ".steam", "root"),
-			filepath.Join(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
-			filepath.Join(home, "snap", "steam", "common", ".local", "share", "Steam"),
-		)
+	add(os.Getenv("STEAM_ROOT"))
+	for _, p := range platformRootsFunc() {
+		add(p)
 	}
 	return roots
 }
@@ -130,12 +151,14 @@ func Libraries(root string) []string {
 
 // canonical is the key used to de-duplicate library paths. EvalSymlinks so that
 // ~/.steam/root (a symlink to ~/.local/share/Steam on most installs) is not
-// examined twice and reported twice in `detect`.
+// examined twice and reported twice in `detect`. foldPath then makes the
+// registry's "c:/program files (x86)/steam" and the VDF's
+// "C:\Program Files (x86)\Steam" one key on Windows (spec 020 R2.2).
 func canonical(p string) string {
 	if resolved, err := filepath.EvalSymlinks(p); err == nil {
-		return resolved
+		return foldPath(resolved)
 	}
-	return filepath.Clean(p)
+	return foldPath(filepath.Clean(p))
 }
 
 // Locate finds the game (R3.3).
@@ -264,6 +287,7 @@ func describe(root, lib, gameDir string) (*Install, Candidate) {
 			in.CompatDataDir = compat
 		}
 	}
+	in.SaveDir = saveDir(in.CompatDataDir)
 
 	fi, err := os.Stat(in.PCBanksDir)
 	switch {
@@ -279,7 +303,9 @@ func describe(root, lib, gameDir string) (*Install, Candidate) {
 	// from the directory it points at.
 	if li, err := os.Lstat(in.ModsDir); err == nil {
 		switch {
-		case li.Mode()&os.ModeSymlink != 0:
+		// A directory junction is reported as ModeIrregular rather than
+		// ModeSymlink, and is a link all the same (spec 020 R2.4).
+		case li.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0:
 			in.ModsState = ModsSymlink
 			if target, err := os.Readlink(in.ModsDir); err == nil {
 				in.ModsTarget = target

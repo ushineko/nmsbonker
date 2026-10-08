@@ -16,17 +16,19 @@ import (
 /*
 Save backup (spec 004 R5).
 
-No Man's Sky under Proton keeps its saves in the prefix, at
+No Man's Sky keeps its saves in one st_<id> folder per profile, under
+steam.Install.SaveDir (spec 020 R4.1):
 
-	<library>/steamapps/compatdata/275850/pfx/drive_c/users/steamuser/
-	    AppData/Roaming/HelloGames/NMS/st_<id>/
+	Linux (Proton): <library>/steamapps/compatdata/275850/pfx/drive_c/users/
+	    steamuser/AppData/Roaming/HelloGames/NMS/st_<id>/
+	Windows:        %APPDATA%\HelloGames\NMS\st_<id>\
 
 and Steam Cloud syncs them, which means a save corrupted by a bad mod can be
 synced everywhere before anyone notices. Copying the folder before a deploy
 costs a second and a few megabytes and is the only thing standing between "that
 mod broke my save" and losing it.
 
-Copy only, in one direction; nothing in this file writes into the prefix, and
+Copy only, in one direction; nothing in this file writes into the save folder, and
 restoring is a documented manual copy. The save editor (saveedit.go, spec 007)
 is the one place that does write there, and it calls backupSaves first, every
 time, which is what makes that write survivable.
@@ -37,13 +39,6 @@ const SaveRetention = 10
 
 // saveStamp is the timestamp in a backup directory's name: UTC and sortable.
 const saveStamp = "20060102-150405Z"
-
-// savesRelative is the path from the compatdata directory to the save folder.
-//
-//nolint:gochecknoglobals // a fixed path, read-only
-var savesRelative = []string{
-	"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS",
-}
 
 // BackupSavesRequest copies the game's saves (R5.1).
 type BackupSavesRequest struct {
@@ -63,7 +58,7 @@ type SaveBackupInfo struct {
 
 // BackupSavesResult reports what was copied (R5.1).
 type BackupSavesResult struct {
-	// Source is the save folder in the Proton prefix, "" when there is none.
+	// Source is the game's save folder, "" when none is known.
 	Source string `json:"source,omitempty"`
 	Dir    string `json:"dir,omitempty"`
 	// Skipped says why nothing was copied, when nothing was.
@@ -79,7 +74,7 @@ type BackupSavesResult struct {
 	Pruned []string `json:"pruned,omitempty"`
 }
 
-// BackupSaves copies every save profile out of the Proton prefix (R5.1).
+// BackupSaves copies every save profile out of the game's save folder (R5.1).
 func BackupSaves(_ context.Context, req BackupSavesRequest) (BackupSavesResult, error) {
 	s, err := open(req.Request)
 	if err != nil {
@@ -91,30 +86,39 @@ func BackupSaves(_ context.Context, req BackupSavesRequest) (BackupSavesResult, 
 	return s.backupSaves()
 }
 
-// savesDir is where the game keeps its saves, or "" when the prefix is absent.
+// savesDir is where the game keeps its saves, or "" when none is known.
 func (s *session) savesDir() string {
-	if s.install == nil || s.install.CompatDataDir == "" {
+	if s.install == nil {
 		return ""
 	}
-	return filepath.Join(append([]string{s.install.CompatDataDir}, savesRelative...)...)
+	return s.install.SaveDir
+}
+
+// noSaveFolder is what a missing save folder is called, on either platform.
+const noSaveFolder = "no save folder is known for this game; under Proton it appears " +
+	"once the game has been run"
+
+// missingSaveFolder says a known save folder does not exist yet.
+func missingSaveFolder(dir string) string {
+	return "the game's save folder does not exist yet (" + dir + "); start the game once"
 }
 
 /*
 backupSaves copies the st_* profiles to a timestamped directory.
 
-A missing prefix is reported, not an error (R5.1): a game that has never been
-started under Proton has no save folder, and a first deploy on a fresh install
+A missing save folder is reported, not an error (R5.1): a game that has never
+been started has none, and a first deploy on a fresh install
 is exactly when that is true.
 */
 func (s *session) backupSaves() (BackupSavesResult, error) {
 	out := BackupSavesResult{Source: s.savesDir()}
 	if out.Source == "" {
-		out.Skipped = "no Proton prefix for this game; the game has not been run yet"
+		out.Skipped = noSaveFolder
 		return out, nil
 	}
 	entries, err := os.ReadDir(out.Source)
 	if errors.Is(err, os.ErrNotExist) {
-		out.Skipped = "no save folder in the Proton prefix (" + out.Source + ")"
+		out.Skipped = missingSaveFolder(out.Source)
 		return out, nil
 	}
 	if err != nil {

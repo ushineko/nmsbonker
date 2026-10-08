@@ -14,6 +14,7 @@ import (
 
 	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
+	"github.com/ushineko/nmsbonker/internal/fsutil"
 	"github.com/ushineko/nmsbonker/internal/mbin"
 	"github.com/ushineko/nmsbonker/internal/mxml"
 )
@@ -241,7 +242,7 @@ func (r *runner) restorePrevious() error {
 		}
 		return fmt.Errorf("stat %s: %w", prev, err)
 	}
-	if err := os.Rename(prev, r.modRoot); err != nil {
+	if err := fsutil.Rename(prev, r.modRoot); err != nil {
 		return fmt.Errorf("restore %s: %w", r.modRoot, err)
 	}
 	return nil
@@ -268,7 +269,7 @@ func (r *runner) prepare() error {
 		return fmt.Errorf("remove %s: %w", prev, err)
 	}
 	if _, err := os.Stat(r.modRoot); err == nil {
-		if err := os.Rename(r.modRoot, prev); err != nil {
+		if err := fsutil.Rename(r.modRoot, prev); err != nil {
 			return fmt.Errorf("rename %s: %w", r.modRoot, err)
 		}
 	}
@@ -570,7 +571,7 @@ func (r *runner) mirrorGlobals() error {
 
 // moveFile renames, falling back to copy-and-remove across filesystems.
 func moveFile(from, to string) error {
-	if err := os.Rename(from, to); err == nil {
+	if err := fsutil.Rename(from, to); err == nil {
 		return nil
 	}
 	data, err := os.ReadFile(from)

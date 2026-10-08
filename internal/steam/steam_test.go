@@ -83,6 +83,7 @@ func TestTheAppManifestYieldsTheInstallDirAndBuildID(t *testing.T) {
 
 	t.Setenv("STEAM_ROOT", lib)
 	t.Setenv("HOME", t.TempDir()) // keep discovery off the developer's real Steam
+	t.Cleanup(steam.OverridePlatformRoots(nil))
 	found, err := steam.Locate("")
 	require.NoError(t, err)
 	require.Equal(t, "25233815", found.BuildID)
@@ -153,6 +154,7 @@ func TestPakFilesAreSortedAndExcludeNonPaks(t *testing.T) {
 func TestEveryCandidateExaminedIsRetainedForDiagnostics(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("STEAM_ROOT", filepath.Join(t.TempDir(), "nowhere"))
+	t.Cleanup(steam.OverridePlatformRoots(nil))
 
 	in, err := steam.Locate("")
 	require.ErrorIs(t, err, steam.ErrNotFound)

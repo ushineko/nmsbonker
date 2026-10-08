@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
+	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 	"github.com/ushineko/nmsbonker/internal/save"
 )
 
@@ -88,13 +91,11 @@ func writeSaveFixture(t *testing.T, profile string, ref save.SlotRef, payload []
 func editorFixture(t *testing.T) (game, profile string) {
 	t.Helper()
 	root := bare(t)
-	// The game-running check reads /proc; a test must not depend on whether
-	// the machine running it has the game open.
-	t.Cleanup(core.SetProcRoot(t.TempDir()))
+	// A test must not depend on whether the machine running it has the game
+	// open.
+	t.Cleanup(core.SetGameRunning(false))
 	game, lib := steamGame(t, root)
-	dir := filepath.Join(lib, "steamapps", "compatdata", "275850",
-		"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS")
-	profile = filepath.Join(dir, "st_1")
+	profile = filepath.Join(gameSaveDir(lib), "st_1")
 	require.NoError(t, os.MkdirAll(profile, 0o750))
 	older := time.Now().Add(-2 * time.Hour).Truncate(time.Second)
 	newer := time.Now().Add(-time.Hour).Truncate(time.Second)
@@ -103,10 +104,8 @@ func editorFixture(t *testing.T) (game, profile string) {
 	require.NoError(t, os.WriteFile(filepath.Join(profile, "accountdata.hg"), []byte(`{"F2P":4098}`+"\x00"), 0o600))
 
 	tools := filepath.Join(config.Defaults().Paths().Tools, "mbincompiler", "v7.02.0-pre1")
-	require.NoError(t, os.MkdirAll(tools, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(tools, "MBINCompiler-linux-dotnet10"), []byte("#!/bin/sh\n"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(tools, "libMBIN-linux-dotnet10.so"), []byte("x"), 0o640))
-	require.NoError(t, os.WriteFile(filepath.Join(tools, "mapping.json"), []byte(testMappingJSON), 0o640))
+	mbintest.Install(t, tools, mbin.FlavorDotnet10, mbintest.KindRunner,
+		map[string]string{"mapping.json": testMappingJSON})
 	return game, profile
 }
 
@@ -229,10 +228,16 @@ func TestEditSaveBacksUpThenRewritesThePairAndNothingElse(t *testing.T) {
 	require.Equal(t, "Test save", meta.SaveName(), "carried over")
 	dataTime, dataMode, dataSize := fileTimes(t, data)
 	mfTime, mfMode, _ := fileTimes(t, mf)
+	// The fixture wrote both 0755, which is what Linux keeps; Windows has only
+	// a read-only bit and reports any writable file as 0666 (spec 020 R4.4).
+	gameMode := os.FileMode(0o755)
+	if runtime.GOOS == "windows" {
+		gameMode = 0o666
+	}
 	require.Equal(t, w.Timestamp.Unix(), dataTime.Unix())
 	require.Equal(t, w.Timestamp.Unix(), mfTime.Unix())
-	require.Equal(t, os.FileMode(0o755), dataMode, "the game's mode is kept")
-	require.Equal(t, os.FileMode(0o755), mfMode)
+	require.Equal(t, gameMode, dataMode, "the game's mode is kept")
+	require.Equal(t, gameMode, mfMode)
 	require.Equal(t, w.Bytes, dataSize)
 
 	// R6.5: the account data and the other half of the slot are untouched.
@@ -294,13 +299,7 @@ func TestEditSaveDryRunWritesNothing(t *testing.T) {
 // AC6: a running game refuses the write; Force overrides it and still backs up.
 func TestEditSaveRefusesWhileTheGameRunsUnlessForced(t *testing.T) {
 	game, _ := editorFixture(t)
-	proc := t.TempDir()
-	t.Cleanup(core.SetProcRoot(proc))
-	require.NoError(t, os.MkdirAll(filepath.Join(proc, "4242"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(proc, "4242", "comm"), []byte("NMS.exe\n"), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(proc, "4242", "cmdline"),
-		[]byte("Z:\\games\\No Man's Sky\\Binaries\\NMS.exe\x00"), 0o600))
-	require.NoError(t, os.MkdirAll(filepath.Join(proc, "self"), 0o750))
+	t.Cleanup(core.SetGameRunning(true))
 
 	list, err := core.ListSaveSlots(t.Context(), core.ListSaveSlotsRequest{Request: core.Request{GameDir: game}})
 	require.NoError(t, err)
@@ -340,13 +339,20 @@ func TestExportAndImportRoundTripThroughANamedFile(t *testing.T) {
 	// R5.3: nothing is exported into the prefix, whichever way it is spelled.
 	link := filepath.Join(t.TempDir(), "link-into-profile")
 	require.NoError(t, os.Symlink(profile, link))
-	for _, out := range []string{
+	refused := []string{
 		filepath.Join(profile, "dump.json"),
 		filepath.Join(profile, "..", "st_1", "dump.json"),
 		filepath.Join(link, "dump.json"),
 		filepath.Join(link, "new-dir", "dump.json"),
 		filepath.Join(game, "GAMEDATA", "dump.json"),
-	} {
+	}
+	if runtime.GOOS == "windows" {
+		// NTFS ignores case, so the guard has to as well (spec 020 R4.2).
+		refused = append(refused,
+			filepath.Join(strings.ToUpper(profile), "dump.json"),
+			filepath.Join(strings.ToLower(game), "gamedata", "dump.json"))
+	}
+	for _, out := range refused {
 		_, err = core.ExportSave(t.Context(), core.ExportSaveRequest{
 			Request: core.Request{GameDir: game}, Slot: core.SlotSelector{Slot: 9}, Out: out,
 		})

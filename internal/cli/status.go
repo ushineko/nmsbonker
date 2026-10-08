@@ -72,6 +72,9 @@ func printStatus(w io.Writer, res core.StatusResult) {
 		if in.CompatDataDir != "" {
 			fact(w, "proton prefix", in.CompatDataDir)
 		}
+		if in.SaveDir != "" {
+			fact(w, "save folder", in.SaveDir)
+		}
 		if in.ModSettingsOK {
 			fact(w, "mod settings", in.ModSettingsPath)
 			fact(w, "DisableAllMods", in.DisableAllMods)

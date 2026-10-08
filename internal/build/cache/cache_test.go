@@ -12,38 +12,17 @@ import (
 	"github.com/ushineko/nmsbonker/internal/hgpak"
 	"github.com/ushineko/nmsbonker/internal/hgpak/hgpaktest"
 	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 )
 
 /*
-decompilerScript is a compiler that turns anything into an MXML naming its
+stub is a fake compiler (mbintest's cache kind) that turns anything into an MXML naming its
 input, and back.
 
 The cache does not care what the compiler produces, only that it produced
 something and where it put it, so a stub is a complete stand-in. It records each
 invocation so a test can prove the second Ensure did not run it again.
 */
-const decompilerScript = `#!/bin/sh
-here=$(dirname "$0")
-outdir=""; input=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -d) outdir="$2"; shift 2;;
-    -y|-q|-Q) shift;;
-    version) shift;;
-    *) input="$1"; shift;;
-  esac
-done
-[ -z "$input" ] && { echo "MBINCompiler v0.0.0-fake"; exit 0; }
-echo "$input" >> "$here/calls"
-base=$(basename "$input"); stem=${base%.*}
-if [ -f "$here/fail" ] && grep -qF "$base" "$here/fail"; then
-  echo "[ERROR]: unknown template" >&2
-  exit 1
-fi
-printf '<?xml version="1.0"?><!-- %s -->' "$base" > "$outdir/$stem.MXML"
-exit 0
-`
-
 type stub struct {
 	compiler *mbin.Compiler
 	dir      string
@@ -80,12 +59,11 @@ func splitLines(s string) []string {
 func newStub(t *testing.T, failing ...string) stub {
 	t.Helper()
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "MBINCompiler-linux-dotnet10")
-	require.NoError(t, os.WriteFile(bin, []byte(decompilerScript), 0o700)) //nolint:gosec // a test stub
+	knobs := map[string]string{}
 	if len(failing) > 0 {
-		require.NoError(t, os.WriteFile(filepath.Join(dir, "fail"),
-			[]byte(joinLines(failing)), 0o600))
+		knobs["fail"] = joinLines(failing)
 	}
+	bin := mbintest.Install(t, dir, mbin.FlavorDotnet10, mbintest.KindCache, knobs)
 	mbin.SetMaxProcesses(4)
 	return stub{compiler: &mbin.Compiler{Bin: bin, Tag: "v1.0.0-fake"}, dir: dir}
 }

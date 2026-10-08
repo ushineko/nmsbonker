@@ -1,9 +1,9 @@
 package core
 
-// SetProcRoot points the game-running check at a fixture directory laid out
-// like /proc (spec 007 AC6) and returns the undo.
-func SetProcRoot(dir string) func() {
-	prev := procRoot
-	procRoot = dir
-	return func() { procRoot = prev }
+// SetGameRunning makes the game-running check answer running until the
+// returned undo is called (spec 007 AC6, spec 020 R4.3).
+func SetGameRunning(running bool) func() {
+	prev := gameRunning
+	gameRunning = func() bool { return running }
+	return func() { gameRunning = prev }
 }

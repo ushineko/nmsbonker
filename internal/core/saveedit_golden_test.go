@@ -11,6 +11,8 @@ import (
 
 	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
+	"github.com/ushineko/nmsbonker/internal/mbin"
+	"github.com/ushineko/nmsbonker/internal/mbin/mbintest"
 	"github.com/ushineko/nmsbonker/internal/save"
 )
 
@@ -30,18 +32,15 @@ func TestGoldenEditSaveOnACopyOfARealProfile(t *testing.T) {
 		t.Skip("NMSBONKER_SAVE_DIR or NMSBONKER_MAPPING_FILE is unset; skipping the golden edit test")
 	}
 	root := bare(t)
-	t.Cleanup(core.SetProcRoot(t.TempDir()))
+	t.Cleanup(core.SetGameRunning(false))
 	game, lib := steamGame(t, root)
-	dir := filepath.Join(lib, "steamapps", "compatdata", "275850",
-		"pfx", "drive_c", "users", "steamuser", "AppData", "Roaming", "HelloGames", "NMS")
+	dir := gameSaveDir(lib)
 	profile := filepath.Join(dir, filepath.Base(src))
 	require.NoError(t, os.MkdirAll(dir, 0o750))
 	require.NoError(t, copyDir(src, profile))
 
 	tools := filepath.Join(config.Defaults().Paths().Tools, "mbincompiler", "v7.02.0-pre1")
-	require.NoError(t, os.MkdirAll(tools, 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(tools, "MBINCompiler-linux-dotnet10"), []byte("#!/bin/sh\n"), 0o750))
-	require.NoError(t, os.WriteFile(filepath.Join(tools, "libMBIN-linux-dotnet10.so"), []byte("x"), 0o640))
+	mbintest.Install(t, tools, mbin.FlavorDotnet10, mbintest.KindRunner, nil)
 	mapping, err := os.ReadFile(mappingFile)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(tools, "mapping.json"), mapping, 0o640))
