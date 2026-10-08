@@ -2,7 +2,7 @@
 
 **Issue**: #31
 
-## Status: DRAFT
+## Status: IMPLEMENTED (AC4, AC6 real-profile edit, AC7 Linux run, AC8 GUI build/deploy, AC9, AC10 open)
 
 ## Executive Summary
 
@@ -93,17 +93,28 @@ Facts established on that machine, 2026-10-07:
   `MBINCompiler-dotnet10.exe` + `libMBIN-dotnet10.dll`; `self-contained` →
   `MBINCompiler.exe` + `libMBIN.dll`. Linux unchanged. The flavor names and the
   `auto` fallback order are unchanged.
-- R3.2 `HasDotnet10` works unchanged (`dotnet.exe` on `PATH`).
-- R3.3 A release without the current OS's assets is skipped by the release
-  picker, as a release without the Linux assets is today.
+- R3.2 `HasDotnet10` finds `dotnet.exe` the way the compiler's own host does:
+  `DOTNET_ROOT`, then `PATH`, then `%ProgramFiles%\dotnet`. *Revised in
+  implementation:* `PATH` alone reported "no runtime" in a terminal opened
+  before the runtime was installed, while the compiler ran fine.
+- R3.3 *Revised in implementation:* the release picker does not look at assets
+  on either platform (the original wording was wrong about today's behaviour);
+  a release without this platform's assets fails the install with a message
+  naming the platform, as it already did for Linux.
+- R3.4 *Added in implementation:* on Windows neither build is self-contained.
+  `MBINCompiler.exe` (the `self-contained` flavor) is framework-dependent on
+  .NET 8 (checked at v7.04.1-pre3). The flavor name is kept because it is a
+  config value. When a compiler exits with the .NET host's "framework missing"
+  code (`0x80008096`), the attempt line says to install the .NET 10 runtime.
 
 ### R4 Saves
 
 - R4.1 `steam.Install` gains `SaveDir`: on Linux the existing
   `compatdata/275850/pfx/.../HelloGames/NMS` path (only when compatdata exists);
-  on Windows `%APPDATA%\HelloGames\NMS` (only when it exists). `saves.go`,
-  `saveedit.go` and the CLI/GUI read `SaveDir` instead of joining
-  `savesRelative` themselves.
+  on Windows `%APPDATA%\HelloGames\NMS` whether or not it exists yet (callers
+  already report a missing folder, now as "start the game once"). `saves.go`
+  and `saveedit.go` read `SaveDir` instead of joining `savesRelative`
+  themselves; `status` prints it.
 - R4.2 `insideTheGame` refuses exports into the game directory and into
   `SaveDir` (on Linux, still the whole compatdata tree). Containment is
   case-insensitive on Windows.
@@ -122,10 +133,10 @@ Facts established on that machine, 2026-10-07:
 - R5.1 Deploy refuses while `NMS.exe` is running on Windows, with the same
   `ErrGameRunning`. The running game holds its mod files open, and a rename
   that fails halfway leaves the archive and `MODS` out of step. Linux behaviour
-  is unchanged.
-- R5.2 Renames in deploy, the build workspace swap (`prepare`,
-  `restorePrevious`) and the cache retry on `ERROR_ACCESS_DENIED` and
-  `ERROR_SHARING_VIOLATION` for up to 2 s with backoff. A scanner (Defender)
+  is unchanged. Rollback and undeploy, which move the same folder, refuse too.
+- R5.2 Every rename in non-test code goes through `fsutil.Rename`, which
+  retries `ERROR_ACCESS_DENIED`, `ERROR_SHARING_VIOLATION` and
+  `ERROR_LOCK_VIOLATION` for up to 2 s with backoff (Linux: plain `os.Rename`). A scanner (Defender)
   briefly opening a file that was just written is the usual cause, and the
   retry is the standard answer to it. After the budget, the error is reported as
   today.
@@ -146,27 +157,34 @@ Facts established on that machine, 2026-10-07:
 - R6.2 Cancellation on Windows kills the compiler process (existing
   `exec.CommandContext` + `WaitDelay`). No job object: MBINCompiler is one
   process, and the tests no longer start a shell (R8).
-- R6.3 Child processes are started without a console window when the parent
-  is the GUI (`CREATE_NO_WINDOW`), so a build does not flash one per
-  conversion.
+- R6.3 Child processes are started without a console window
+  (`CREATE_NO_WINDOW`), so a build does not flash one per conversion. *Revised
+  in implementation:* always, not only under the GUI. The output is piped in
+  both front ends, so a console adds nothing to the CLI either.
 
 ### R7 Line endings
 
 - R7.1 A `.gitattributes` makes the checkout identical across platforms:
-  `* text=auto eol=lf`, with `*.png`, `*.svg` and other binaries marked
-  `binary`. Committed after a renormalise, which must produce no content change
-  on Linux.
-- R7.2 Code that reads `.lua` scripts and MXML already tolerates CRLF (user
-  library scripts from Nexus are CRLF); this is verified, not assumed, by one
-  test per reader with a CRLF input.
+  `* text=auto eol=lf`, with `*.png` and other binaries marked `binary`. SVG
+  stays text (marking it binary stored the CRLF working copy). Committed after
+  a renormalise that produced no content change.
+- R7.2 A script with CRLF line endings means what it means with LF: every
+  built-in is loaded both ways and must give the same change tables, header,
+  parameters, and parameter override (`internal/tweaks/crlf_test.go`). MXML
+  needs no test: MBINCompiler writes LF on Windows too (all 88 decompiled files
+  of a real build checked).
 
 ### R8 Tests run on Windows
 
-- R8.1 The stand-in compiler is a Go program, not a shell script: the test
-  binary re-executes itself (`os.Executable`, copied to the asset name the test
-  needs) with `NMSBONKER_FAKE_MBIN` set, and a `TestMain` hook implements the
-  fake `version` and conversion behaviours the shell stubs had. The same helper
-  serves `internal/mbin`, `internal/core` and `internal/build/cache`.
+- R8.1 The stand-in compiler is a Go program, not a shell script
+  (`internal/mbin/mbintest/fakembin`), ported from the four shell stubs and
+  selected by a `kind` file beside it. `mbintest.Install` builds it once per
+  test process (cached in the temp directory by source hash) and installs it
+  under this platform's asset names. *Revised in implementation:* not a
+  re-executed test binary with an environment flag. The runner strips the
+  environment, and a separate program needs no `TestMain` in four packages.
+  It serves `internal/mbin`, `internal/build`, `internal/build/cache` and
+  `internal/core`.
 - R8.2 Tests that assert Unix modes or `/proc` layout are split by build tag or
   rewritten to assert the platform's behaviour.
 - R8.3 `go test ./...` passes on Windows with `CGO_ENABLED=0` for every package
@@ -180,9 +198,12 @@ Facts established on that machine, 2026-10-07:
 
 - R9.1 `nmsbonker-gui.exe` builds with MSYS2 UCRT64 gcc and links with
   `-H windowsgui`, so it opens without a console.
-- R9.2 The executable carries the application icon (a `.syso` resource
-  generated from `packaging/nmsbonker.svg`, committed or generated at build
-  time — decided in implementation, recorded here).
+- R9.2 The executable carries the application icon. *Decided:* committed.
+  `tools/winicon` renders the SVG into `packaging/windows/nmsbonker.ico` (nine
+  sizes, stroke widths scaled per size), and `windres` compiles
+  `packaging/windows/nmsbonker.rc` into
+  `cmd/nmsbonker-gui/rsrc_windows_amd64.syso` (`make winres`). A plain
+  `go build` on Windows needs neither tool.
 - R9.3 User-facing text that names Linux, Proton or XDG as the only case is
   made platform-neutral: the About blurb, the "Keep files where you expect"
   note, `cli/root.go`'s short description, `cli/saves.go`'s long help, the
@@ -196,12 +217,14 @@ Facts established on that machine, 2026-10-07:
 ### R10 Build and release
 
 - R10.1 The Makefile is not required on Windows. The README gives the plain
-  `go build` lines for both binaries, with the ldflags that stamp the version.
+  `go build` lines for both binaries. They stamp no version, so the binary
+  reports `dev`; the CI zip carries the Makefile's version rule.
+  `make lint-windows` lints the Windows files from Linux, and CI runs it.
 - R10.2 `make build-all` adds `windows/amd64` to the static CLI targets.
-- R10.3 The Release job gains a `windows-latest` step (MSYS2 UCRT64
-  gcc) that builds `nmsbonker.exe` and `nmsbonker-gui.exe` and publishes
-  `nmsbonker-VERSION-windows-amd64.zip` (both executables, README, LICENSE),
-  listed in `SHA256SUMS`. The tag/`VERSION` check and the changelog extraction
+- R10.3 A `windows-zip` job (`windows-latest`, MSYS2 UCRT64 gcc) builds
+  `nmsbonker.exe` and `nmsbonker-gui.exe` on every push and uploads
+  `nmsbonker-VERSION-windows-amd64.zip` (both executables, README, LICENSE).
+  The Release job attaches it and adds it to `SHA256SUMS`. The tag/`VERSION` check and the changelog extraction
   are unchanged.
 - R10.4 No installer, no Start-menu entry, no winget manifest in this spec.
   Installing is unzipping.
@@ -218,30 +241,48 @@ Facts established on that machine, 2026-10-07:
 
 ## Acceptance Criteria
 
-- [ ] AC1 On the Windows machine, `nmsbonker status` finds the game from the
-  registry with no `STEAM_ROOT` or `--game-dir`, reports buildid, MODS state
-  `absent`, and the save folder under `%APPDATA%`.
-- [ ] AC2 `nmsbonker tools install` installs a Windows MBINCompiler. With no
-  .NET runtime, `auto` ends on the self-contained flavor and says why; after
-  installing the .NET 10 runtime, it picks `dotnet10`.
-- [ ] AC3 `nmsbonker build` with every built-in tweak enabled reports `WORKING`
-  for each, nothing skipped (`TestEveryBuiltInFindsEveryKeyInTheInstalledGame`
-  with `NMSBONKER_GAME_DIR` set, on Windows).
+- [x] AC1 On the Windows machine, `nmsbonker status` finds the game from the
+  registry with no `STEAM_ROOT` or `--game-dir`, reports buildid (25732212),
+  MODS state `absent`, and the save folder under `%APPDATA%`. Paths are shown
+  in the file system's case, not the registry's lower case.
+- [x] AC2 *Revised:* `nmsbonker tools ensure` installs and verifies
+  `MBINCompiler-dotnet10.exe` v7.04.1-pre3 with the .NET 10 runtime present.
+  With the `self-contained` flavor configured and no .NET 8, `MBINCompiler.exe`
+  fails to start, the attempt line says to install the .NET 10 runtime, and
+  `auto`'s fallback lands on `dotnet10`. The original wording ("with no runtime,
+  self-contained works") was wrong about the Windows assets (R3.4).
+- [x] AC3 `nmsbonker build` with all 30 built-ins: every one `WORKING` (one
+  `WORKING*`), 88 MBINs built, 0 dropped, 330 edits, 0 skipped, compiler
+  round-trip compatible, 32 s cold. `TestEveryBuiltInFindsEveryKeyInTheInstalledGame`
+  passes on Windows with `NMSBONKER_GAME_DIR` set.
 - [ ] AC4 Golden parity on Windows: the decompiled output of a build matches
   the same build's output on Linux byte for byte, for the same game buildid,
-  scripts and compiler version.
-- [ ] AC5 `nmsbonker deploy` creates `GAMEDATA\MODS\<mod>` and the save backup;
-  a second deploy archives the first. With the game running, deploy refuses
-  with `ErrGameRunning` and nothing under `MODS` changes.
+  scripts and compiler version. *Open:* needs a Linux build of buildid
+  25732212. Supporting evidence: the checkout is byte-identical (R7.1), and
+  MBINCompiler writes LF MXML on Windows (R7.2).
+- [x] AC5 `nmsbonker deploy`, real build, into a scratch game directory (not
+  the real game): 94 files under `GAMEDATA\MODS\COSMOS COMBINE` and a save backup
+  of the real profile; a second deploy archived the first. With a process named
+  `NMS.exe` running, deploy and rollback refused with "the game is running" and
+  the `MODS` tree was unchanged; undeploy worked once it exited.
 - [ ] AC6 Save editor: with the game closed, an edit backs up the profile and
   rewrites the slot; with the game running, it refuses. Exporting into the game
   directory or the save folder is refused, including through a differently
-  cased spelling of the path.
-- [ ] AC7 `go test ./...` passes on Windows (cgo and no-cgo, R8.3) and on
-  Linux. `make test` on Linux still includes the parity test and passes.
+  cased spelling of the path. *Verified:* `saves slots`, `saves inspect` and
+  `saves export` on the real Windows profile; an upper-cased export path into
+  the save folder refused; edit, backup and refusal pass in the unit tests on
+  NTFS. *Open:* an edit of a real profile, left to the user.
+- [ ] AC7 `go test ./...` passes on Windows (cgo with `-race -tags parity`,
+  and no-cgo, R8.3) and on Linux. `make test` on Linux still includes the
+  parity test and passes. *Verified:* Windows both ways; Linux `go vet` and
+  golangci-lint (non-GUI packages, cross-checked from Windows). *Open:* the
+  Linux test run, which is CI's on the pull request.
 - [ ] AC8 `nmsbonker-gui.exe` opens without a console window, shows the icon,
   and runs status, build (with a cancel partway through) and deploy without a
-  console flash per conversion.
+  console flash per conversion. *Verified:* GUI subsystem (no console), icon in
+  the executable and the title bar, Overview and About render at 150% scaling
+  with the game and compiler found. *Open:* build, cancel and deploy driven
+  from the window.
 - [ ] AC9 In game: the built-in mod deployed by AC5 is active on the Windows
   machine (one visible tweak checked). Recorded by the user.
 - [ ] AC10 A pushed tag produces the Windows zip on the Release page alongside
@@ -258,24 +299,24 @@ Facts established on that machine, 2026-10-07:
 
 ## Risks & Assumptions
 
-- The Windows `MBINCompiler.exe` is assumed to run without a .NET runtime and
-  to need `libMBIN.dll` beside it, mirroring the Linux self-contained pair.
-  AC2 verifies it; if it needs a runtime, `auto`'s fallback reports that and
-  the README says to install .NET 10.
+- ~~The Windows `MBINCompiler.exe` is assumed to run without a .NET runtime.~~
+  Wrong: it needs .NET 8 (R3.4). The README says to install .NET 10.
 - NTFS is case-insensitive. The engine writes MBIN paths from pak paths, which
   are already lower-cased for lookup; two scripts that emit the same file under
   different case would merge on Linux only if spelled identically, and collide
-  on Windows. Assumed not to occur; implementation checks whether the build
-  already detects a duplicate output path and, if not, adds a case-folded
-  check that names both scripts.
+  on Windows. *Resolved:* output paths are already upper-cased
+  (`build.InternalUpper`), so two spellings of one file are one target on both
+  platforms.
 - Paths longer than 260 characters: Go adds the `\\?\` prefix itself for
   absolute paths, so no manifest change is needed. A workspace path under a
   long user name plus deep pak paths is the case to watch.
 - The cgo toolchain for the GUI on Windows is MSYS2 (UCRT64) gcc, locally and
   in CI. The README says to put its `bin` on `PATH` for the GUI build.
-- Defender may slow the cache build (hundreds of thousands of small files on
-  first extraction). Not addressed beyond R5.2; an exclusion is the user's
-  call and the README can mention it.
+- Defender may slow the cache build. *Measured:* a cold build of all 30
+  built-ins took 32 s (cache 13.6 s) with Defender on, so the README does not
+  mention it.
+- The warm pak-index timing test (200 ms budget) measured 144–188 ms alone and
+  321 ms while a full build ran beside it. It is load-sensitive, as on Linux.
 - Rollback: Linux paths are untouched apart from the `SaveDir` refactor (R4.1)
   and the test helper (R8.1). Reverting the merge commit restores 0.6.0
   behaviour; no on-disk format changes on either platform.
@@ -304,5 +345,6 @@ Facts established on that machine, 2026-10-07:
 
 ## Gaps found
 
-(Filled during implementation: fynedesygn behaviour on Windows that needs a
-library change, per R9.4.)
+None so far. Checked at 150% display scaling (DPI 144): native title bar and
+icon, the responsive tab layout, fonts, dark scheme, status bar. File dialogs
+and the light schemes were not exercised.

@@ -51,8 +51,8 @@ Two consequences that are easy to lose:
 | `internal/cli` | The cobra tree. Builds a `core.Request` from flags, calls one operation, prints the result |
 | `internal/gui` | The Fyne window, on [fynedesygn](https://github.com/ushineko/fynedesygn)'s shell. Ten sections, every core call off the UI thread and back through `fyne.Do` |
 | `internal/core` | Every operation, as request/result structs. The only package both front ends import |
-| `internal/config` | The settings document, the XDG directory resolution, and the parameter overrides |
-| `internal/steam` | `libraryfolders.vdf` and `appmanifest_275850.acf` parsing; game detection; the state of `GAMEDATA/MODS` |
+| `internal/config` | The settings document, the directory resolution (XDG; AppData on Windows), and the parameter overrides |
+| `internal/steam` | `libraryfolders.vdf` and `appmanifest_275850.acf` parsing; game detection (the registry on Windows); the state of `GAMEDATA/MODS`; where the saves are (`Install.SaveDir`) |
 | `internal/hgpak` | The native HGPAK v2 reader and the cached index over every archive |
 | `internal/mbin` | MBINCompiler release selection, download, the process runner, and the round-trip compatibility check |
 | `internal/modscript` | The sandboxed Lua loader, the decoded change-table model, and the `@param` parser |
@@ -64,10 +64,13 @@ Two consequences that are easy to lose:
 | `internal/modsettings` | The game's `GCMODSETTINGS.MXML`, read and written line by line |
 | `internal/save` | The save file codec (spec 007): chunked LZ4 container, XXTEA manifest, a JSON tree that reproduces untouched bytes, the key mapping, the typed edits |
 | `internal/tweaks` | The ten built-in mod scripts, embedded, with their headers parsed |
+| `internal/fsutil` | `Rename`, which retries the transient refusals a Windows scanner causes |
 | `internal/buildinfo` | Version and commit, injected by the linker |
 | `tests/parity` | The CLI/GUI parity guard, behind a build tag `make test` always passes |
 | `tools/reference` | `make_golden.py`, which regenerates the golden fixtures from the reference builder |
 | `tools/screenshot.sh` | The README capture harness |
+| `tools/winicon` | Renders the SVG icon into the Windows `.ico` (`make winres`) |
+| `internal/mbin/mbintest` | The fake MBINCompiler the tests install: a Go program, so it runs on Windows too |
 
 ---
 
@@ -278,6 +281,22 @@ and the mapping from core's verdicts and levels onto the library's `Status`
 mark, the CRLF endings, the tabs and every unknown property survive; the tests
 assert that an unedited document round-trips byte for byte and that a flipped
 switch changes exactly one line.
+
+**Platform differences live in `_windows.go` / `_unix.go` (or `_other.go`) pairs,
+behind one function each.** Nothing outside these files asks which OS it is on:
+
+| Package | File pair | What differs |
+| --- | --- | --- |
+| `internal/config` | `path_windows.go` / `path_other.go` | default directories; `~\` expansion |
+| `internal/steam` | `platform_windows.go` / `platform_other.go` | Steam roots (registry vs home directory), path case folding, the save folder |
+| `internal/mbin` | `assets_*.go` | release asset names per flavor |
+| `internal/mbin` | `process_windows.go` / `process_unix.go` | the child environment allow-list, hidden console vs process group, finding `dotnet`, the missing-runtime hint |
+| `internal/core` | `gamerun_windows.go` / `gamerun_unix.go` | finding `NMS.exe` (process snapshot vs `/proc`); whether deploy refuses while it runs |
+| `internal/fsutil` | `transient_*.go` | which rename errors are worth retrying |
+
+Tests that need a different expectation per OS say so with `runtime.GOOS` in the
+test, or sit in a `_windows_test.go` / `_unix_test.go` file. `make lint-windows`
+lints the Windows files from Linux.
 
 **No game data, no third-party scripts, no personal paths in the repository.**
 Tests that need real data read the user's install at run time and skip when the

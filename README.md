@@ -1,12 +1,13 @@
 # nmsbonker
 
-**For No Man's Sky installed through Steam and played under Proton on Linux.**
-The community's mod builder, [AMUMSS](https://github.com/HolySpiritus/AMUMSS),
-is Windows batch tooling wrapped around Windows executables. It does not run on
-Linux, and it does not run under Wine either — the usual advice is to keep a
-Windows VM around purely to rebuild your mods after every game update. This is
-that job, done natively on the machine you actually play on: no Wine, no VM, no
-Python, no `hgpaktool.exe`.
+**For No Man's Sky installed through Steam, played under Proton on Linux or
+natively on Windows.** The community's mod builder,
+[AMUMSS](https://github.com/HolySpiritus/AMUMSS), is Windows batch tooling
+wrapped around Windows executables. It does not run on Linux, and it does not
+run under Wine either — the usual advice is to keep a Windows VM around purely
+to rebuild your mods after every game update. This is that job, done natively
+on the machine you actually play on: no Wine, no VM, no Python, no
+`hgpaktool.exe`. It runs natively on Windows too.
 
 Rebuilds AMUMSS-format `.lua` mod scripts against the game files you have
 installed, merges every enabled mod into one collision-free mod folder, and
@@ -15,7 +16,7 @@ slider for every number they change, so a fresh install has something to build
 without downloading anything first.
 
 *Nothing from the game lives in this repository. It reads your install at run
-time and writes its output under your XDG directories.*
+time and writes its output under your XDG directories (AppData on Windows).*
 
 **Version**: 0.7.0
 
@@ -55,7 +56,8 @@ compiler will not accept is never shipped.
 **Finds your game.** Reads Steam's own `libraryfolders.vdf` and
 `appmanifest_275850.acf` across every library — including a Flatpak or Snap
 Steam, and a second drive — and validates the result by the presence of
-`GAMEDATA/PCBANKS`. `nmsbonker detect` shows every place it looked and why each
+`GAMEDATA/PCBANKS`. On Windows it starts from the Steam location in the
+registry. `nmsbonker detect` shows every place it looked and why each
 was rejected.
 
 **Reads the game's `.pak` archives natively.** HGPAK version 2, the
@@ -66,8 +68,8 @@ archive by size and modification time, so a game update re-reads only the
 archives it changed.
 
 **Acquires MBINCompiler and proves it matches your install.** It picks the
-release that matches your game, downloads the Linux binary and its `libMBIN`
-together, and verifies the pair by running it. `nmsbonker tools check` then
+release that matches your game, downloads the binary for your platform and its
+`libMBIN` together, and verifies the pair by running it. `nmsbonker tools check` then
 decompiles three known game files, recompiles them, and compares the bytes outside
 the header — which answers the question a version string cannot, because the
 game's own MBINs carry no libMBIN version.
@@ -154,7 +156,8 @@ so the rollback is itself reversible. `undeploy` takes the folder out.
 which is the cheapest thing to try when the game stops starting.
 
 **Copies your saves first.** The first deploy of each run copies every `st_*`
-save profile out of the Proton prefix into a timestamped folder, retention ten.
+save profile out of the game's save folder (inside the Proton prefix on Linux,
+`%APPDATA%\HelloGames\NMS` on Windows) into a timestamped folder, retention ten.
 The save editor below takes the same copy before every write it makes.
 
 **Edits your saves, natively.** `saves slots` lists what the game has, `saves
@@ -179,18 +182,22 @@ the build if either front end grows an operation the other lacks.
 
 ## Requirements
 
-- **Linux.** macOS is a secondary target: the CLI cross-compiles for it and is
-  untested there.
+- **Linux, or Windows 10/11 (x64).** macOS is a secondary target: the CLI
+  cross-compiles for it and is untested there.
 - **No Man's Sky, installed through Steam.** Steam itself does not need to be
-  running; only its on-disk manifests are read.
+  running; only its on-disk manifests (and on Windows, the registry entry that
+  says where Steam is) are read.
 - **A .NET runtime**, for MBINCompiler. `nmsbonker tools ensure` prefers the
   framework-dependent build when `dotnet --list-runtimes` reports
-  `Microsoft.NETCore.App 10.x`, and falls back to the self-contained build
-  otherwise.
+  `Microsoft.NETCore.App 10.x`, and falls back to the other build otherwise.
+  On Linux the other build is self-contained. **On Windows neither is:** install
+  the .NET 10 runtime (`winget install Microsoft.DotNet.Runtime.10`) before
+  `tools ensure`. The other Windows build needs .NET 8 instead.
 - **Go 1.26 or newer**, to build it. The CLI builds with `CGO_ENABLED=0`.
-- **For the window only**: CGO, OpenGL, and X11 or Wayland development headers,
-  which is what Fyne needs. The command line needs none of them and never links
-  them — everything the tool does is reachable without a display.
+- **For the window only**: CGO, OpenGL, and X11 or Wayland development headers
+  on Linux, or MinGW-w64 gcc on Windows (MSYS2's UCRT64 toolchain), which is
+  what Fyne needs. The command line needs none of them and never links them —
+  everything the tool does is reachable without a display.
 
 ## Installing
 
@@ -231,7 +238,7 @@ Or build without installing:
 ```
 make build          # ./nmsbonker, CGO-free, version and commit baked in
 make build-gui      # ./nmsbonker-gui, needs CGO and the toolkit's headers
-make build-all      # static CLI for linux/darwin x amd64/arm64, plus this host's GUI
+make build-all      # static CLI for linux/darwin x amd64/arm64 and windows/amd64, plus this host's GUI
 make release        # tar.gz per target in dist/, with SHA256SUMS
 make test           # go test -race -tags parity ./...
 make lint           # golangci-lint, pinned to v2.12.2
@@ -240,6 +247,37 @@ make help           # every target
 
 The window is built for the host only. It needs CGO, so cross-compiling it would
 mean a C toolchain per target, and nothing about the tool's job depends on it.
+
+**Windows**: every [release](https://github.com/ushineko/nmsbonker/releases)
+carries `nmsbonker-<version>-windows-amd64.zip`, holding `nmsbonker.exe` (the
+command line) and `nmsbonker-gui.exe` (the window). Unzip it anywhere; there is
+no installer. Then, in a terminal in that folder:
+
+```
+winget install Microsoft.DotNet.Runtime.10   # once, for MBINCompiler
+.\nmsbonker.exe status                        # finds the game through the registry
+.\nmsbonker.exe tools ensure
+.\nmsbonker.exe mods list                     # the thirty built-ins, all off
+.\nmsbonker.exe mods enable BigStacks
+.\nmsbonker.exe build --deploy
+```
+
+Start the game once before the first deploy: it creates
+`Binaries\SETTINGS\GCMODSETTINGS.MXML`, the mod list deploy edits, the first
+time it runs.
+
+To build it yourself, with Go and MSYS2 installed, from a checkout (the
+Makefile is not needed on Windows):
+
+```
+$env:CGO_ENABLED = "0"; go build -trimpath -o nmsbonker.exe ./cmd/nmsbonker
+$env:PATH = "C:\msys64\ucrt64\bin;$env:PATH"; $env:CGO_ENABLED = "1"
+go build -trimpath -tags migrated_fynedo -ldflags "-H windowsgui" -o nmsbonker-gui.exe ./cmd/nmsbonker-gui
+```
+
+`-H windowsgui` stops the window opening a console beside itself. The icon is
+`cmd/nmsbonker-gui/rsrc_windows_amd64.syso`, committed; `make winres`
+regenerates it from the SVG.
 
 ## First run
 
@@ -496,6 +534,19 @@ yet.](assets/screenshot-report.png)
 | `<game>/Binaries/SETTINGS/GCMODSETTINGS.MXML` | the game's own mod list, which deploy edits |
 | `<compatdata>/275850/pfx/.../HelloGames/NMS/st_*/` | your saves; `saves edit` and `saves import` write here, after a backup |
 
+On Windows the same things live here:
+
+| Path | What is in it |
+| --- | --- |
+| `%APPDATA%\nmsbonker\config.json` | your settings (roams with the profile) |
+| `%LOCALAPPDATA%\nmsbonker\` | `library`, `tools`, `build`, `archive` and `save-backup`, as above |
+| `%LOCALAPPDATA%\nmsbonker\cache\` | the cache |
+| `<game>\GAMEDATA\MODS\<mod_name>\` and `<game>\Binaries\SETTINGS\GCMODSETTINGS.MXML` | as above |
+| `%APPDATA%\HelloGames\NMS\st_*\` | your saves |
+
+An `XDG_CONFIG_HOME`, `XDG_DATA_HOME` or `XDG_CACHE_HOME` that is set wins on
+Windows too.
+
 The defaults are `~/.config`, `~/.local/share` and `~/.cache`; every one of the
 first four is a setting, and `nmsbonker config show` prints where they resolved
 to. The archive and the save backups are deliberately *not* configurable: they
@@ -534,8 +585,10 @@ turning the limit off: a limit of zero would flag every reward in the game.
 
 ## Limitations
 
-- **Linux.** The CLI cross-compiles for macOS and nobody has run it there; the
-  window is built for the host only.
+- **Linux and Windows, through Steam.** The CLI cross-compiles for macOS and
+  nobody has run it there; the window is built for the host only. Game Pass and
+  GOG installs on Windows are not looked for: `--game-dir` points build and
+  deploy at a GOG copy, and saves are found only for Steam.
 - **Mods must be rebuilt after every game update,** and MBINCompiler must have a
   release that matches. That is not a limitation of this tool — it is how
   loose-file MBIN mods work — but it is the reason the tool exists, so it is
@@ -594,7 +647,16 @@ shows what exists, `nmsbonker tools ensure` takes the newest match, and
 framework-dependent and needs a .NET 10 runtime on `PATH`; `nmsbonker status`
 reports whether one is there. Either install it, or
 `nmsbonker config set mbincompiler.flavor self-contained` and
-`nmsbonker tools ensure` again for a build that carries its own.
+`nmsbonker tools ensure` again for a build that carries its own. On Windows
+both builds need a runtime (.NET 10 for one, .NET 8 for the other), and
+`tools ensure` says so when that is why one would not start:
+`winget install Microsoft.DotNet.Runtime.10`. The runtime is also found in its
+default location, `C:\Program Files\dotnet`, so a terminal opened before it was
+installed does not hide it.
+
+**Windows: `deploy` says the game is running.** The running game holds its mod
+files open, and Windows will not move an open file, so deploy, rollback and
+undeploy refuse rather than fail halfway. Quit the game first.
 
 **A mod says WORKING~ with "keys not found".** A game update renamed or removed
 the fields it was editing. The rest of its edits applied; that one did not, and
@@ -632,12 +694,12 @@ are never committed.
 | Path | What is in it |
 | --- | --- |
 | `cmd/nmsbonker` | The CLI entry point |
-| `cmd/nmsbonker-gui` | The desktop entry point; four flags and nothing else |
+| `cmd/nmsbonker-gui` | The desktop entry point; four flags and nothing else, plus the Windows icon resource |
 | `internal/cli` | The cobra command tree; renders, decides nothing |
 | `internal/gui` | The Fyne window; renders, decides nothing |
 | `internal/core` | Every operation, headless, as request/result structs |
-| `internal/config` | Settings and directory resolution |
-| `internal/steam` | Steam manifest parsing and game detection |
+| `internal/config` | Settings and directory resolution (XDG, or AppData on Windows) |
+| `internal/steam` | Steam manifest parsing, game detection, and where the saves are |
 | `internal/hgpak` | The native HGPAK v2 reader and the pak index |
 | `internal/mbin` | MBINCompiler acquisition, the process runner and the round-trip check |
 | `internal/modscript` | The sandboxed Lua loader, the change-table model and the parameter parser |
@@ -647,11 +709,12 @@ are never committed.
 | `internal/build/audit` | The reward-amount audit: reward blocks parsed, limits applied, contributors attributed |
 | `internal/save` | The save file codec: the chunked LZ4 container, the encrypted manifest, a byte-preserving JSON tree, the key mapping and the typed edits |
 | `internal/tweaks` | The thirty built-in mod scripts, embedded, and the pages they are drawn on |
+| `internal/fsutil` | Renames that ride out a Windows scanner holding a file open |
 | `internal/buildinfo` | Version and commit, injected at build time |
 | `tests/parity` | The guard that the CLI and the window expose the same operations |
-| `packaging` | The desktop entry, the application icon, and `arch/PKGBUILD` |
-| `.github/workflows` | Test, lint and Arch package on every push; release tarballs and the package on a `v*` tag |
-| `tools` | The screenshot harness and the reference fixture generator |
+| `packaging` | The desktop entry, the application icon, `arch/PKGBUILD`, and `windows/` (the .ico and its resource script) |
+| `.github/workflows` | Test, lint, Windows tests, the Arch package and the Windows zip on every push; all of them released on a `v*` tag |
+| `tools` | The screenshot harness, the reference fixture generator and the Windows icon renderer |
 
 [`docs/architecture.md`](docs/architecture.md) is the package map and the data
 flow in more detail, including how the golden fixtures are regenerated.
@@ -667,7 +730,8 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/005`](specs/005-amount-audit-and-caps.md) for the reward-amount audit
 > and the caps on the multiplier tweaks;
 > [`specs/006`](specs/006-mission-reward-tweaks.md) for the mission reward
-> tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor.
+> tweaks; [`specs/007`](specs/007-save-editor.md) for the save editor;
+> [`specs/020`](specs/020-windows-support.md) for Windows.
 
 ## Changelog
 
