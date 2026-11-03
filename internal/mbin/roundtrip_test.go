@@ -94,12 +94,14 @@ func TestAConversionFailureIsAMismatchThatQuotesTheCompiler(t *testing.T) {
 	require.False(t, rt.OK)
 	require.Contains(t, rt.Reason, "probe.MBIN did not decompile")
 	require.Contains(t, rt.Reason, "unknown template")
+	require.Equal(t, "probe.MBIN did not decompile", rt.Summary, "the compiler's output stays out of the summary")
 
 	rt, err = roundTripCompiler(t, "failcompile").CheckRoundTrip(t.Context(), probe(t), t.TempDir())
 	require.NoError(t, err)
 	require.False(t, rt.OK)
 	require.Contains(t, rt.Reason, "probe.MBIN did not recompile")
 	require.Contains(t, rt.Reason, "unexpected element")
+	require.Equal(t, "probe.MBIN did not recompile", rt.Summary, "the compiler's output stays out of the summary")
 }
 
 // A file that is nothing but header has only its length to check; the

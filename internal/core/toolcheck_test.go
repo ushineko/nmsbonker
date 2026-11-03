@@ -89,6 +89,24 @@ func TestToolCheckReportsMismatchWithAnActionableMessage(t *testing.T) {
 	}
 }
 
+// The detail is the one line a report header or a card shows, so it names the
+// file and leaves the compiler's output on the file's own result.
+func TestToolCheckDetailLeavesTheCompilerOutputOnTheFile(t *testing.T) {
+	root := bare(t)
+	game := probeGame(t, root)
+	stubTools(t, "faildecompile")
+
+	res, err := core.ToolCheck(t.Context(), core.ToolCheckRequest{
+		Request: core.Request{GameDir: game},
+		Files:   []string{"gcgameplayglobals.global.mbin"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, core.CompatMismatch, res.Status)
+	require.Equal(t, "gcgameplayglobals.global.MBIN did not decompile", res.Detail)
+	require.Len(t, res.Files, 1)
+	require.Contains(t, res.Files[0].Reason, "unknown template")
+}
+
 // R3.4: with nothing installed there is nothing to check, and the answer says
 // what to run.
 func TestToolCheckWithNoCompilerSaysWhatToRun(t *testing.T) {

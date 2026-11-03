@@ -131,7 +131,7 @@ func toolCheck(ctx context.Context, s *session, ev Events, files []string) (Tool
 		}
 		out.Files = append(out.Files, rt)
 		if !rt.OK {
-			failures = append(failures, rt.Reason)
+			failures = append(failures, rt.Summary)
 		}
 		ev.logf(LevelDebug, "compatibility check: %s ok=%v %s", name, rt.OK, rt.Reason)
 	}

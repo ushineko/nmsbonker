@@ -82,17 +82,14 @@ func (u *ui) buildReport() fyne.CanvasObject {
 		))
 	}
 
-	compat := r.Compatibility
-	if r.CompatibilityDetail != "" {
-		compat += " (" + r.CompatibilityDetail + ")"
-	}
+	compat, compatNote := compatParts(r.Compatibility, r.Compatibility, r.CompatibilityDetail)
 	facts := widgets.Card("Last build",
 		widgets.PlainRow("Generated", r.Generated.Format("2006-01-02 15:04")+" · "+widgets.HumanAgo(r.Generated)),
 		widgets.PlainRow("Output folder", r.ModName),
 		widgets.PlainRow("Output directory", r.OutputDir),
 		widgets.PlainRow("Game buildid", widgets.OrNone(r.GameBuildID, "unknown")),
 		widgets.PlainRow("Compiler", widgets.OrNone(r.CompilerVersion, "unknown")),
-		widgets.FactRow("Compatibility", compat, compatStatus(r.Compatibility)),
+		compatRow(compat, compatNote, compatStatus(r.Compatibility)),
 		widgets.FactRow("MBINs", fmt.Sprintf("%d built, %d dropped", r.Built, r.Dropped),
 			builtStatus(r.Dropped)),
 		widgets.PlainRow("Edits", fmt.Sprintf("%d applied, %d skipped", r.Applied, r.Skipped)),

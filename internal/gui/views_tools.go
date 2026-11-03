@@ -265,7 +265,7 @@ func (u *ui) showToolCheck(res core.ToolCheckResult) {
 	for _, f := range res.Files {
 		st, state := fd.StatusGood, "round-trips byte-identical outside the header"
 		if !f.OK {
-			st, state = fd.StatusWarn, f.Reason
+			st, state = fd.StatusWarn, f.Summary
 		}
 		t.Row(st, f.Name, state)
 	}

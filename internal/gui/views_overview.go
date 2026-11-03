@@ -191,11 +191,11 @@ func (u *ui) toolsCard() fyne.CanvasObject {
 		indexStatus = fd.StatusWarn
 	}
 
-	compat, compatSt := u.compatLine()
+	compat, compatNote, compatSt := u.compatLine()
 	return widgets.Card("Tools",
 		widgets.FactRow("MBINCompiler", c.Tag+" ("+c.Flavor+")", fd.StatusGood),
 		widgets.PlainRow("Reports", c.Version),
-		widgets.FactRow("Compatibility", compat, compatSt),
+		compatRow(compat, compatNote, compatSt),
 		widgets.FactRow(".NET 10 runtime", dotnetText(c.Dotnet10, c.Flavor), dotnetStatus(c.Dotnet10, c.Flavor)),
 		widgets.FactRow("Pak index", indexText, indexStatus),
 	)
@@ -212,18 +212,39 @@ running the row says so, because "checking" and "unknown" are different states
 and a card that says "unknown" for two seconds and then changes its mind reads
 as a card that was wrong.
 */
-func (u *ui) compatLine() (string, fd.Status) {
+func (u *ui) compatLine() (text, note string, st fd.Status) {
 	switch {
 	case u.compatError != "":
-		return "could not be checked: " + u.compatError, fd.StatusInfo
+		return "could not be checked: " + u.compatError, "", fd.StatusInfo
 	case u.compat.Status == "":
-		return "checking…", fd.StatusInfo
+		return "checking…", "", fd.StatusInfo
 	}
-	text := compatText(u.compat.Status)
-	if u.compat.Detail != "" {
-		text += " (" + u.compat.Detail + ")"
+	text, note = compatParts(u.compat.Status, compatText(u.compat.Status), u.compat.Detail)
+	return text, note, compatStatus(u.compat.Status)
+}
+
+// compatParts decides where a verdict's detail goes. A compatible detail is a
+// fixed short sentence and stays on the row. Any other names the files that
+// failed, and a report already on disk can carry a compiler stack trace
+// there, so it goes in a note that wraps: the row does not wrap, and its text
+// sets the window's minimum width.
+func compatParts(status, verdict, detail string) (text, note string) {
+	switch {
+	case detail == "":
+		return verdict, ""
+	case status == core.CompatOK:
+		return verdict + " (" + detail + ")", ""
 	}
-	return text, compatStatus(u.compat.Status)
+	return verdict, detail
+}
+
+// compatRow is the Compatibility fact, with its note beneath when it has one.
+func compatRow(text, note string, st fd.Status) fyne.CanvasObject {
+	row := widgets.FactRow("Compatibility", text, st)
+	if note == "" {
+		return row
+	}
+	return container.NewVBox(row, widgets.Note(note, st))
 }
 
 // libraryCard is the mod side: how much is enabled, and what the last build
