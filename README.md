@@ -18,7 +18,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories (AppData on Windows).*
 
-**Version**: 0.8.0
+**Version**: 0.8.1
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -734,6 +734,18 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/023`](specs/023-windows-support.md) for Windows.
 
 ## Changelog
+
+### 0.8.1
+
+- **A compatibility mismatch no longer widens the window past the screen.**
+  When MBINCompiler could not read a game file, its stack trace went onto the
+  Compatibility row in Overview and Report as one line, and the window grew to
+  fit it. The detail now names only the file and what went wrong, and sits in a
+  wrapped note under the row. The stack trace is still on the file's own line
+  in `nmsbonker tools check` and its `--json`. A report built by an older
+  version, which still carries the long text, shows it wrapped as well.
+- **fynedesygn v0.1.110.** A long value on any fact row is now cut with an
+  ellipsis instead of setting the window's width.
 
 ### 0.8.0
 
