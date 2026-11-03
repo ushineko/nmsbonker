@@ -9,11 +9,13 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/stretchr/testify/require"
 	fd "github.com/ushineko/fynedesygn"
 	"github.com/ushineko/fynedesygn/fynetest"
 	"github.com/ushineko/fynedesygn/shell"
+	"github.com/ushineko/fynedesygn/widgets"
 
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/modscript"
@@ -203,20 +205,42 @@ seconds later reads as a card that was wrong.
 func TestTheCompatibilityRowReportsTheRoundTripCheck(t *testing.T) {
 	u := testUI(t)
 
-	text, st := u.compatLine()
+	text, _, st := u.compatLine()
 	require.Contains(t, text, "checking")
 	require.Equal(t, fd.StatusInfo, st)
 
 	u.compat = core.ToolCheckResult{Status: core.CompatOK, Detail: "2 file(s) round-tripped"}
-	text, st = u.compatLine()
+	text, _, st = u.compatLine()
 	require.Equal(t, fd.StatusGood, st)
 	require.Contains(t, text, "2 file(s) round-tripped")
 
 	u.compat = core.ToolCheckResult{}
 	u.compatError = "the compiler did not run"
-	text, st = u.compatLine()
+	text, _, st = u.compatLine()
 	require.Contains(t, text, "the compiler did not run")
 	require.Equal(t, fd.StatusInfo, st, "a check that could not run is not a bad verdict")
+}
+
+/*
+A failed round trip must not set the window's width. MBINCompiler's failure can
+be a stack trace of several hundred characters, on one line, and the row it
+landed on does not wrap: the window grew past the screen with every label pushed
+off the edge. A report already on disk can still carry a detail that long, so
+the row has to hold whatever it is given.
+*/
+func TestALongCompatibilityDetailDoesNotWidenTheCard(t *testing.T) {
+	u := testUI(t)
+	trace := strings.Repeat("at libMBIN.NMSTemplate.DeserializeBinaryTemplate(BinaryReader reader); ", 12)
+	u.compat = core.ToolCheckResult{Status: core.CompatMismatch, Detail: trace}
+
+	text, note, st := u.compatLine()
+	require.Equal(t, fd.StatusWarn, st)
+	require.NotContains(t, text, "libMBIN", "the row does not wrap")
+	require.Equal(t, trace, note, "the detail is still on screen")
+
+	short := fyne.MeasureText(text, theme.TextSize(), fyne.TextStyle{}).Width
+	require.Less(t, compatRow(text, note, st).MinSize().Width,
+		short+2*widgets.LabelWidth, "the card is as wide as its verdict, not its detail")
 }
 
 // The Overview no longer claims a game data version. Spec 002 R3.4 retired the

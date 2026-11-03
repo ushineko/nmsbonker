@@ -38,8 +38,12 @@ type RoundTrip struct {
 	// Name identifies the file the check ran on.
 	Name string `json:"name"`
 	OK   bool   `json:"ok"`
-	// Reason is empty when OK.
-	Reason       string `json:"reason,omitempty"`
+	// Reason is empty when OK. It carries the compiler's own output, so it can
+	// run to a stack trace.
+	Reason string `json:"reason,omitempty"`
+	// Summary is Reason without the compiler's output: the file and what went
+	// wrong, short enough for a report header or a table cell.
+	Summary      string `json:"summary,omitempty"`
 	OriginalSize int    `json:"originalSize"`
 	RebuiltSize  int    `json:"rebuiltSize"`
 	FirstDiff    int    `json:"firstDiff"`
@@ -76,12 +80,14 @@ func (c *Compiler) CheckRoundTrip(ctx context.Context, mbinPath, workDir string)
 
 	mxmlPath, err := c.Decompile(ctx, mbinPath, mxmlDir)
 	if err != nil {
-		out.Reason = fmt.Sprintf("%s did not decompile: %s", out.Name, tail(err.Error()))
+		out.Summary = out.Name + " did not decompile"
+		out.Reason = out.Summary + ": " + tail(err.Error())
 		return out, nil
 	}
 	rebuiltPath, err := c.Compile(ctx, mxmlPath, mbinDir)
 	if err != nil {
-		out.Reason = fmt.Sprintf("%s did not recompile: %s", out.Name, tail(err.Error()))
+		out.Summary = out.Name + " did not recompile"
+		out.Reason = out.Summary + ": " + tail(err.Error())
 		return out, nil
 	}
 	rebuilt, err := os.ReadFile(rebuiltPath)
@@ -93,6 +99,7 @@ func (c *Compiler) CheckRoundTrip(ctx context.Context, mbinPath, workDir string)
 	if len(rebuilt) != len(original) {
 		out.Reason = fmt.Sprintf("%s round-tripped to a different size (%d bytes, was %d)",
 			out.Name, len(rebuilt), len(original))
+		out.Summary = out.Reason
 		return out, nil
 	}
 	if len(original) <= HeaderSkip {
@@ -103,6 +110,7 @@ func (c *Compiler) CheckRoundTrip(ctx context.Context, mbinPath, workDir string)
 	if i := bytes.Compare(original[HeaderSkip:], rebuilt[HeaderSkip:]); i != 0 {
 		out.FirstDiff = HeaderSkip + firstDiff(original[HeaderSkip:], rebuilt[HeaderSkip:])
 		out.Reason = fmt.Sprintf("%s round-tripped to different bytes, first at offset 0x%X", out.Name, out.FirstDiff)
+		out.Summary = out.Reason
 		return out, nil
 	}
 	out.OK = true
