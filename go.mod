@@ -47,3 +47,9 @@ require (
 	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 )
+
+// Fyne at the commit fynedesygn pins, plus one fix: on Linux, resizing no
+// longer makes the GL context current for every resize event, which on NVIDIA
+// stalled a window drag for up to 1.5 s. Branch ushineko/resize-without-context
+// on github.com/ushineko/fyne. Drop this when fynedesygn moves past it.
+replace fyne.io/fyne/v2 => github.com/ushineko/fyne/v2 v2.8.3-ushineko.1
