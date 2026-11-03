@@ -442,6 +442,13 @@ func Undeploy(_ context.Context, req UndeployRequest) (UndeployResult, error) {
 	out := UndeployResult{ModName: modName}
 
 	dest := filepath.Join(s.install.ModsDir, modName)
+	// Until the first deploy under the new default, what is in the game is
+	// the folder an older version deployed; removing mods should remove it.
+	if legacy := filepath.Join(s.install.ModsDir, config.LegacyModName); modName == config.DefaultModName &&
+		!isDir(dest) && isDir(legacy) {
+		modName, dest = config.LegacyModName, legacy
+		out.ModName = modName
+	}
 	fi, err := os.Lstat(dest)
 	if err != nil || !fi.IsDir() {
 		return out, fmt.Errorf("%w at %s", ErrNotDeployed, dest)

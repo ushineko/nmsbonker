@@ -167,3 +167,49 @@ func TestBuildWithNoEnabledModsRefuses(t *testing.T) {
 	require.NotErrorIs(t, err, core.ErrNoEnabledMods, "the missing compiler is reported first")
 	require.ErrorContains(t, err, "tools ensure")
 }
+
+/*
+A folder deployed under the old default name is taken out of the game by the
+first deploy under the new one, or the game loads both. It goes to the archive,
+as any replaced deploy does, so nothing is lost.
+*/
+func TestDeployRetiresTheFolderDeployedUnderTheOldName(t *testing.T) {
+	root := bare(t)
+	game := fakeGame(t, root)
+	legacy := filepath.Join(game, "GAMEDATA", "MODS", config.LegacyModName)
+	require.NoError(t, os.MkdirAll(legacy, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(legacy, "OLD.MBIN"), []byte("old"), 0o600))
+	builtOutput(t, config.DefaultModName, map[string]string{"A.MBIN": "one"})
+
+	res, err := core.Deploy(t.Context(), core.DeployRequest{Request: core.Request{GameDir: game}})
+	require.NoError(t, err)
+	require.FileExists(t, filepath.Join(game, "GAMEDATA", "MODS", config.DefaultModName, "A.MBIN"))
+	require.NoDirExists(t, legacy)
+	require.NotEmpty(t, res.Warnings)
+	require.Contains(t, res.Warnings[len(res.Warnings)-1], config.LegacyModName)
+
+	list, err := core.ListArchive(t.Context(), core.ListArchiveRequest{Request: core.Request{GameDir: game}})
+	require.NoError(t, err)
+	var archived bool
+	for _, e := range list.Entries {
+		if e.ModName == config.LegacyModName && e.HasMod {
+			archived = true
+		}
+	}
+	require.True(t, archived, "the old folder is in the archive")
+}
+
+// Until the first deploy under the new name, removing the mod removes what an
+// older version put in the game.
+func TestUndeployRemovesTheFolderDeployedUnderTheOldName(t *testing.T) {
+	root := bare(t)
+	game := fakeGame(t, root)
+	legacy := filepath.Join(game, "GAMEDATA", "MODS", config.LegacyModName)
+	require.NoError(t, os.MkdirAll(legacy, 0o750))
+	require.NoError(t, os.WriteFile(filepath.Join(legacy, "OLD.MBIN"), []byte("old"), 0o600))
+
+	res, err := core.Undeploy(t.Context(), core.UndeployRequest{Request: core.Request{GameDir: game}})
+	require.NoError(t, err)
+	require.Equal(t, config.LegacyModName, res.ModName)
+	require.NoDirExists(t, legacy)
+}

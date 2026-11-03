@@ -3,14 +3,14 @@ module github.com/ushineko/nmsbonker
 go 1.26.0
 
 require (
-	fyne.io/fyne/v2 v2.8.1
-	github.com/fyne-io/oksvg v0.2.0
+	fyne.io/fyne/v2 v2.8.3-0.20261103091334-b655332b73c2
+	github.com/fyne-io/oksvg v0.2.1-0.20260918172519-a9af55fa95d9
 	github.com/klauspost/compress v1.18.7
 	github.com/pierrec/lz4/v4 v4.1.29
 	github.com/spf13/cobra v1.10.2
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef
 	github.com/stretchr/testify v1.12.1
-	github.com/ushineko/fynedesygn v0.1.110
+	github.com/ushineko/fynedesygn v0.1.112
 	github.com/yuin/gopher-lua v1.1.1
 	golang.org/x/sys v0.48.0
 )
@@ -26,9 +26,9 @@ require (
 	github.com/fyne-io/glfw-js v0.4.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
 	github.com/go-gl/gl v0.0.0-20260331235117-4566fea9a276 // indirect
-	github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.1.0.20260707082822-2a407d02d01a // indirect
+	github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.2 // indirect
 	github.com/go-text/render v0.2.1 // indirect
-	github.com/go-text/typesetting v0.3.4 // indirect
+	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/hack-pad/go-indexeddb v0.3.2 // indirect
 	github.com/hack-pad/safejs v0.1.0 // indirect
