@@ -18,7 +18,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories (AppData on Windows).*
 
-**Version**: 0.8.2
+**Version**: 0.8.3
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -734,6 +734,17 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/023`](specs/023-windows-support.md) for Windows.
 
 ## Changelog
+
+### 0.8.3
+
+- **Resizing the window is smooth again.** The choppiness was in Fyne, not
+  the NVIDIA driver as 0.8.2 said. On Linux, Fyne made the window's OpenGL
+  context current for every resize event during a drag, though resizing
+  there draws nothing; on NVIDIA each of those cost about 7 ms, and a drag
+  stalled for up to 1.5 s at a time and drew 5 or 6 frames in two seconds.
+  nmsbonker now builds against a Fyne fork with that removed
+  (`github.com/ushineko/fyne`, tag `v2.8.3-ushineko.1`): the same drag draws 33 to 58
+  frames a second, and no poll stalls for longer than 54 ms.
 
 ### 0.8.2
 
