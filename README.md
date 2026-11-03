@@ -18,7 +18,7 @@ without downloading anything first.
 *Nothing from the game lives in this repository. It reads your install at run
 time and writes its output under your XDG directories (AppData on Windows).*
 
-**Version**: 0.8.1
+**Version**: 0.8.2
 
 ![The Overview section. A Game card: the directory, "Found by config game_dir",
 a green tick against Steam buildid 25233815, "97 .pak in …/GAMEDATA/PCBANKS", a
@@ -393,7 +393,7 @@ nmsbonker saves get 9 BaseContext/PlayerStateData/DifficultyState   # one node, 
 nmsbonker saves set 9 BaseContext/PlayerStateData/DifficultyState edited.json
 
 nmsbonker config show
-nmsbonker config set mod_name "COSMOS COMBINE"
+nmsbonker config set mod_name "MY COMBINE"
 nmsbonker config set save_backup false
 ```
 
@@ -566,7 +566,7 @@ a newer build are preserved when an older one saves.
 | `tools_dir` | `$XDG_DATA_HOME/nmsbonker/tools` | Where MBINCompiler is installed |
 | `cache_dir` | `$XDG_CACHE_HOME/nmsbonker` | Pak index, release listing and the decompiled game files a build starts from |
 | `workspace_dir` | `$XDG_DATA_HOME/nmsbonker/build` | Build output |
-| `mod_name` | `COSMOS COMBINE` | The folder created under `GAMEDATA/MODS` |
+| `mod_name` | `NMSBONKER` | The folder created under `GAMEDATA/MODS`. Up to 0.8.1 the default was `COSMOS COMBINE`; a config holding that is read as `NMSBONKER`, and the next deploy moves the old folder to the archive |
 | `mbincompiler.pin` | *(empty)* | A release tag to always use |
 | `mbincompiler.flavor` | `auto` | `auto`, `dotnet10` or `self-contained` |
 | `mods` | `[]` | The build order: `{"name", "enabled"}` per script, managed by `nmsbonker mods` |
@@ -734,6 +734,27 @@ flow in more detail, including how the golden fixtures are regenerated.
 > [`specs/023`](specs/023-windows-support.md) for Windows.
 
 ## Changelog
+
+### 0.8.2
+
+- **The output folder is `NMSBONKER`**, not `COSMOS COMBINE`, which named a
+  game update and went stale with the next one. A config that still holds
+  `COSMOS COMBINE` was written by an older version with the default filled
+  in, and is read as `NMSBONKER`. Build once before deploying: the build goes
+  to the new folder. The first deploy under the new name moves the old
+  `GAMEDATA/MODS/COSMOS COMBINE` to the archive, so the game does not load
+  both, and says so. Until then, removing the deployed mod removes the old
+  folder. A name set with `config set mod_name` is unchanged.
+- **Resizing the window does a fraction of the work.** The rows in Overview
+  and the other sections reshaped their text at every step of a drag; they
+  now measure only when their width changes (fynedesygn v0.1.112). That text
+  work was half the window's CPU during a drag. On this machine resizing is still choppy
+  because of the NVIDIA 615.78 driver: every Fyne program here does it, and
+  the same window drawn by Mesa resizes smoothly.
+- **`NMSBONKER_PPROF=127.0.0.1:6060 nmsbonker-gui`** serves a CPU and heap
+  profile on that loopback address, for diagnosing the window.
+- The GUI in the release tarball is built with `migrated_fynedo`, like every
+  other GUI build. Without it Fyne takes a stack trace on every refresh.
 
 ### 0.8.1
 
