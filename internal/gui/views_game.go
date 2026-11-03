@@ -14,6 +14,7 @@ import (
 	"github.com/ushineko/fynedesygn/table"
 	"github.com/ushineko/fynedesygn/widgets"
 
+	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/steam"
 )
@@ -237,7 +238,7 @@ func (u *ui) deployed(res core.DeployResult, msg string) {
 
 // confirmUndeploy removes the installed mod folder, keeping a copy.
 func (u *ui) confirmUndeploy() {
-	dest := u.status.Install.ModsDir + "/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
+	dest := u.status.Install.ModsDir + "/" + widgets.OrNone(u.status.ModName, config.DefaultModName)
 	dialogs.ConfirmDestructive(u.sh.Window, "Remove the deployed mod?",
 		"The folder at "+dest+" is moved into "+u.status.Paths.Archive+" under a timestamp, "+
 			"so it can be rolled back. The game's own mod settings are left alone, and so is "+

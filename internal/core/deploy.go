@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/fsutil"
 	"github.com/ushineko/nmsbonker/internal/modsettings"
 	"github.com/ushineko/nmsbonker/internal/steam"
@@ -159,6 +160,9 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 	if err := s.writeModSettings(modName, &out); err != nil {
 		return out, err
 	}
+	if err := s.retireLegacyMod(modName, &out); err != nil {
+		return out, err
+	}
 
 	pruned, err := s.pruneArchive()
 	if err != nil {
@@ -166,6 +170,30 @@ func deploy(_ context.Context, s *session, req DeployRequest) (DeployResult, err
 	}
 	out.Pruned = pruned
 	return out, nil
+}
+
+/*
+retireLegacyMod takes the folder deployed under config.LegacyModName out of the
+game once the new name is installed, so the same mods are not loaded twice.
+It goes to the archive like any replaced deploy, so a rollback can bring it
+back. A deploy under the old name itself leaves it alone.
+*/
+func (s *session) retireLegacyMod(modName string, out *DeployResult) error {
+	if modName == config.LegacyModName {
+		return nil
+	}
+	dest := filepath.Join(s.install.ModsDir, config.LegacyModName)
+	if !isDir(dest) {
+		return nil
+	}
+	entry, err := s.archiveDeploy(config.LegacyModName, dest, "")
+	if err != nil {
+		return err
+	}
+	out.Warnings = append(out.Warnings, fmt.Sprintf(
+		"removed %s from GAMEDATA/MODS: older versions deployed there, and %s replaces it; "+
+			"it is in the archive at %s", config.LegacyModName, modName, entry.Dir))
+	return nil
 }
 
 /*
@@ -228,6 +256,12 @@ func (s *session) writeModSettings(modName string, out *DeployResult) error {
 				"previous file is in the archive alongside this deploy")
 	}
 	return nil
+}
+
+// isDir reports whether path is a directory, not following a symlink.
+func isDir(path string) bool {
+	fi, err := os.Lstat(path)
+	return err == nil && fi.IsDir()
 }
 
 // treeSize counts the files and bytes under a directory.

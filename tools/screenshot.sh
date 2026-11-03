@@ -193,7 +193,7 @@ LUA
   "workspace_dir": "$DEMO/build",
   "cache_dir": "$DEMO/cache",
   "tools_dir": "$DEMO/tools",
-  "mod_name": "COSMOS COMBINE"
+  "mod_name": "NMSBONKER"
 }
 JSON
 

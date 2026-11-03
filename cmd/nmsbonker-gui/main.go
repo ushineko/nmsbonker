@@ -19,6 +19,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ushineko/fynedesygn/profiling"
+
 	"github.com/ushineko/nmsbonker/internal/buildinfo"
 	"github.com/ushineko/nmsbonker/internal/gui"
 )
@@ -41,6 +43,9 @@ func main() {
 		fmt.Printf("nmsbonker-gui %s (%s)\n", buildinfo.Version, buildinfo.Commit)
 		os.Exit(0)
 	}
+
+	// Off unless NMSBONKER_PPROF names an address; bound to loopback.
+	defer profiling.FromEnv("NMSBONKER_PPROF", func(msg string) { _, _ = fmt.Fprintln(os.Stderr, msg) })()
 
 	gui.Run(gui.Options{
 		Version:    buildinfo.Version,

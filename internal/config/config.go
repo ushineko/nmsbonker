@@ -22,8 +22,18 @@ const FileEnv = "NMSBONKER_CONFIG"
 // spelled the same in both roles: one variable, one meaning.
 const GameDirEnv = "NMSBONKER_GAME_DIR"
 
-// DefaultModName is the folder created under GAMEDATA/MODS.
-const DefaultModName = "COSMOS COMBINE"
+// DefaultModName is the folder created under GAMEDATA/MODS. It names the
+// program, not a game release, so a game update does not leave it stale.
+const DefaultModName = "NMSBONKER"
+
+/*
+LegacyModName is the default up to 0.8.1. It named the game's COSMOS update.
+Every config saved by those versions holds it, because the defaults are written
+into the file, so a saved LegacyModName is read as DefaultModName: nobody chose
+it. Deploy then takes the old folder out of the game, archived first, so the
+mods are not loaded twice (core.retireLegacyMod).
+*/
+const LegacyModName = "COSMOS COMBINE"
 
 // Flavor selects which MBINCompiler asset pair to install (R2.2).
 const (
@@ -195,6 +205,9 @@ func LoadFrom(path string) (*Config, error) {
 
 	cfg.expand()
 	cfg.fillDefaults()
+	if cfg.ModName == LegacyModName {
+		cfg.ModName = DefaultModName
+	}
 	return cfg, nil
 }
 

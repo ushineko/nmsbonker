@@ -209,3 +209,23 @@ func TestAPartialConfigKeepsTheDefaultsForEverythingElse(t *testing.T) {
 	require.Equal(t, config.DefaultModName, cfg.ModName)
 	require.Equal(t, filepath.Join(root, "data", "nmsbonker", "tools"), cfg.Paths().Tools)
 }
+
+// Versions up to 0.8.1 saved "COSMOS COMBINE", a game update's name, into
+// every config as the default. It is read as the current default; a name the
+// user chose is left alone.
+func TestTheOldDefaultModNameIsReadAsTheNewOne(t *testing.T) {
+	isolate(t)
+	path := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv(config.FileEnv, path)
+
+	require.NoError(t, os.WriteFile(path, []byte(`{"mod_name": "COSMOS COMBINE"}`), 0o600))
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	require.Equal(t, config.DefaultModName, cfg.ModName)
+	require.NotContains(t, config.DefaultModName, "COSMOS")
+
+	require.NoError(t, os.WriteFile(path, []byte(`{"mod_name": "MY COMBINE"}`), 0o600))
+	cfg, err = config.Load()
+	require.NoError(t, err)
+	require.Equal(t, "MY COMBINE", cfg.ModName)
+}

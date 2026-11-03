@@ -14,6 +14,7 @@ import (
 
 	"github.com/ushineko/nmsbonker/internal/build/audit"
 	"github.com/ushineko/nmsbonker/internal/build/report"
+	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/steam"
 )
@@ -267,7 +268,7 @@ func (u *ui) libraryCard() fyne.CanvasObject {
 	if missing > 0 {
 		rows = append(rows, widgets.FactRow("Missing scripts", fmt.Sprintf("%d", missing), fd.StatusWarn))
 	}
-	rows = append(rows, widgets.PlainRow("Output folder", widgets.OrNone(u.status.ModName, "COSMOS COMBINE")))
+	rows = append(rows, widgets.PlainRow("Output folder", widgets.OrNone(u.status.ModName, config.DefaultModName)))
 	rows = append(rows, widgets.PlainRow("Save backup", u.saveBackupText()))
 
 	switch {

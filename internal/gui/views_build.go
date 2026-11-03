@@ -13,6 +13,7 @@ import (
 	"github.com/ushineko/fynedesygn/logpane"
 	"github.com/ushineko/fynedesygn/widgets"
 
+	"github.com/ushineko/nmsbonker/internal/config"
 	"github.com/ushineko/nmsbonker/internal/core"
 	"github.com/ushineko/nmsbonker/internal/steam"
 )
@@ -150,9 +151,9 @@ before pressing this button.
 */
 func (u *ui) confirmDeploy(title, lead string, do func(replaceSymlink bool)) {
 	in := u.status.Install
-	dest := "GAMEDATA/MODS/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
+	dest := "GAMEDATA/MODS/" + widgets.OrNone(u.status.ModName, config.DefaultModName)
 	if in.ModsDir != "" {
-		dest = in.ModsDir + "/" + widgets.OrNone(u.status.ModName, "COSMOS COMBINE")
+		dest = in.ModsDir + "/" + widgets.OrNone(u.status.ModName, config.DefaultModName)
 	}
 
 	body := container.NewVBox(

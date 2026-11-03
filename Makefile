@@ -128,7 +128,7 @@ build-all: ## Build static CLI binaries for every platform, plus the host's GUI
 	@# it would need a C toolchain per target. Nothing about the tool's job
 	@# depends on the difference: the CLI builds and deploys mods on its own.
 	@echo "building the GUI for this host ..."; \
-	if CGO_ENABLED=1 go build -ldflags='$(LDFLAGS)' -trimpath \
+	if CGO_ENABLED=1 go build -tags $(FYNE_TAGS) -ldflags='$(LDFLAGS)' -trimpath \
 		-o dist/nmsbonker-gui-$$(go env GOOS)-$$(go env GOARCH) ./cmd/nmsbonker-gui; then \
 		echo "  built dist/nmsbonker-gui-$$(go env GOOS)-$$(go env GOARCH)"; \
 	else \
